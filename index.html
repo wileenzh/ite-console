@@ -12716,6 +12716,9 @@ const _lnPanelVW = liveNewsPanel; liveNewsPanel = function(){ return _lnPanelVW(
    - Live news: drag the line between the TV and the headlines.
    ===================================================================== */
 LAYOUT_W.panel = 0; LAYOUT_W.full = 100;
+// the original treated a 0% width as "unknown layout"; check the name instead
+setLayout = function(l){ if (l === "map-only") l = "map"; if (l === "cards-only") l = "cards"; if (!(l in LAYOUT_W)) l = "split";
+  UI.layout = l; $("#main").className = "main"; $$("[data-layout]").forEach(b => b.setAttribute("aria-pressed", b.dataset.layout === l)); applyMapWidth(LAYOUT_W[l]); saveUI(); };
 UI.mapPctBy = UI.mapPctBy || {};
 applyMapWidth = function(pct){ pct = Math.max(0, Math.min(100, +pct || 0)); if (pct < 5) pct = 0; if (pct > 95) pct = 100;
   UI.mapPct = pct; const m = $("#main"); m.style.setProperty("--mapw", pct === 0 ? "0px" : pct === 100 ? "calc(100% - 8px)" : pct + "%");
