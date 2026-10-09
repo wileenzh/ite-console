@@ -19,7 +19,7 @@ p{color:#ccc;font:14px system-ui,sans-serif;text-align:center;margin-top:20%}</s
   else if (/^[\w-]{11}$/.test(v)) src = "https://www.youtube.com/embed/" + v;
   if (!src){ document.body.innerHTML = "<p>No channel given.</p>"; return; }
   var f = document.createElement("iframe");
-  f.src = src + (src.indexOf("?") > 0 ? "&" : "?") + "autoplay=1&mute=" + mute + "&playsinline=1";
+  f.src = src + (src.indexOf("?") > 0 ? "&" : "?") + "autoplay=1&mute=" + mute + "&playsinline=1" + (q.get("cc") === "1" ? "&cc_load_policy=1&cc_lang_pref=en&hl=en" : "");
   f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
   f.allowFullscreen = true; f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "Live video";
   document.body.appendChild(f);

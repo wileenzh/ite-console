@@ -12476,67 +12476,199 @@ const _vccNewsL = vccNewsHtml; vccNewsHtml = function(){ const r = _vccNewsL(); 
 
 /* =====================================================================
    VIDEO WALL — full-screen live TV wall (Vision Command Centre → Video wall)
-   - Same channels as the Live TV wall (Channels… picks them), laid out to
-     fill the screen: 1, 2×2, 3×3, or one large channel with the rest beside it.
-   - Full screen button for a wall display; sound on one channel at a time.
-   - Video keeps playing while the console refreshes: the wall is only
-     redrawn when its channels, sound or layout change.
+   - Same channels as the Live TV wall (Channels… picks them). The wall fills
+     the space it has: 1, 2×2, 3×3, or one large channel with the rest beside it.
+   - Transcript panel on the right: what the channel with sound is saying,
+     time-stamped, with watch words highlighted. Two ways to get it:
+       · Captions on the video — YouTube's own captions, free, no set-up.
+       · Live transcript — the console listens to this tab's sound and sends
+         short clips to a speech-to-text service (OpenAI or Groq, with your own
+         key, kept in this browser only). Can translate into English.
+   - Full screen for a wall display; video keeps playing while the console
+     refreshes (the wall is only redrawn when channels, sound or layout change).
    ===================================================================== */
 CFG.ltv.layout = CFG.ltv.layout || "auto";
+CFG.ltv.tr = Object.assign({ open: true, cc: false, provider: "groq", key: "", translate: true, seconds: 15 }, CFG.ltv.tr || {});
 // a fuller default wall for new copies (existing choices are kept)
-if (!CFG.ltv.__vw){ CFG.ltv.__vw = 1; const want = ["cna", "aje", "abcau", "awani", "abscbn", "kompastv", "arirang", "ndtv", "bloomberg"];
+if (!CFG.ltv.__vw){ CFG.ltv.__vw = 1; const want = ["cna", "aje", "abcau", "kompastv", "dw", "arirang", "ndtv", "bloomberg", "euronews"];
   if (CFG.ltv.wall.join() === "cna,aje,abcau,awani") CFG.ltv.wall = want; ltvSyncDock(); saveCfg(); }
+// Astro AWANI and ABS-CBN don't offer their live stream for other websites: swap them for 24/7 channels that do
+if (!CFG.ltv.__vw2){ CFG.ltv.__vw2 = 1; const swap = { awani: "dw", abscbn: "euronews" };
+  CFG.ltv.wall = [...new Set(CFG.ltv.wall.map(k => swap[k] && !CFG.ltv.wall.includes(swap[k]) ? swap[k] : k).filter(k => !swap[k]))];
+  if (!CFG.ltv.wall.includes(CFG.ltv.audio)) CFG.ltv.audio = CFG.ltv.wall[0] || ""; ltvSyncDock(); saveCfg(); }
 const VW_LAYOUTS = [["auto", "Auto"], ["1", "1"], ["4", "2 × 2"], ["9", "3 × 3"], ["feature", "1 large + 5"]];
 function vwShape(n){ const L = CFG.ltv.layout;
   if (L === "feature") return { n: Math.min(n, 6), cols: 3, rows: 3, feature: true };
   const cap = L === "1" ? 1 : L === "4" ? 4 : L === "9" ? 9 : n, m = Math.max(1, Math.min(n, cap)), cols = m <= 1 ? 1 : m <= 4 ? 2 : 3;
   return { n: m, cols, rows: Math.ceil(m / cols), feature: false }; }
+// saved sizes per layout: drag the lines between tiles (double-click a line to reset)
+CFG.ltv.sizes = CFG.ltv.sizes || {};
+const vwKey = sh => `${CFG.ltv.layout}:${sh.cols}x${sh.rows}`;
+function vwTracks(sh){ const z = CFG.ltv.sizes[vwKey(sh)] || {}, ok = (a, n) => Array.isArray(a) && a.length === n && a.every(x => x > 0);
+  const c = ok(z.c, sh.cols) ? z.c : Array(sh.cols).fill(1), r = ok(z.r, sh.rows) ? z.r : Array(sh.rows).fill(1);
+  return { c, r, css: `grid-template-columns:${c.map(f => `minmax(0,${f}fr)`).join(" ")};grid-template-rows:${r.map(f => `minmax(0,${f}fr)`).join(" ")}` }; }
+// YouTube captions: ask the player to show them (live streams with automatic captions show them)
+const vwCC = src => !CFG.ltv.tr.cc ? src : /\/yt\.html\?/.test(src) ? src + "&cc=1" : /youtube\.com\/embed\//.test(src) ? src + "&cc_load_policy=1&cc_lang_pref=en&hl=en" : src;
 function vwTile(c, big){ const audio = CFG.ltv.audio === c.key, e = ltvSrc(c, !audio), st = ltvStatus(c), open = esc(safeUrl(ltvOpenUrl(c)));
   const body = st && st.embeddable === false ? `<div class="ltvmsg">${esc(c.name)} does not allow its live stream inside other websites. <a href="${open}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`
     : !e ? `<div class="ltvmsg">${esc(c.name)} is listed by its YouTube handle, which needs the ITE server to look up. <a href="${open}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`
     : ltvNoPlay() ? `<div class="ltvmsg">Live video plays when the console is opened from its website address. <a href="${open}" target="_blank" rel="noopener">Watch ${esc(c.name)} ↗</a></div>`
     : e.kind === "hls" ? `<video data-vwhls="${esc(c.key)}" ${audio ? "" : "muted"} autoplay playsinline controls></video>`
-    : `<iframe src="${esc(e.src)}" title="${esc(c.name)} live" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    : `<iframe src="${esc(vwCC(e.src))}" title="${esc(c.name)} live" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   return `<div class="vwtile${audio ? " audio" : ""}${big ? " big" : ""}"><div class="vwh">${ltvDot(c)}<b title="${esc(c.name)} · ${esc(c.country)}">${esc(c.name)}</b>
     <button class="ltvb" data-vwaudio="${esc(c.key)}" title="${audio ? "Sound on — click to mute" : "Listen to this channel"}" aria-label="${audio ? "Mute " : "Listen to "}${esc(c.name)}">${audio ? "🔊" : "🔈"}</button>
     ${big ? "" : `<button class="ltvb" data-vwbig="${esc(c.key)}" title="Make this the large channel" aria-label="Make ${esc(c.name)} the large channel">⤢</button>`}<a class="ltvb" href="${open}" target="_blank" rel="noopener" title="Open on YouTube" aria-label="Open ${esc(c.name)} on YouTube">↗</a></div><div class="vwb">${body}</div></div>`; }
-const vwSig = () => [CFG.ltv.wall.join(), CFG.ltv.audio, CFG.ltv.layout, ltvNoPlay(), JSON.stringify(CFG.ltv.wall.map(k => { const s = (CFG.ltv.status || {})[k]; return s ? [s.live, s.videoId, s.embeddable] : 0; }))].join("|");
+const vwSig = () => [CFG.ltv.wall.join(), CFG.ltv.audio, CFG.ltv.layout, ltvNoPlay(), CFG.ltv.tr.open, CFG.ltv.tr.cc, JSON.stringify(CFG.ltv.wall.map(k => { const s = (CFG.ltv.status || {})[k]; return s ? [s.live, s.videoId, s.embeddable] : 0; }))].join("|");
+
+/* ---------- transcript ---------- */
+const TR = { on: false, busy: false, stream: null, rec: null, timer: null, lines: [], err: "", queue: [] };
+const TR_PROV = { groq: { name: "Groq (free tier)", url: "https://api.groq.com/openai/v1/audio/", model: "whisper-large-v3", keyUrl: "https://console.groq.com/keys" },
+  openai: { name: "OpenAI", url: "https://api.openai.com/v1/audio/", model: "whisper-1", keyUrl: "https://platform.openai.com/api-keys" } };
+const TR_JUNK = /^(\W*|thank you\.?|thanks for watching!?|you|bye\.?|\[music\]|\(music\)|subtitles by.*|please subscribe.*)$/i;
+function trWords(){ const w = new Set(["typhoon", "earthquake", "tsunami", "flood", "protest", "riot", "explosion", "fire", "evacuat", "shooting", "attack", "outage", "blackout", "strike", "curfew", "warning", "landslide", "cyclone", "storm", "killed", "injured"]);
+  (CFG.watchlists || []).forEach(x => (x.terms || []).forEach(t => t && t.length > 2 && w.add(String(t).toLowerCase())));
+  SITES.forEach(s => s.city && w.add(s.city.toLowerCase())); return [...w].filter(Boolean).sort((a, b) => b.length - a.length); }
+function trMark(text){ let h = esc(text); const ws = trWords().map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); if (!ws.length) return h;
+  return h.replace(new RegExp(`\\b(${ws.join("|")})\\w*`, "gi"), "<mark>$&</mark>"); }
+function trLineHtml(l){ return `<div class="trl${l.hit ? " hit" : ""}"><span class="trt">${esc(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(l.t))}</span> <span class="trc">${esc(l.ch)}</span><div>${trMark(l.text)}</div></div>`; }
+function trPanelHtml(){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.groq, ch = ltvGet(CFG.ltv.audio);
+  return `<aside class="vwtr" aria-label="Transcript"><div class="trhd"><b>Transcript</b><span class="s">${ch ? esc(ch.name) : "no channel with sound"}</span><span class="sp"></span><button class="ltvb" data-trclose title="Hide transcript" aria-label="Hide transcript">×</button></div>
+    <div class="trctl">
+      <label class="ctl"><input type="checkbox" data-trcc${T.cc ? " checked" : ""}> Captions on the video <small class="s">(YouTube's own, free)</small></label>
+      <div class="trbtns">${TR.on ? `<button class="pill" data-trstop>■ Stop live transcript</button>` : `<button class="pill primary" data-trstart>● Start live transcript</button>`}<button class="tab-mini" data-trset>Settings</button></div>
+      <div class="s trstat" id="trStat">${TR.on ? `Listening to this tab · ${esc(P.name)} · every ${T.seconds} s${T.translate ? " · translated to English" : ""}${TR.busy ? " · transcribing…" : ""}` : T.key ? `${esc(P.name)} ready. Start, then choose <b>this tab</b> and tick <b>Share tab audio</b>.` : `Live transcript needs a speech-to-text key — <button class="linkbtn" data-trset>add one in Settings</button>. Captions work without one.`}${TR.err ? `<div class="trerr">${esc(TR.err)}</div>` : ""}</div></div>
+    <div class="trlog" id="trLog">${TR.lines.length ? TR.lines.map(trLineHtml).join("") : `<div class="s trempty">What the channel with sound (🔊) says appears here, time-stamped, with watch words and your sites' cities highlighted.</div>`}</div>
+    <div class="trft"><button class="tab-mini" data-trcopy${TR.lines.length ? "" : " disabled"}>Copy</button><button class="tab-mini" data-trdl${TR.lines.length ? "" : " disabled"}>Download</button><button class="tab-mini" data-trclear${TR.lines.length ? "" : " disabled"}>Clear</button></div></aside>`; }
+function trRefresh(){ const box = $(".vwtr"); if (!box) return; const log = $("#trLog"), atEnd = log && log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  box.outerHTML = trPanelHtml(); const n = $("#trLog"); if (n && (atEnd || !log)) n.scrollTop = n.scrollHeight; }
+function trAdd(text){ text = String(text || "").replace(/\s+/g, " ").trim(); if (!text || TR_JUNK.test(text)) return;
+  const ws = trWords(), hit = ws.some(w => text.toLowerCase().includes(w)); const ch = ltvGet(CFG.ltv.audio);
+  TR.lines.push({ t: new Date(), ch: ch ? ch.name : "", text, hit }); if (TR.lines.length > 600) TR.lines.splice(0, TR.lines.length - 600);
+  const log = $("#trLog"); if (log){ const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40; const e = log.querySelector(".trempty"); if (e) e.remove(); log.insertAdjacentHTML("beforeend", trLineHtml(TR.lines[TR.lines.length - 1])); if (atEnd) log.scrollTop = log.scrollHeight; } }
+async function trSend(blob){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.groq; if (blob.size < 2000) return;
+  const fd = new FormData(); fd.append("file", blob, "clip.webm"); fd.append("model", P.model); fd.append("response_format", "json"); if (!T.translate) fd.append("temperature", "0");
+  TR.busy = true; const st = $("#trStat"); if (st && !/transcribing/.test(st.textContent)) st.insertAdjacentHTML("beforeend", "<span class='trbusy'> · transcribing…</span>");
+  try{ const r = await fetch(P.url + (T.translate ? "translations" : "transcriptions"), { method: "POST", headers: { Authorization: "Bearer " + T.key }, body: fd });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error((j.error && (j.error.message || j.error)) || "HTTP " + r.status);
+    TR.err = ""; trAdd(j.text); }
+  catch(e){ TR.err = "Speech-to-text: " + (e.message || e) + (/401|invalid.*key|Incorrect API key/i.test(e.message) ? " — check the key in Settings." : /Failed to fetch/i.test(e.message) ? " — the service can't be reached from this network." : ""); trRefresh(); }
+  finally{ TR.busy = false; const b = $(".trbusy"); if (b) b.remove(); } }
+function trCycle(){ if (!TR.on || !TR.stream) return; const tr = TR.stream.getAudioTracks()[0]; if (!tr || tr.readyState !== "live"){ trStop("Tab sound sharing ended."); return; }
+  const mt = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(new MediaStream([tr]), mt ? { mimeType: mt } : undefined), parts = [];
+  rec.ondataavailable = e => e.data && e.data.size && parts.push(e.data);
+  rec.onstop = () => { const b = new Blob(parts, { type: mt || "audio/webm" }); TR.queue.push(b); trDrain(); };
+  rec.start(); TR.rec = rec; TR.timer = setTimeout(() => { try{ rec.stop(); }catch(e){} trCycle(); }, Math.max(6, +CFG.ltv.tr.seconds || 15) * 1000); }
+async function trDrain(){ if (trDrain.on) return; trDrain.on = true; try{ while (TR.queue.length){ const b = TR.queue.shift(); if (TR.queue.length > 3) TR.queue.splice(0, TR.queue.length - 2); await trSend(b); } } finally { trDrain.on = false; } }
+async function trStart(){ const T = CFG.ltv.tr; if (!T.key){ trSettings(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.MediaRecorder){ toast("Not supported in this browser", "Use Chrome or Edge on a computer.", "var(--amber)"); return; }
+  try{ const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { suppressLocalAudioPlayback: false }, preferCurrentTab: true, selfBrowserSurface: "include", systemAudio: "include", surfaceSwitching: "exclude" });
+    if (!s.getAudioTracks().length){ s.getTracks().forEach(t => t.stop()); toast("No sound was shared", "Choose this tab and tick “Share tab audio”, then try again.", "var(--amber)"); return; }
+    TR.stream = s; TR.on = true; TR.err = ""; s.getVideoTracks().forEach(v => { try{ v.applyConstraints({ frameRate: 1, width: 64, height: 36 }); }catch(e){} v.onended = () => trStop("Sharing stopped."); });
+    s.getAudioTracks()[0].onended = () => trStop("Tab sound sharing ended."); trCycle(); trRefresh(); audit("Live transcript started", (ltvGet(CFG.ltv.audio) || {}).name || "", (TR_PROV[T.provider] || {}).name || ""); }
+  catch(e){ if (!/Permission|NotAllowed|AbortError/i.test(e.name + e.message)) toast("Could not start", e.message, "var(--amber)"); } }
+function trStop(msg){ TR.on = false; clearTimeout(TR.timer); try{ TR.rec && TR.rec.state !== "inactive" && TR.rec.stop(); }catch(e){} if (TR.stream) TR.stream.getTracks().forEach(t => t.stop()); TR.stream = null; TR.rec = null; if (msg) TR.err = msg; trRefresh(); }
+function trSettings(){ const T = CFG.ltv.tr;
+  openModal(head("Live transcript — settings") + `<div class="bd"><p class="help" style="margin-top:0">The live transcript listens to <b>this tab's sound</b> (the channel with 🔊) and sends a short clip every few seconds to a speech-to-text service. You need your own key. It is kept <b>in this browser only</b> and goes only to the service you pick. Captions on the video need no key.</p>
+    <div class="fgrid"><label class="fld">Service<select id="trP">${Object.entries(TR_PROV).map(([k, p]) => `<option value="${k}"${T.provider === k ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+    <label class="fld">Clip length<select id="trS">${[8, 10, 15, 20, 30].map(n => `<option value="${n}"${+T.seconds === n ? " selected" : ""}>${n} seconds</option>`).join("")}</select></label></div>
+    <label class="fld">API key <small class="s" id="trKeyHelp"></small><input id="trK" type="password" autocomplete="off" value="${esc(T.key)}" placeholder="paste your key"></label>
+    <label class="ctl"><input type="checkbox" id="trT"${T.translate ? " checked" : ""}> Translate into English (Bahasa, Thai, Japanese, Korean, Mandarin and others become English text)</label>
+    <p class="help">Shorter clips appear sooner; longer clips give more accurate sentences. Each clip is charged by the service (Groq has a free allowance). Don't use a key that belongs to your organisation on a public computer.</p></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="trSave">Save</button></div>`);
+  const help = () => { const p = TR_PROV[$("#trP").value]; $("#trKeyHelp").innerHTML = `— get one at <a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${esc(p.keyUrl.replace(/^https:\/\//, ""))}</a>`; }; help(); $("#trP").onchange = help;
+  $("#trSave").onclick = () => { Object.assign(CFG.ltv.tr, { provider: $("#trP").value, key: $("#trK").value.trim(), translate: $("#trT").checked, seconds: +$("#trS").value }); saveCfg(); $("#ov").classList.remove("show"); trRefresh(); toast("Transcript settings saved", "Kept in this browser only.", "var(--teal)"); }; }
+
+/* ---------- the panel ---------- */
 function videoWallPanel(){ const all = CFG.ltv.wall.map(ltvGet).filter(Boolean), sh = vwShape(all.length), list = all.slice(0, sh.n);
   const fileNote = ltvNoPlay() ? `<div class="banner warn" style="margin:0 0 6px">Opened from a file and the ITE player page can't be reached (no internet, or the network blocks it), so YouTube won't play inside the console here. Each tile opens the channel on YouTube instead.</div>` : "";
   const tiles = list.map((c, i) => vwTile(c, sh.feature && i === 0)).join("");
-  return `<div class="vw" data-sig="${esc(vwSig())}"><div class="vwbar"><b>Video wall</b><span class="s">${list.length} of ${all.length} channels · sound: ${esc((ltvGet(CFG.ltv.audio) || {}).name || "off")}</span><span class="sp"></span>
+  return `<div class="vw${CFG.ltv.tr.open ? " withtr" : ""}" data-sig="${esc(vwSig())}"><div class="vwbar"><b>Video wall</b><span class="s">${list.length} of ${all.length} channels · sound: ${esc((ltvGet(CFG.ltv.audio) || {}).name || "off")}</span><span class="sp"></span>
     <span class="vwlay" role="group" aria-label="Layout">${VW_LAYOUTS.map(([k, l]) => `<button class="tab-mini${CFG.ltv.layout === k ? " on" : ""}" data-vwlay="${k}" aria-pressed="${CFG.ltv.layout === k}">${l}</button>`).join("")}</span>
-    <button class="tab-mini" data-ltvmanage>Channels…</button><button class="tab-mini" data-vwmute>Mute all</button><button class="tab-mini primary" data-vwfs>⛶ Full screen</button></div>${fileNote}
-    ${list.length ? `<div class="vwgrid${sh.feature ? " feature" : ""}" style="--cols:${sh.cols};--rows:${sh.rows}">${tiles}</div>` : `<div class="empty">No channels yet — open <b>Channels…</b> and tick up to 9 (CNA, Al Jazeera, ABC Australia and others).</div>`}</div>`; }
-function mountVideoWall(){ $$("[data-vwhls]").forEach(v => { if (v.__on) return; v.__on = 1; const c = ltvGet(v.dataset.vwhls); if (c) attachHls(v, c.ref).then(() => v.play().catch(() => {})).catch(() => {}); });
+    <button class="tab-mini" data-ltvmanage>Channels…</button><button class="tab-mini" data-vwmute>Mute all</button><button class="tab-mini${CFG.ltv.tr.open ? " on" : ""}" data-trtoggle aria-pressed="${CFG.ltv.tr.open}">Transcript</button><button class="tab-mini primary" data-vwfs>⛶ Full screen</button></div>${fileNote}
+    <div class="vwmain">${list.length ? `<div class="vwgrid${sh.feature ? " feature" : ""}" data-key="${esc(vwKey(sh))}" data-cols="${sh.cols}" data-rows="${sh.rows}" style="--cols:${sh.cols};--rows:${sh.rows};${vwTracks(sh).css}">${tiles}</div>` : `<div class="empty" style="flex:1">No channels yet — open <b>Channels…</b> and tick up to 9 (CNA, Al Jazeera, ABC Australia and others).</div>`}${CFG.ltv.tr.open ? `<div class="vwsplit" data-vwsplit role="separator" aria-orientation="vertical" title="Drag to resize the transcript"></div>` + trPanelHtml() : ""}</div></div>`; }
+// the wall takes all the height below it on screen
+function vwFit(){ const v = $(".vw"); if (!v) return; if (CFG.ltv.tr.width) v.style.setProperty("--trw", CFG.ltv.tr.width + "px");
+  if (document.fullscreenElement === v) v.style.height = ""; else v.style.height = Math.max(360, innerHeight - v.getBoundingClientRect().top - 10) + "px"; requestAnimationFrame(vwHandles); }
+addEventListener("resize", () => { if (UI.mode === "videowall") vwFit(); });
+// drag handles on the lines between tiles
+function vwHandles(){ const g = $(".vwgrid"); if (!g || matchMedia("(max-width:760px)").matches) return; g.querySelectorAll(".vwgut").forEach(x => x.remove());
+  const cs = getComputedStyle(g), gap = parseFloat(cs.columnGap) || 6, cw = cs.gridTemplateColumns.split(" ").map(parseFloat), rh = cs.gridTemplateRows.split(" ").map(parseFloat);
+  const feat = g.classList.contains("feature"), bigH = feat ? rh[0] + rh[1] + 2 * gap : 0, bigW = feat ? cw[0] + cw[1] + 2 * gap : 0;   // lines never cross the large tile
+  let x = 0; cw.slice(0, -1).forEach((w, i) => { x += w; g.insertAdjacentHTML("beforeend", `<div class="vwgut col" data-gut="c${i}" style="left:${x + i * gap}px;width:${gap}px;${feat && i === 0 ? `top:${bigH}px` : ""}" title="Drag to resize · double-click to reset" role="separator" aria-orientation="vertical"></div>`); });
+  let y = 0; rh.slice(0, -1).forEach((h, i) => { y += h; g.insertAdjacentHTML("beforeend", `<div class="vwgut row" data-gut="r${i}" style="top:${y + i * gap}px;height:${gap}px;${feat && i === 0 ? `left:${bigW}px` : ""}" title="Drag to resize · double-click to reset" role="separator" aria-orientation="horizontal"></div>`); }); }
+function vwSaveTracks(g, c, r){ CFG.ltv.sizes[g.dataset.key] = { c, r }; saveCfg(); }
+document.addEventListener("pointerdown", e => {
+  const gut = e.target.closest(".vwgut"), split = e.target.closest("[data-vwsplit]"); if (!gut && !split) return; e.preventDefault();
+  const vw = $(".vw"); vw.classList.add("dragging");
+  if (split){ const tr = $(".vwtr"), x0 = e.clientX, w0 = tr.getBoundingClientRect().width, max = Math.max(260, vw.getBoundingClientRect().width * 0.6);
+    const mv = ev => { const w = Math.min(max, Math.max(220, w0 - (ev.clientX - x0))); vw.style.setProperty("--trw", w + "px"); CFG.ltv.tr.width = Math.round(w); vwHandles(); };
+    const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); vw.classList.remove("dragging"); saveCfg(); vwHandles(); };
+    addEventListener("pointermove", mv); addEventListener("pointerup", up); return; }
+  const g = gut.parentElement, isCol = gut.dataset.gut[0] === "c", i = +gut.dataset.gut.slice(1), cs = getComputedStyle(g);
+  const px = (isCol ? cs.gridTemplateColumns : cs.gridTemplateRows).split(" ").map(parseFloat), sum = px.reduce((a, b) => a + b, 0), fr = px.map(p => p / sum * px.length);
+  const pair = px[i] + px[i + 1], a0 = px[i], p0 = isCol ? e.clientX : e.clientY, min = Math.max(60, pair * 0.12);
+  const other = (isCol ? cs.gridTemplateRows : cs.gridTemplateColumns).split(" ").map(parseFloat), osum = other.reduce((a, b) => a + b, 0), ofr = other.map(p => p / osum * other.length);
+  const mv = ev => { const a = Math.min(pair - min, Math.max(min, a0 + ((isCol ? ev.clientX : ev.clientY) - p0))), f = fr.slice(); const pf = fr[i] + fr[i + 1]; f[i] = +(pf * a / pair).toFixed(3); f[i + 1] = +(pf - f[i]).toFixed(3);
+    g.style[isCol ? "gridTemplateColumns" : "gridTemplateRows"] = f.map(x => `minmax(0,${x}fr)`).join(" "); mv.f = f; };
+  const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); vw.classList.remove("dragging");
+    if (mv.f) vwSaveTracks(g, isCol ? mv.f : ofr.map(x => +x.toFixed(3)), isCol ? ofr.map(x => +x.toFixed(3)) : mv.f); vwHandles(); };
+  addEventListener("pointermove", mv); addEventListener("pointerup", up); });
+document.addEventListener("dblclick", e => { const gut = e.target.closest(".vwgut"), split = e.target.closest("[data-vwsplit]");
+  if (split){ CFG.ltv.tr.width = 340; saveCfg(); const vw = $(".vw"); if (vw) vw.style.setProperty("--trw", "340px"); vwHandles(); return; }
+  if (!gut) return; const g = gut.parentElement; delete CFG.ltv.sizes[g.dataset.key]; saveCfg(); g.style.gridTemplateColumns = `repeat(${g.dataset.cols},minmax(0,1fr))`; g.style.gridTemplateRows = `repeat(${g.dataset.rows},minmax(0,1fr))`; vwHandles(); });
+function mountVideoWall(){ vwFit(); const n = $("#trLog"); if (n) n.scrollTop = n.scrollHeight;
+  $$("[data-vwhls]").forEach(v => { if (v.__on) return; v.__on = 1; const c = ltvGet(v.dataset.vwhls); if (c) attachHls(v, c.ref).then(() => v.play().catch(() => {})).catch(() => {}); });
   if (serverBase()){ const stale = CFG.ltv.wall.map(ltvGet).filter(c => c && !/^https?:/.test(c.ref) && (!ltvStatus(c) || Date.now() - (ltvStatus(c).at || 0) > 30 * 60e3)); if (stale.length && !mountVideoWall.__busy){ mountVideoWall.__busy = true; ltvCheckMany(stale).then(() => { mountVideoWall.__busy = false; if (UI.mode === "videowall") renderPanel(); }); } } }
 { const t = G("vcc").tabs; if (!t.some(x => x[0] === "videowall")) t.splice(t.findIndex(x => x[0] === "vcc") + 1, 0, ["videowall", "Video wall"]); }
-NOMAP.push("videowall"); NON_CITY_MODES.push("videowall"); KEYS.videowall = ["VIDEO WALL", [], "Live news channels on one screen — full screen for a wall display"];
+NOMAP.push("videowall"); NON_CITY_MODES.push("videowall"); KEYS.videowall = ["VIDEO WALL", [], "Live news channels on one screen, with a live transcript — full screen for a wall display"];
 const _rpiVW = renderPanelInner;
 renderPanelInner = function(p){ if (UI.mode !== "videowall") return _rpiVW(p);
   if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
-  const cur = p.querySelector(".vw"); if (cur && cur.dataset.sig === vwSig()) return;      // unchanged: keep the video playing
-  p.innerHTML = `<div class="pbody vwbody">${videoWallPanel()}</div>`; setTimeout(mountVideoWall, 30); };
-document.addEventListener("click", e => { const t = e.target.closest("[data-vwaudio],[data-vwbig],[data-vwlay],[data-vwfs],[data-vwmute],[data-vwgo]"); if (!t) return; const d = t.dataset;
+  const cur = p.querySelector(".vw"); if (cur && cur.dataset.sig === vwSig()){ setTimeout(vwFit, 0); return; }      // unchanged: keep the video playing
+  const wasFs = document.fullscreenElement && document.fullscreenElement.classList.contains("vw");
+  p.innerHTML = `<div class="pbody vwbody">${videoWallPanel()}</div>`; setTimeout(mountVideoWall, 30);
+  if (wasFs){ const v = $(".vw"); if (v && v.requestFullscreen) v.requestFullscreen().catch(() => {}); } };
+document.addEventListener("click", async e => { const t = e.target.closest("[data-vwaudio],[data-vwbig],[data-vwlay],[data-vwfs],[data-vwmute],[data-vwgo],[data-trtoggle],[data-trclose],[data-trstart],[data-trstop],[data-trset],[data-trcopy],[data-trdl],[data-trclear]"); if (!t) return; const d = t.dataset;
   if (d.vwgo !== undefined){ setMode("videowall"); return; }
   if (d.vwaudio){ CFG.ltv.audio = CFG.ltv.audio === d.vwaudio ? "" : d.vwaudio; saveCfg(); renderPanel(); return; }
   if (d.vwmute !== undefined){ CFG.ltv.audio = ""; saveCfg(); renderPanel(); return; }
   if (d.vwbig){ CFG.ltv.wall = [d.vwbig].concat(CFG.ltv.wall.filter(k => k !== d.vwbig)); if (CFG.ltv.layout !== "feature") CFG.ltv.layout = "feature"; ltvSyncDock(); saveCfg(); renderPanel(); return; }
   if (d.vwlay){ CFG.ltv.layout = d.vwlay; saveCfg(); renderPanel(); return; }
+  if (d.trtoggle !== undefined || d.trclose !== undefined){ CFG.ltv.tr.open = d.trclose !== undefined ? false : !CFG.ltv.tr.open; saveCfg(); renderPanel(); return; }
+  if (d.trstart !== undefined){ trStart(); return; }
+  if (d.trstop !== undefined){ trStop(); audit("Live transcript stopped", "", ""); return; }
+  if (d.trset !== undefined){ trSettings(); return; }
+  if (d.trclear !== undefined){ TR.lines = []; TR.err = ""; trRefresh(); return; }
+  if (d.trcopy !== undefined || d.trdl !== undefined){ const txt = TR.lines.map(l => `[${sgt(l.t)}] ${l.ch}: ${l.text}`).join("\n");
+    if (d.trcopy !== undefined){ try{ await navigator.clipboard.writeText(txt); toast("Transcript copied", `${TR.lines.length} lines`, "var(--teal)"); }catch(err){ toast("Could not copy", "", "var(--amber)"); } }
+    else download(`transcript-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.txt`, txt, "text/plain"); return; }
   if (d.vwfs !== undefined){ const el = $(".vw"); if (!el) return; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else (el.requestFullscreen ? el.requestFullscreen() : Promise.reject()).catch(() => toast("Full screen not available", "Your browser blocked it — press F11 instead.", "var(--amber)")); } });
-document.addEventListener("fullscreenchange", () => { const b = $("[data-vwfs]"); if (b) b.textContent = document.fullscreenElement ? "✕ Exit full screen" : "⛶ Full screen"; });
+document.addEventListener("change", e => { if (e.target.matches && e.target.matches("[data-trcc]")){ CFG.ltv.tr.cc = e.target.checked; saveCfg(); renderPanel(); } });
+document.addEventListener("fullscreenchange", () => { const b = $("[data-vwfs]"); if (b) b.textContent = document.fullscreenElement ? "✕ Exit full screen" : "⛶ Full screen"; setTimeout(vwFit, 50); });
 // Live news gets a shortcut to the full wall
 const _lnPanelVW = liveNewsPanel; liveNewsPanel = function(){ return _lnPanelVW().replace(/(<button class="tab-mini" data-ltvmanage>)/, `<button class="tab-mini" data-vwgo>Open video wall ⤢</button>$1`); };
 { const st = document.createElement("style"); st.textContent = `
-.vwbody{padding:8px 12px}.vw{display:flex;flex-direction:column;gap:6px;background:var(--bg)}.vw:fullscreen{background:#000;padding:6px;gap:4px}.vw:fullscreen .vwbar{color:#fff}
-.vwbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.vwbar .sp{flex:1}.vwlay{display:inline-flex;gap:2px}.vwlay .on{background:var(--accent,#0F6CBD);color:#fff;border-color:transparent}
-.vwgrid{--avail:calc(100vh - 260px);display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:6px;margin:0 auto;width:min(100%, calc((var(--avail) / var(--rows) - 26px) * 1.7778 * var(--cols)))}
-.vw:fullscreen .vwgrid{--avail:calc(100vh - 50px)}
+.vwbody{padding:6px 10px}.vw{display:flex;flex-direction:column;gap:6px;background:var(--bg);min-height:360px}.vw:fullscreen{background:#000;padding:6px;gap:4px;height:100vh}.vw:fullscreen .vwbar{color:#fff}
+.vwbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.vwbar .sp{flex:1}.vwlay{display:inline-flex;gap:2px}.vwbar .on{background:var(--accent,#0F6CBD);color:#fff;border-color:transparent}
+.vwmain{flex:1;min-height:0;display:flex;gap:6px}
+.vwgrid{flex:1;min-width:0;min-height:0;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
+.vwgrid{position:relative}.vwgut{position:absolute;z-index:3;background:transparent;touch-action:none}.vwgut.col{top:0;bottom:0;cursor:col-resize}.vwgut.row{left:0;right:0;cursor:row-resize}
+.vwgut:hover,.vw.dragging .vwgut{background:color-mix(in srgb,#3B8BEB 70%,transparent)}.vw.dragging iframe,.vw.dragging video{pointer-events:none}.vw.dragging{user-select:none}
+.vwsplit{flex:none;width:6px;margin:0 -3px;cursor:col-resize;border-radius:3px;touch-action:none;position:relative;z-index:3}.vwsplit:hover,.vw.dragging .vwsplit{background:color-mix(in srgb,#3B8BEB 70%,transparent)}
 .vwgrid.feature .vwtile.big{grid-column:1 / span 2;grid-row:1 / span 2}
-.vwtile{display:flex;flex-direction:column;background:#000;border:2px solid #000;border-radius:6px;overflow:hidden;min-width:0}.vwtile.audio{border-color:#3B8BEB}
-.vwh{display:flex;align-items:center;gap:6px;background:#1d2327;color:#fff;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden}.vwh b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.vwb{flex:1;display:flex;min-height:0}.vwb iframe,.vwb video{width:100%;aspect-ratio:16/9;height:100%;border:0;display:block;background:#000}.vwb .ltvmsg{flex:1}
-@media (max-width:760px){.vwgrid{grid-template-columns:1fr;width:100%}.vwgrid.feature .vwtile.big{grid-column:auto;grid-row:auto}}`; document.head.appendChild(st); }
+.vwtile{display:flex;flex-direction:column;background:#000;border:2px solid #000;border-radius:6px;overflow:hidden;min-width:0;min-height:0}.vwtile.audio{border-color:#3B8BEB}
+.vwh{display:flex;align-items:center;gap:6px;background:#1d2327;color:#fff;padding:2px 6px;font-size:12px;white-space:nowrap;overflow:hidden;flex:none}.vwh b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vwb{flex:1;display:flex;min-height:0;background:#000}.vwb iframe,.vwb video{width:100%;height:100%;border:0;display:block;background:#000}.vwb .ltvmsg{flex:1;aspect-ratio:auto}
+.vwtr{flex:none;width:var(--trw,340px);display:flex;flex-direction:column;min-height:0;background:var(--panel,#161c20);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vw:fullscreen .vwtr{background:#0d1114;border-color:#2a3238;color:#e8ecef}
+.trhd{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line)}.trhd .sp{flex:1}.trhd .ltvb{color:inherit;font-size:16px}
+.trctl{padding:6px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}.trbtns{display:flex;gap:6px;align-items:center}.trstat{font-size:12px}.trerr{color:#E8873A;margin-top:3px}
+.trlog{flex:1;overflow:auto;padding:6px 10px;font-size:14px;line-height:1.45}.trl{padding:5px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.trl.hit{border-left:3px solid #E8873A;padding-left:6px}
+.trt{font:600 11px Consolas,monospace;color:var(--muted)}.trc{font-size:11px;color:var(--muted)}.trl mark{background:#E8873A;color:#111;border-radius:2px;padding:0 2px}.trempty{padding:10px 0}
+.trft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid var(--line)}
+@media (max-width:1100px){.vwtr{width:280px}}
+@media (max-width:760px){.vw{height:auto !important}.vwmain{flex-direction:column}.vwgrid{grid-template-columns:1fr;grid-template-rows:none}.vwgrid .vwb{aspect-ratio:16/9}.vwgrid.feature .vwtile.big{grid-column:auto;grid-row:auto}.vwtr{width:auto;height:420px}}`; document.head.appendChild(st); }
 
 boot();
 
