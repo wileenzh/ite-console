@@ -12488,7 +12488,8 @@ const _vccNewsL = vccNewsHtml; vccNewsHtml = function(){ const r = _vccNewsL(); 
      refreshes (the wall is only redrawn when channels, sound or layout change).
    ===================================================================== */
 CFG.ltv.layout = CFG.ltv.layout || "auto";
-CFG.ltv.tr = Object.assign({ open: true, cc: false, provider: "groq", key: "", translate: true, seconds: 15 }, CFG.ltv.tr || {});
+CFG.ltv.tr = Object.assign({ open: true, cc: false, provider: "local", key: "", translate: true, seconds: 15, localModel: "base" }, CFG.ltv.tr || {});
+if (!CFG.ltv.tr.__local){ CFG.ltv.tr.__local = 1; if (!CFG.ltv.tr.key) CFG.ltv.tr.provider = "local"; }      // free on-computer engine unless a key was set
 // a fuller default wall for new copies (existing choices are kept)
 if (!CFG.ltv.__vw){ CFG.ltv.__vw = 1; const want = ["cna", "aje", "abcau", "kompastv", "dw", "arirang", "ndtv", "bloomberg", "euronews"];
   if (CFG.ltv.wall.join() === "cna,aje,abcau,awani") CFG.ltv.wall = want; ltvSyncDock(); saveCfg(); }
@@ -12522,7 +12523,8 @@ const vwSig = () => [CFG.ltv.wall.join(), CFG.ltv.audio, CFG.ltv.layout, ltvNoPl
 
 /* ---------- transcript ---------- */
 const TR = { on: false, busy: false, stream: null, rec: null, timer: null, lines: [], err: "", queue: [] };
-const TR_PROV = { groq: { name: "Groq (free tier)", url: "https://api.groq.com/openai/v1/audio/", model: "whisper-large-v3", keyUrl: "https://console.groq.com/keys" },
+const TR_PROV = { local: { name: "On this computer (free, no key)", local: true },
+  groq: { name: "Groq (free tier)", url: "https://api.groq.com/openai/v1/audio/", model: "whisper-large-v3", keyUrl: "https://console.groq.com/keys" },
   openai: { name: "OpenAI", url: "https://api.openai.com/v1/audio/", model: "whisper-1", keyUrl: "https://platform.openai.com/api-keys" } };
 const TR_JUNK = /^(\W*|thank you\.?|thanks for watching!?|you|bye\.?|\[music\]|\(music\)|subtitles by.*|please subscribe.*)$/i;
 function trWords(){ const w = new Set(["typhoon", "earthquake", "tsunami", "flood", "protest", "riot", "explosion", "fire", "evacuat", "shooting", "attack", "outage", "blackout", "strike", "curfew", "warning", "landslide", "cyclone", "storm", "killed", "injured"]);
@@ -12531,12 +12533,12 @@ function trWords(){ const w = new Set(["typhoon", "earthquake", "tsunami", "floo
 function trMark(text){ let h = esc(text); const ws = trWords().map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); if (!ws.length) return h;
   return h.replace(new RegExp(`\\b(${ws.join("|")})\\w*`, "gi"), "<mark>$&</mark>"); }
 function trLineHtml(l){ return `<div class="trl${l.hit ? " hit" : ""}"><span class="trt">${esc(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(l.t))}</span> <span class="trc">${esc(l.ch)}</span><div>${trMark(l.text)}</div></div>`; }
-function trPanelHtml(){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.groq, ch = ltvGet(CFG.ltv.audio);
+function trPanelHtml(){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.local, ch = ltvGet(CFG.ltv.audio);
   return `<aside class="vwtr" aria-label="Transcript"><div class="trhd"><b>Transcript</b><span class="s">${ch ? esc(ch.name) : "no channel with sound"}</span><span class="sp"></span><button class="ltvb" data-trclose title="Hide transcript" aria-label="Hide transcript">×</button></div>
     <div class="trctl">
       <label class="ctl"><input type="checkbox" data-trcc${T.cc ? " checked" : ""}> Captions on the video <small class="s">(YouTube's own, free)</small></label>
       <div class="trbtns">${TR.on ? `<button class="pill" data-trstop>■ Stop live transcript</button>` : `<button class="pill primary" data-trstart>● Start live transcript</button>`}<button class="tab-mini" data-trset>Settings</button></div>
-      <div class="s trstat" id="trStat">${TR.on ? `Listening to this tab · ${esc(P.name)} · every ${T.seconds} s${T.translate ? " · translated to English" : ""}${TR.busy ? " · transcribing…" : ""}` : T.key ? `${esc(P.name)} ready. Start, then choose <b>this tab</b> and tick <b>Share tab audio</b>.` : `Live transcript needs a speech-to-text key — <button class="linkbtn" data-trset>add one in Settings</button>. Captions work without one.`}${TR.err ? `<div class="trerr">${esc(TR.err)}</div>` : ""}</div></div>
+      <div class="s trstat" id="trStat">${TR.on ? `Listening to this tab · ${esc(P.name)} · every ${T.seconds} s${T.translate ? " · translated to English" : ""}${TR.busy ? " · transcribing…" : ""}` : !trNeedsKey() ? `${esc(P.name)}. Press Start, choose <b>this tab</b> (Chrome tab / “ITE”) and keep <b>Also share tab audio</b> ticked.${P.local && !TRL.asr ? " The first start downloads the speech model once." : ""}` : `${esc(P.name)} needs a key — <button class="linkbtn" data-trset>add it in Settings</button>, or switch to the free engine.`}${TR.on || TRL.loading ? `<div id="trProg">${esc(TRL.msg || "")}</div>` : ""}${TR.err ? `<div class="trerr">${esc(TR.err)}</div>` : ""}</div></div>
     <div class="trlog" id="trLog">${TR.lines.length ? TR.lines.map(trLineHtml).join("") : `<div class="s trempty">What the channel with sound (🔊) says appears here, time-stamped, with watch words and your sites' cities highlighted.</div>`}</div>
     <div class="trft"><button class="tab-mini" data-trcopy${TR.lines.length ? "" : " disabled"}>Copy</button><button class="tab-mini" data-trdl${TR.lines.length ? "" : " disabled"}>Download</button><button class="tab-mini" data-trclear${TR.lines.length ? "" : " disabled"}>Clear</button></div></aside>`; }
 function trRefresh(){ const box = $(".vwtr"); if (!box) return; const log = $("#trLog"), atEnd = log && log.scrollHeight - log.scrollTop - log.clientHeight < 40;
@@ -12545,7 +12547,8 @@ function trAdd(text){ text = String(text || "").replace(/\s+/g, " ").trim(); if 
   const ws = trWords(), hit = ws.some(w => text.toLowerCase().includes(w)); const ch = ltvGet(CFG.ltv.audio);
   TR.lines.push({ t: new Date(), ch: ch ? ch.name : "", text, hit }); if (TR.lines.length > 600) TR.lines.splice(0, TR.lines.length - 600);
   const log = $("#trLog"); if (log){ const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40; const e = log.querySelector(".trempty"); if (e) e.remove(); log.insertAdjacentHTML("beforeend", trLineHtml(TR.lines[TR.lines.length - 1])); if (atEnd) log.scrollTop = log.scrollHeight; } }
-async function trSend(blob){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.groq; if (blob.size < 2000) return;
+async function trSend(blob){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR_PROV.local; if (blob.size < 2000) return;
+  if (P.local) return trLocalSend(blob);
   const fd = new FormData(); fd.append("file", blob, "clip.webm"); fd.append("model", P.model); fd.append("response_format", "json"); if (!T.translate) fd.append("temperature", "0");
   TR.busy = true; const st = $("#trStat"); if (st && !/transcribing/.test(st.textContent)) st.insertAdjacentHTML("beforeend", "<span class='trbusy'> · transcribing…</span>");
   try{ const r = await fetch(P.url + (T.translate ? "translations" : "transcriptions"), { method: "POST", headers: { Authorization: "Bearer " + T.key }, body: fd });
@@ -12553,6 +12556,33 @@ async function trSend(blob){ const T = CFG.ltv.tr, P = TR_PROV[T.provider] || TR
     TR.err = ""; trAdd(j.text); }
   catch(e){ TR.err = "Speech-to-text: " + (e.message || e) + (/401|invalid.*key|Incorrect API key/i.test(e.message) ? " — check the key in Settings." : /Failed to fetch/i.test(e.message) ? " — the service can't be reached from this network." : ""); trRefresh(); }
   finally{ TR.busy = false; const b = $(".trbusy"); if (b) b.remove(); } }
+/* ---------- free engine: Whisper running in this browser (transformers.js, downloaded once, then cached) ---------- */
+const TRL = { asr: null, loading: null, msg: "", device: "" };
+const TRL_MODELS = { tiny: ["onnx-community/whisper-tiny", "Fast, rougher (≈40 MB)"], base: ["onnx-community/whisper-base", "Balanced (≈80 MB)"], small: ["onnx-community/whisper-small", "Most accurate, slower (≈250 MB)"] };
+function trProg(msg){ TRL.msg = msg; const e = $("#trProg"); if (e) e.textContent = msg; else { const st = $("#trStat"); if (st) st.insertAdjacentHTML("beforeend", `<div id="trProg">${esc(msg)}</div>`); } }
+function trLocalLoad(){ if (TRL.asr) return Promise.resolve(TRL.asr); if (TRL.loading) return TRL.loading;
+  const id = (TRL_MODELS[CFG.ltv.tr.localModel] || TRL_MODELS.base)[0]; const files = {};
+  TRL.loading = (async () => { trProg("Loading the speech engine…");
+    const T = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js");
+    T.env.allowLocalModels = false;
+    const progress_callback = p => { if (p.status === "progress" && p.file){ files[p.file] = [p.loaded || 0, p.total || 0]; const v = Object.values(files), l = v.reduce((a, x) => a + x[0], 0), t = v.reduce((a, x) => a + x[1], 0); if (t) trProg(`Downloading the speech model (first time only): ${Math.round(l / t * 100)}% of ${Math.round(t / 1e6)} MB`); } };
+    let asr = null;
+    if (navigator.gpu){ try{ asr = await T.pipeline("automatic-speech-recognition", id, { device: "webgpu", dtype: { encoder_model: "fp32", decoder_model_merged: "q4" }, progress_callback }); TRL.device = "graphics card"; }catch(e){ asr = null; } }
+    if (!asr){ asr = await T.pipeline("automatic-speech-recognition", id, { device: "wasm", dtype: "q8", progress_callback }); TRL.device = "processor"; }
+    TRL.asr = asr; trProg(`Speech model ready (runs on this computer's ${TRL.device}).`); return asr; })();
+  TRL.loading.catch(e => { TRL.loading = null; TR.err = "The free speech engine couldn't load: " + (e.message || e) + ". It downloads from cdn.jsdelivr.net and huggingface.co — your network may block them. Try a Groq or OpenAI key in Settings instead."; trProg(""); trRefresh(); });
+  return TRL.loading; }
+async function trPcm(blob){ const ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  try{ const buf = await ac.decodeAudioData(await blob.arrayBuffer()); const n = buf.length, out = new Float32Array(n);
+    for (let c = 0; c < buf.numberOfChannels; c++){ const d = buf.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i] / buf.numberOfChannels; }
+    return out; } finally { ac.close(); } }
+async function trLocalSend(blob){ TR.busy = true; try{ const asr = await trLocalLoad(); const pcm = await trPcm(blob);
+    let e = 0; for (let i = 0; i < pcm.length; i += 4) e += pcm[i] * pcm[i]; if (Math.sqrt(e / (pcm.length / 4)) < 0.004){ trProg("Listening… (no speech in the last clip — is a channel's sound on 🔊?)"); return; }
+    trProg("Transcribing…"); const t0 = performance.now();
+    const r = await asr(pcm, { task: CFG.ltv.tr.translate ? "translate" : "transcribe", language: null, chunk_length_s: 30, return_timestamps: false });
+    TR.err = ""; trAdd(r && r.text); trProg(`Listening… last clip took ${((performance.now() - t0) / 1000).toFixed(1)} s on this computer's ${TRL.device}.`); }
+  catch(err){ TR.err = "Transcribing failed: " + (err.message || err); trRefresh(); }
+  finally{ TR.busy = false; } }
 function trCycle(){ if (!TR.on || !TR.stream) return; const tr = TR.stream.getAudioTracks()[0]; if (!tr || tr.readyState !== "live"){ trStop("Tab sound sharing ended."); return; }
   const mt = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
   const rec = new MediaRecorder(new MediaStream([tr]), mt ? { mimeType: mt } : undefined), parts = [];
@@ -12560,7 +12590,9 @@ function trCycle(){ if (!TR.on || !TR.stream) return; const tr = TR.stream.getAu
   rec.onstop = () => { const b = new Blob(parts, { type: mt || "audio/webm" }); TR.queue.push(b); trDrain(); };
   rec.start(); TR.rec = rec; TR.timer = setTimeout(() => { try{ rec.stop(); }catch(e){} trCycle(); }, Math.max(6, +CFG.ltv.tr.seconds || 15) * 1000); }
 async function trDrain(){ if (trDrain.on) return; trDrain.on = true; try{ while (TR.queue.length){ const b = TR.queue.shift(); if (TR.queue.length > 3) TR.queue.splice(0, TR.queue.length - 2); await trSend(b); } } finally { trDrain.on = false; } }
-async function trStart(){ const T = CFG.ltv.tr; if (!T.key){ trSettings(); return; }
+const trNeedsKey = () => { const P = TR_PROV[CFG.ltv.tr.provider] || TR_PROV.local; return !P.local && !CFG.ltv.tr.key; };
+async function trStart(){ const T = CFG.ltv.tr; if (trNeedsKey()){ trSettings(); return; }
+  if ((TR_PROV[T.provider] || {}).local) trLocalLoad().catch(() => {});      // start downloading the model while you pick the tab
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.MediaRecorder){ toast("Not supported in this browser", "Use Chrome or Edge on a computer.", "var(--amber)"); return; }
   try{ const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { suppressLocalAudioPlayback: false }, preferCurrentTab: true, selfBrowserSurface: "include", systemAudio: "include", surfaceSwitching: "exclude" });
     if (!s.getAudioTracks().length){ s.getTracks().forEach(t => t.stop()); toast("No sound was shared", "Choose this tab and tick “Share tab audio”, then try again.", "var(--amber)"); return; }
@@ -12569,15 +12601,17 @@ async function trStart(){ const T = CFG.ltv.tr; if (!T.key){ trSettings(); retur
   catch(e){ if (!/Permission|NotAllowed|AbortError/i.test(e.name + e.message)) toast("Could not start", e.message, "var(--amber)"); } }
 function trStop(msg){ TR.on = false; clearTimeout(TR.timer); try{ TR.rec && TR.rec.state !== "inactive" && TR.rec.stop(); }catch(e){} if (TR.stream) TR.stream.getTracks().forEach(t => t.stop()); TR.stream = null; TR.rec = null; if (msg) TR.err = msg; trRefresh(); }
 function trSettings(){ const T = CFG.ltv.tr;
-  openModal(head("Live transcript — settings") + `<div class="bd"><p class="help" style="margin-top:0">The live transcript listens to <b>this tab's sound</b> (the channel with 🔊) and sends a short clip every few seconds to a speech-to-text service. You need your own key. It is kept <b>in this browser only</b> and goes only to the service you pick. Captions on the video need no key.</p>
+  openModal(head("Live transcript — settings") + `<div class="bd"><p class="help" style="margin-top:0">The live transcript listens to <b>this tab's sound</b> (the channel with 🔊) in short clips. <b>On this computer</b> is free and needs no key: a speech model downloads once and runs in the browser, and the sound never leaves your PC. Groq and OpenAI are faster and more accurate but need your own key, kept <b>in this browser only</b>.</p>
     <div class="fgrid"><label class="fld">Service<select id="trP">${Object.entries(TR_PROV).map(([k, p]) => `<option value="${k}"${T.provider === k ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
     <label class="fld">Clip length<select id="trS">${[8, 10, 15, 20, 30].map(n => `<option value="${n}"${+T.seconds === n ? " selected" : ""}>${n} seconds</option>`).join("")}</select></label></div>
-    <label class="fld">API key <small class="s" id="trKeyHelp"></small><input id="trK" type="password" autocomplete="off" value="${esc(T.key)}" placeholder="paste your key"></label>
+    <label class="fld" id="trMW">Speech model (on this computer)<select id="trM">${Object.entries(TRL_MODELS).map(([k, m]) => `<option value="${k}"${CFG.ltv.tr.localModel === k ? " selected" : ""}>${esc(k[0].toUpperCase() + k.slice(1))} — ${esc(m[1])}</option>`).join("")}</select></label>
+    <label class="fld" id="trKW">API key <small class="s" id="trKeyHelp"></small><input id="trK" type="password" autocomplete="off" value="${esc(T.key)}" placeholder="paste your key"></label>
     <label class="ctl"><input type="checkbox" id="trT"${T.translate ? " checked" : ""}> Translate into English (Bahasa, Thai, Japanese, Korean, Mandarin and others become English text)</label>
-    <p class="help">Shorter clips appear sooner; longer clips give more accurate sentences. Each clip is charged by the service (Groq has a free allowance). Don't use a key that belongs to your organisation on a public computer.</p></div>
+    <p class="help">Shorter clips appear sooner; longer clips give more accurate sentences. With a key, each clip is charged by the service (Groq has a free allowance). Don't use a key that belongs to your organisation on a public computer.</p></div>
     <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="trSave">Save</button></div>`);
-  const help = () => { const p = TR_PROV[$("#trP").value]; $("#trKeyHelp").innerHTML = `— get one at <a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${esc(p.keyUrl.replace(/^https:\/\//, ""))}</a>`; }; help(); $("#trP").onchange = help;
-  $("#trSave").onclick = () => { Object.assign(CFG.ltv.tr, { provider: $("#trP").value, key: $("#trK").value.trim(), translate: $("#trT").checked, seconds: +$("#trS").value }); saveCfg(); $("#ov").classList.remove("show"); trRefresh(); toast("Transcript settings saved", "Kept in this browser only.", "var(--teal)"); }; }
+  const help = () => { const p = TR_PROV[$("#trP").value]; $("#trKW").style.display = p.local ? "none" : ""; $("#trMW").style.display = p.local ? "" : "none"; if (!p.local) $("#trKeyHelp").innerHTML = `— get one at <a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${esc(p.keyUrl.replace(/^https:\/\//, ""))}</a>`; }; help(); $("#trP").onchange = help;
+  $("#trSave").onclick = () => { const nm = $("#trM").value; if (nm !== CFG.ltv.tr.localModel){ TRL.asr = null; TRL.loading = null; }
+    Object.assign(CFG.ltv.tr, { provider: $("#trP").value, key: $("#trK").value.trim(), translate: $("#trT").checked, seconds: +$("#trS").value, localModel: nm }); saveCfg(); $("#ov").classList.remove("show"); trRefresh(); toast("Transcript settings saved", "Kept in this browser only.", "var(--teal)"); }; }
 
 /* ---------- the panel ---------- */
 function videoWallPanel(){ const all = CFG.ltv.wall.map(ltvGet).filter(Boolean), sh = vwShape(all.length), list = all.slice(0, sh.n);
@@ -12669,6 +12703,63 @@ const _lnPanelVW = liveNewsPanel; liveNewsPanel = function(){ return _lnPanelVW(
 .trft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid var(--line)}
 @media (max-width:1100px){.vwtr{width:280px}}
 @media (max-width:760px){.vw{height:auto !important}.vwmain{flex-direction:column}.vwgrid{grid-template-columns:1fr;grid-template-rows:none}.vwgrid .vwb{aspect-ratio:16/9}.vwgrid.feature .vwtile.big{grid-column:auto;grid-row:auto}.vwtr{width:auto;height:420px}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   ADJUSTABLE LAYOUT — you decide how much room each part gets
+   - Map / cards divider goes all the way: drag the map down to nothing or up to
+     the full width (it snaps shut near either edge). Double-click the divider
+     to go back to half and half.
+   - New layout buttons: Hide map and Map only, next to Split / Map focus / Cards focus.
+   - Each tab remembers its own split (e.g. a small map on Releases to operations,
+     a big one on Map & cities).
+   - Live news: drag the line between the TV and the headlines.
+   ===================================================================== */
+LAYOUT_W.panel = 0; LAYOUT_W.full = 100;
+UI.mapPctBy = UI.mapPctBy || {};
+applyMapWidth = function(pct){ pct = Math.max(0, Math.min(100, +pct || 0)); if (pct < 5) pct = 0; if (pct > 95) pct = 100;
+  UI.mapPct = pct; const m = $("#main"); m.style.setProperty("--mapw", pct === 0 ? "0px" : pct === 100 ? "calc(100% - 8px)" : pct + "%");
+  m.classList.toggle("maphidden", pct === 0); m.classList.toggle("cardshidden", pct === 100);
+  if (typeof placeLayerButton === "function") placeLayerButton();
+  if (map){ clearTimeout(applyMapWidth.t); applyMapWidth.t = setTimeout(() => { map.invalidateSize(); safe(redrawMap, "map"); }, 90); } };
+// remember the split for the tab you're on
+function rememberSplit(){ if (UI.mode) UI.mapPctBy[UI.mode] = UI.mapPct; saveUI(); }
+{ const lay = $(".layout"); if (lay && !lay.querySelector("[data-layout='panel']")){
+    lay.insertAdjacentHTML("beforeend", `<button data-layout="panel" aria-pressed="false" title="Hide the map — cards use the whole width (drag the divider at the left edge to bring it back)">Hide map</button><button data-layout="full" aria-pressed="false" title="Map uses the whole width (drag the divider at the right edge to bring the cards back)">Map only</button>`);
+    lay.querySelectorAll("[data-layout]").forEach(b => { if (!b.onclick) b.onclick = () => setLayout(b.dataset.layout); b.addEventListener("click", () => setTimeout(rememberSplit, 0)); }); } }
+{ const dv = $("#divider"); if (dv){
+    dv.title = "Drag to resize the map · double-click for half and half";
+    dv.addEventListener("pointerup", () => rememberSplit());
+    dv.addEventListener("keyup", e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") rememberSplit(); });
+    dv.addEventListener("dblclick", () => { setLayout("split"); rememberSplit(); }); } }
+// when you switch tabs, bring back that tab's split
+const _setModeAL = setMode;
+setMode = function(m){ const r = _setModeAL(m);
+  try{ const p = UI.mapPctBy[m]; if (p != null && !NOMAP.includes(m) && !["livenews", "typhoon", "protests"].includes(m)){ UI.layout = "custom"; applyMapWidth(p); $$("[data-layout]").forEach(b => b.setAttribute("aria-pressed", b.dataset.layout === (p === 0 ? "panel" : p === 100 ? "full" : "") ? "true" : "false")); } }catch(e){}
+  return r; };
+// boot: honour a saved 0% / 100% split (the original start-up clamped it)
+if (UI.layout === "custom" && UI.mapPct != null) applyMapWidth(UI.mapPct);
+{ const p = UI.mapPctBy[UI.mode]; if (p != null && !NOMAP.includes(UI.mode)) applyMapWidth(p); }
+
+/* ---------- Live news: TV vs headlines ---------- */
+UI.lnPct = UI.lnPct || 62;
+function lnApply(){ const g = $(".lngrid"); if (!g || matchMedia("(max-width:1000px)").matches) return;
+  const p = Math.max(15, Math.min(88, UI.lnPct)); g.style.gridTemplateColumns = `minmax(0,${p}fr) minmax(220px,${100 - p}fr)`;
+  let h = g.querySelector(".lnsplit"); if (!h){ g.insertAdjacentHTML("beforeend", `<div class="lnsplit" role="separator" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>`); h = g.querySelector(".lnsplit"); }
+  requestAnimationFrame(() => { const a = g.children[0]; if (a) h.style.left = (a.getBoundingClientRect().right - g.getBoundingClientRect().left + 1) + "px"; }); }
+const _mountLNAL = mountLiveNews; mountLiveNews = function(){ _mountLNAL(); lnApply(); };
+document.addEventListener("pointerdown", e => { const h = e.target.closest(".lnsplit"); if (!h) return; e.preventDefault(); const g = h.parentElement; g.classList.add("lndrag");
+  const mv = ev => { const r = g.getBoundingClientRect(); UI.lnPct = Math.max(15, Math.min(88, (ev.clientX - r.left) / r.width * 100)); lnApply(); };
+  const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); g.classList.remove("lndrag"); saveUI(); };
+  addEventListener("pointermove", mv); addEventListener("pointerup", up); });
+document.addEventListener("dblclick", e => { if (e.target.closest(".lnsplit")){ UI.lnPct = 62; saveUI(); lnApply(); } });
+addEventListener("resize", () => { if (UI.mode === "livenews") lnApply(); });
+{ const st = document.createElement("style"); st.textContent = `
+.main.maphidden .mapwrap{overflow:hidden;border-right:0}.main.maphidden .mapwrap > *{visibility:hidden}
+.main.cardshidden .panel{overflow:hidden}.main.cardshidden .panel > *{visibility:hidden}
+.main.maphidden .divider::before,.main.cardshidden .divider::before{content:"";position:absolute;inset:0;background:var(--teal);opacity:.35}
+.lngrid{position:relative}.lnsplit{position:absolute;top:0;bottom:0;width:8px;margin-left:-6px;cursor:col-resize;z-index:4;border-radius:3px;touch-action:none}
+.lnsplit:hover,.lngrid.lndrag .lnsplit{background:color-mix(in srgb,var(--teal) 70%,transparent)}.lngrid.lndrag iframe,.lngrid.lndrag video{pointer-events:none}.lngrid.lndrag{user-select:none}`; document.head.appendChild(st); }
 
 boot();
 
