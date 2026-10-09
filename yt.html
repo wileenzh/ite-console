@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>ITE player</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}
+p{color:#ccc;font:14px system-ui,sans-serif;text-align:center;margin-top:20%}</style>
+</head>
+<body>
+<script>
+/* ITE player relay. The ITE console can be opened straight from a file, and YouTube refuses to play
+   embedded video on a page without a web address. The console loads this page (which has one) and this
+   page loads the YouTube player. Only YouTube channel IDs and video IDs are accepted. */
+(function(){
+  var q = new URLSearchParams(location.search), ch = q.get("channel") || "", v = q.get("v") || "", mute = q.get("mute") === "0" ? 0 : 1, src = "";
+  if (/^UC[\w-]{22}$/.test(ch)) src = "https://www.youtube.com/embed/live_stream?channel=" + ch;
+  else if (/^[\w-]{11}$/.test(v)) src = "https://www.youtube.com/embed/" + v;
+  if (!src){ document.body.innerHTML = "<p>No channel given.</p>"; return; }
+  var f = document.createElement("iframe");
+  f.src = src + (src.indexOf("?") > 0 ? "&" : "?") + "autoplay=1&mute=" + mute + "&playsinline=1";
+  f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+  f.allowFullscreen = true; f.referrerPolicy = "strict-origin-when-cross-origin"; f.title = "Live video";
+  document.body.appendChild(f);
+})();
+</script>
+</body>
+</html>

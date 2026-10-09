@@ -12377,10 +12377,24 @@ CFG.ltv = Object.assign({ wall: ["cna", "aje", "abcau", "awani"], custom: [], au
 const ltvAll = () => LTV.concat((CFG.ltv.custom || []).map(c => Object.assign({ region: "Custom", lang: "", country: "" }, c)));
 const ltvGet = k => ltvAll().find(c => c.key === k);
 const isFileMode = () => location.protocol === "file:";
+/* Opened from a file, YouTube refuses embedded video (no web address to send it). The console then plays each
+   channel through a small player page on the ITE website, which has one. LTV_RELAY is the first one that answers. */
+const LTV_RELAYS = ["https://wileenzh.github.io/ite-console/yt.html", "https://raw.githack.com/wileenzh/ite-console/main/yt.html"];
+let LTV_RELAY = "";
+const ltvNoPlay = () => isFileMode() && !LTV_RELAY;          // file mode and no player page reachable
+async function ltvFindRelay(){ if (!isFileMode()) return;
+  for (const u of (CFG.ltv && CFG.ltv.relay ? [CFG.ltv.relay] : []).concat(LTV_RELAYS)){
+    try{ const r = await fetch(u + "?probe=1", { cache: "no-store" }); if (r.ok && /ITE player relay/.test(await r.text())){ LTV_RELAY = u; break; } }catch(e){} }
+  if (LTV_RELAY && ["videowall", "livenews", "vcc"].includes(UI.mode)) renderPanel();
+  if (LTV_RELAY && $("#tvdock") && (UI.tv || {}).open && typeof tvRender === "function") tvRender(); }
+function ltvRelayWrap(src){ if (!isFileMode() || !LTV_RELAY) return src;
+  const ch = /[?&]channel=(UC[\w-]{22})/.exec(src), v = /youtube\.com\/embed\/([\w-]{11})(?:\?|$)/.exec(src), m = /[?&]mute=0/.test(src) ? 0 : 1;
+  if (ch) return `${LTV_RELAY}?channel=${ch[1]}&mute=${m}`; if (v && v[1] !== "live_stream") return `${LTV_RELAY}?v=${v[1]}&mute=${m}`; return src; }
 function ltvStatus(c){ return (CFG.ltv.status || {})[c.key] || null; }
 function ltvOpenUrl(c){ if (/^https?:/.test(c.ref)) return c.ref; const st = ltvStatus(c); if (st && st.videoId) return "https://www.youtube.com/watch?v=" + st.videoId; return c.ref.startsWith("UC") ? `https://www.youtube.com/channel/${c.ref}/live` : `https://www.youtube.com/${c.ref}/live`; }
 // the embed address: a live video ID if we know it, else the channel's live stream; handles need the server to resolve
-function ltvSrc(c, muted){ const m = muted ? 1 : 0, st = ltvStatus(c);
+function ltvSrc(c, muted){ const r = ltvSrcRaw(c, muted); if (r && r.kind === "iframe" && /youtube\.com\/embed\//.test(r.src)) r.src = ltvRelayWrap(r.src); return r; }
+function ltvSrcRaw(c, muted){ const m = muted ? 1 : 0, st = ltvStatus(c);
   if (/\.m3u8(\?|$)/i.test(c.ref)) return { kind: "hls", src: c.ref };
   const yt = /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([\w-]{11})/.exec(c.ref); if (yt) return { kind: "iframe", src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=${m}&playsinline=1` };
   if (st && st.videoId && st.live) return { kind: "iframe", src: `https://www.youtube.com/embed/${st.videoId}?autoplay=1&mute=${m}&playsinline=1` };
@@ -12399,17 +12413,17 @@ function ltvDot(c){ const st = ltvStatus(c), [col, txt] = !st ? ["#6b7680", serv
 // the Live TV dock and the command-centre tile use the wall channels
 function ltvSyncDock(){ const custom = (CFG.livetv || []).filter(x => x.url && !/^ltv:/.test(x.url)); CFG.livetv = CFG.ltv.wall.map(k => ltvGet(k)).filter(Boolean).map(c => ({ name: c.name, url: "ltv:" + c.key })).concat(custom.filter(x => !CFG.ltv.wall.some(k => (ltvGet(k) || {}).ref === x.url))); if (!CFG.livetv.length) CFG.livetv = [{ name: "CNA", url: "ltv:cna" }]; }
 const _tvEmbedL = tvEmbed; tvEmbed = function(url){ if (/^ltv:/.test(String(url))){ const c = ltvGet(url.slice(4)); return c ? ltvSrc(c, true) : null; } return _tvEmbedL(url); };
-ltvSyncDock(); saveCfg();
+ltvSyncDock(); saveCfg(); ltvFindRelay();
 /* ---------- the wall ---------- */
 function ltvWallHtml(){ const wall = CFG.ltv.wall.map(ltvGet).filter(Boolean).slice(0, 9), n = wall.length, cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
-  const fileNote = isFileMode() ? `<div class="banner warn ltvfile"><b>Live video can't play here:</b> this console was opened from a file on your computer, and YouTube only plays embedded video on pages with a website address. Open the console through the PSOC server address and the wall plays; meanwhile use <b>↗ Open</b> on each tile.</div>` : "";
+  const fileNote = ltvNoPlay() ? `<div class="banner warn ltvfile"><b>Live video can't play here:</b> this console was opened from a file on your computer, and YouTube only plays embedded video on pages with a website address. Open the console through the PSOC server address and the wall plays; meanwhile use <b>↗ Open</b> on each tile.</div>` : "";
   const tiles = wall.map(c => { const audio = CFG.ltv.audio === c.key, e = ltvSrc(c, !audio), st = ltvStatus(c), blocked = st && st.embeddable === false;
     return `<div class="ltvtile${audio ? " audio" : ""}"><div class="ltvh">${ltvDot(c)}<b title="${esc(c.name)} · ${esc(c.country)}">${esc(c.name)}</b><span class="sp"></span><button class="ltvb" data-ltvaudio="${esc(c.key)}" title="${audio ? "Sound on" : "Listen to this channel"}" aria-label="${audio ? "Sound on" : "Listen to " + esc(c.name)}">${audio ? "🔊" : "🔈"}</button><a class="ltvb" href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener" title="Open on YouTube">↗ Open</a><button class="ltvb" data-ltvrm="${esc(c.key)}" aria-label="Remove ${esc(c.name)} from the wall">×</button></div>
       ${st && st.found === false ? `<div class="ltvmsg">YouTube doesn't recognise this channel — check its ID or handle in Channels….</div>`
         : st && st.found && !st.live && !st.error && !/^https?:/.test(c.ref) ? `<div class="ltvmsg">${esc(c.name)} isn't streaming live right now. <a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">Open the channel ↗</a> <button class="linkbtn" data-ltvchk="${esc(c.key)}">check again</button></div>`
         : blocked ? `<div class="ltvmsg">${esc(c.name)} does not allow its live stream to be shown inside other websites. <a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`
         : !e ? `<div class="ltvmsg">${serverBase() ? `Looking up this channel… <button class="linkbtn" data-ltvchk="${esc(c.key)}">check now</button>` : "This channel is listed by its YouTube handle — the PSOC server looks it up. "}<a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">Open on YouTube ↗</a></div>`
-        : isFileMode() ? `<div class="ltvmsg">Opens through the PSOC server — <a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">watch on YouTube ↗</a></div>`
+        : ltvNoPlay() ? `<div class="ltvmsg">Opens through the PSOC server — <a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">watch on YouTube ↗</a></div>`
         : e.kind === "hls" ? `<video data-ltvhls="${esc(c.key)}" ${audio ? "" : "muted"} autoplay playsinline controls></video>` : `<iframe src="${esc(e.src)}" title="${esc(c.name)} live" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe>`}</div>`; }).join("");
   return `<div class="ltvwrap">${fileNote}<div class="ltvbar"><b>Live TV</b><span class="s">${n} of 9 · sound: ${esc((ltvGet(CFG.ltv.audio) || {}).name || "off")}</span><span class="sp"></span><button class="tab-mini" data-ltvmanage>Channels…</button>${serverBase() ? `<button class="tab-mini" data-ltvchkwall>Check live now</button>` : ""}</div>
     ${n ? `<div class="ltvgrid" style="--cols:${cols}">${tiles}</div>` : `<div class="empty">No channels on the wall — open <b>Channels…</b> to add CNA, Al Jazeera, ABC Australia and others.</div>`}</div>`; }
@@ -12442,7 +12456,7 @@ document.addEventListener("click", async e => { const t = e.target.closest("[dat
   if (d.ltvchk){ const c = ltvGet(d.ltvchk); t.textContent = "checking…"; await ltvCheck(c); renderPanel(); return; }
   if (d.ltvchkwall !== undefined){ t.disabled = true; t.textContent = "Checking…"; await ltvCheckMany(CFG.ltv.wall.map(ltvGet).filter(c => c && !/^https?:/.test(c.ref))); renderPanel(); return; } }, true);
 // the dock explains file mode too
-const _tvRenderL = tvRender; tvRender = function(){ _tvRenderL(); const b = $("#tvdock .tvb"); if (b && isFileMode() && b.querySelector("iframe")){ const ch = CFG.livetv[(UI.tv || {}).ch || 0], c = ch && /^ltv:/.test(ch.url) ? ltvGet(ch.url.slice(4)) : null;
+const _tvRenderL = tvRender; tvRender = function(){ _tvRenderL(); const b = $("#tvdock .tvb"); if (b && ltvNoPlay() && b.querySelector("iframe")){ const ch = CFG.livetv[(UI.tv || {}).ch || 0], c = ch && /^ltv:/.test(ch.url) ? ltvGet(ch.url.slice(4)) : null;
   b.innerHTML = `<div class="tvempty"><b>Opened from a file — YouTube won't play embedded video here.</b><p>Open the console through the PSOC server address to watch inside the console.</p>${c ? `<p><a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">Watch ${esc(c.name)} on YouTube ↗</a></p>` : ""}</div>`; } };
 { const st = document.createElement("style"); st.textContent = `
 .ltvwrap{display:flex;flex-direction:column;gap:6px;height:100%;min-height:0}.ltvbar{display:flex;align-items:center;gap:8px}.ltvbar .sp{flex:1}
@@ -12456,7 +12470,7 @@ const _tvRenderL = tvRender; tvRender = function(){ _tvRenderL(); const b = $("#
 .lngrid .lntv{overflow:auto}.lngrid{grid-template-columns:minmax(0,2.4fr) minmax(250px,.9fr) !important}
 .ltvh{flex-wrap:nowrap;white-space:nowrap;overflow:hidden}.ltvh b{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}.ltvh .sp{display:none}.ltvdot{flex:none;width:9px;height:9px;border-radius:50%;display:inline-block}.ltvh .s{display:none}.ltvtile .ltvh .ltvst{flex:none}`; document.head.appendChild(st); }
 // command-centre tile: same file-mode explanation
-const _vccNewsL = vccNewsHtml; vccNewsHtml = function(){ const r = _vccNewsL(); if (isFileMode()){ const ch = CFG.livetv.find(c => c.url), c = ch && /^ltv:/.test(ch.url) ? ltvGet(ch.url.slice(4)) : null;
+const _vccNewsL = vccNewsHtml; vccNewsHtml = function(){ const r = _vccNewsL(); if (ltvNoPlay()){ const ch = CFG.livetv.find(c => c.url), c = ch && /^ltv:/.test(ch.url) ? ltvGet(ch.url.slice(4)) : null;
   r.panel = r.panel.replace(/<iframe[^>]*><\/iframe>/, `<div class="ltvmsg">Opened from a file — YouTube won't play embedded video here.${c ? ` <a href="${esc(safeUrl(ltvOpenUrl(c)))}" target="_blank" rel="noopener">Watch ${esc(c.name)} ↗</a>` : ""}</div>`); } return r; };
 
 
@@ -12480,15 +12494,15 @@ function vwShape(n){ const L = CFG.ltv.layout;
 function vwTile(c, big){ const audio = CFG.ltv.audio === c.key, e = ltvSrc(c, !audio), st = ltvStatus(c), open = esc(safeUrl(ltvOpenUrl(c)));
   const body = st && st.embeddable === false ? `<div class="ltvmsg">${esc(c.name)} does not allow its live stream inside other websites. <a href="${open}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`
     : !e ? `<div class="ltvmsg">${esc(c.name)} is listed by its YouTube handle, which needs the ITE server to look up. <a href="${open}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`
-    : isFileMode() ? `<div class="ltvmsg">Live video plays when the console is opened from its website address. <a href="${open}" target="_blank" rel="noopener">Watch ${esc(c.name)} ↗</a></div>`
+    : ltvNoPlay() ? `<div class="ltvmsg">Live video plays when the console is opened from its website address. <a href="${open}" target="_blank" rel="noopener">Watch ${esc(c.name)} ↗</a></div>`
     : e.kind === "hls" ? `<video data-vwhls="${esc(c.key)}" ${audio ? "" : "muted"} autoplay playsinline controls></video>`
     : `<iframe src="${esc(e.src)}" title="${esc(c.name)} live" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   return `<div class="vwtile${audio ? " audio" : ""}${big ? " big" : ""}"><div class="vwh">${ltvDot(c)}<b title="${esc(c.name)} · ${esc(c.country)}">${esc(c.name)}</b>
     <button class="ltvb" data-vwaudio="${esc(c.key)}" title="${audio ? "Sound on — click to mute" : "Listen to this channel"}" aria-label="${audio ? "Mute " : "Listen to "}${esc(c.name)}">${audio ? "🔊" : "🔈"}</button>
     ${big ? "" : `<button class="ltvb" data-vwbig="${esc(c.key)}" title="Make this the large channel" aria-label="Make ${esc(c.name)} the large channel">⤢</button>`}<a class="ltvb" href="${open}" target="_blank" rel="noopener" title="Open on YouTube" aria-label="Open ${esc(c.name)} on YouTube">↗</a></div><div class="vwb">${body}</div></div>`; }
-const vwSig = () => [CFG.ltv.wall.join(), CFG.ltv.audio, CFG.ltv.layout, isFileMode(), JSON.stringify(CFG.ltv.wall.map(k => { const s = (CFG.ltv.status || {})[k]; return s ? [s.live, s.videoId, s.embeddable] : 0; }))].join("|");
+const vwSig = () => [CFG.ltv.wall.join(), CFG.ltv.audio, CFG.ltv.layout, ltvNoPlay(), JSON.stringify(CFG.ltv.wall.map(k => { const s = (CFG.ltv.status || {})[k]; return s ? [s.live, s.videoId, s.embeddable] : 0; }))].join("|");
 function videoWallPanel(){ const all = CFG.ltv.wall.map(ltvGet).filter(Boolean), sh = vwShape(all.length), list = all.slice(0, sh.n);
-  const fileNote = isFileMode() ? `<div class="banner warn" style="margin:0 0 6px">Opened from a file: YouTube only plays embedded live video on a page with a website address. The hosted console (or the ITE server) plays the wall; here each tile opens the channel on YouTube.</div>` : "";
+  const fileNote = ltvNoPlay() ? `<div class="banner warn" style="margin:0 0 6px">Opened from a file and the ITE player page can't be reached (no internet, or the network blocks it), so YouTube won't play inside the console here. Each tile opens the channel on YouTube instead.</div>` : "";
   const tiles = list.map((c, i) => vwTile(c, sh.feature && i === 0)).join("");
   return `<div class="vw" data-sig="${esc(vwSig())}"><div class="vwbar"><b>Video wall</b><span class="s">${list.length} of ${all.length} channels · sound: ${esc((ltvGet(CFG.ltv.audio) || {}).name || "off")}</span><span class="sp"></span>
     <span class="vwlay" role="group" aria-label="Layout">${VW_LAYOUTS.map(([k, l]) => `<button class="tab-mini${CFG.ltv.layout === k ? " on" : ""}" data-vwlay="${k}" aria-pressed="${CFG.ltv.layout === k}">${l}</button>`).join("")}</span>
