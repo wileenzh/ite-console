@@ -13119,6 +13119,131 @@ setInterval(() => { if (UI.mode === "camwall" && CFG.camwall.view === "ops" && !
 .cwtile.opsissue{border-color:#C4314B}.opsdemo{position:absolute;left:0;right:0;bottom:0;font-size:11px;color:#ffd58a;background:rgba(0,0,0,.55);padding:2px 6px;pointer-events:none}
 .cwb video{width:100%;height:100%;object-fit:cover;background:#000}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   SENTIMENT — ALL CHANNELS (Sentiment Analysis → All channels)
+   One view of how a topic is being talked about across:
+     · Mainstream media — every news source in the console + GDELT's worldwide
+       news index (articles in 65 languages, no key)
+     · Social media — the Social media monitoring posts (Mastodon, Bluesky,
+       Reddit, X where connected)
+     · Blogs & forums — Hacker News, Reddit discussions, Medium and WordPress
+       blogs by topic, plus any blog / forum RSS feeds you add
+   Volume, average sentiment, % negative, trend by hour, share of voice, the
+   most negative items per channel, and topics — filter by channel, sentiment,
+   time and words. Scored by the built-in scorer, or the AI model if loaded.
+   ===================================================================== */
+CFG.sentx = Object.assign({ topic: "", window: 72, blogFeeds: "", gdelt: true, hn: true, reddit: true, medium: true, wp: true }, CFG.sentx || {});
+const SX = { items: { media: [], social: [], blogs: [] }, status: {}, at: 0, busy: false };
+const SX_CH = { media: ["Mainstream media", "#3B8BEB"], social: ["Social media", "#B565D8"], blogs: ["Blogs & forums", "#2BB673"] };
+const sxTopics = () => (CFG.sentx.topic.trim() ? CFG.sentx.topic.split(",").map(s => s.trim()).filter(Boolean) : socKeywords().slice(0, 6));
+const sxScore = t => (SOC.model && t.__ai != null) ? t.__ai : lexScore(t);
+const sxTag = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+async function sxJson(url){ try{ const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); } catch(e){ return JSON.parse(await fetchVia(url)); } }
+function sxRss(txt, src){ const d = xml(txt); return Array.from(d.getElementsByTagName("item")).concat(Array.from(d.getElementsByTagName("entry"))).slice(0, 40).map(it => {
+  const link = tx(it, "link") || ((it.getElementsByTagName("link")[0] || {}).getAttribute ? it.getElementsByTagName("link")[0].getAttribute("href") : "");
+  return { q: !!src && /^(Medium|WordPress) #/.test(src), title: tx(it, "title"), text: (tx(it, "description") || tx(it, "summary") || tx(it, "content")).replace(/<[^>]+>/g, " ").slice(0, 600), url: link, t: Date.parse(tx(it, "pubDate") || tx(it, "updated") || tx(it, "published")) || Date.now(), src }; }); }
+async function sxLoad(force){ if (SX.busy || (!force && Date.now() - SX.at < 10 * 60e3 && SX.at)) return; SX.busy = true; renderSx();
+  const kws = sxTopics(), q = kws.map(k => k.includes(" ") ? `"${k}"` : k).join(" OR "), st = SX.status = {}; const media = [], blogs = [];
+  // mainstream media: the console's news + GDELT article list
+  (DATA.news || []).forEach(n => media.push({ title: n.title || "", text: n.desc || "", url: n.url, t: n.t || Date.now(), src: n.source || n.provider || "News", q: true }));
+  st["Console news sources"] = `${media.length} stories`;
+  const jobs = [];
+  if (CFG.sentx.gdelt) jobs.push((async () => { try{ const j = await sxJson(`https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent("(" + kws.slice(0, 6).map(k => `"${k.replace(/"/g, "")}"`).join(" OR ") + ")")}&mode=artlist&format=json&maxrecords=120&sort=datedesc&timespan=${Math.round(CFG.sentx.window)}h`);
+      const a = j.articles || []; a.forEach(x => media.push({ title: x.title || "", text: "", url: x.url, t: Date.parse((x.seendate || "").replace(/(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z/, "$1-$2-$3T$4:$5:$6Z")) || Date.now(), src: x.domain || "GDELT", lang: x.language, q: true })); st["GDELT world news"] = `${a.length} articles`; }
+    catch(e){ st["GDELT world news"] = "not reached — " + e.message; } })());
+  // blogs & forums
+  if (CFG.sentx.hn) jobs.push((async () => { try{ const out = []; for (const k of kws.slice(0, 5)){ const j = await sxJson(`https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(k)}&tags=(story,comment)&hitsPerPage=25`);
+        (j.hits || []).forEach(h => out.push({ title: h.title || h.story_title || "", text: (h.comment_text || h.story_text || "").replace(/<[^>]+>/g, " ").slice(0, 600), url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`, t: (h.created_at_i || 0) * 1000, src: "Hacker News", kw: k })); }
+      blogs.push(...out); st["Hacker News"] = `${out.length} posts and comments`; }catch(e){ st["Hacker News"] = "not reached — " + e.message; } })());
+  if (CFG.sentx.reddit) jobs.push((async () => { try{ const j = await sxJson(`https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&limit=60&t=week`);
+      const out = ((j.data || {}).children || []).map(c => c.data).map(d => ({ title: d.title || "", text: (d.selftext || "").slice(0, 600), url: "https://www.reddit.com" + d.permalink, t: (d.created_utc || 0) * 1000, src: "Reddit r/" + d.subreddit, q: true })); blogs.push(...out); st["Reddit discussions"] = `${out.length} threads`; }
+    catch(e){ st["Reddit discussions"] = serverBase() ? "not reached — " + e.message : "blocked by the browser — runs through the desktop app or ITE server"; } })());
+  const tags = [...new Set(kws.map(sxTag).filter(t => t.length > 2))].slice(0, 5);
+  if (CFG.sentx.medium) jobs.push((async () => { let n = 0, err = ""; for (const t of tags){ try{ const items = sxRss(await fetchVia(`https://medium.com/feed/tag/${t}`), "Medium #" + t); n += items.length; blogs.push(...items); }catch(e){ err = e.message; } } st["Medium blogs"] = n ? `${n} posts` : "not reached — " + (err || "no posts"); })());
+  if (CFG.sentx.wp) jobs.push((async () => { let n = 0, err = ""; for (const t of tags){ try{ const items = sxRss(await fetchVia(`https://wordpress.com/tag/${t}/feed/`), "WordPress #" + t); n += items.length; blogs.push(...items); }catch(e){ err = e.message; } } st["WordPress blogs"] = n ? `${n} posts` : "not reached — " + (err || "no posts"); })());
+  CFG.sentx.blogFeeds.split(/\s+/).filter(u => /^https?:\/\//.test(u)).slice(0, 20).forEach(u => jobs.push((async () => { const host = u.replace(/^https?:\/\//, "").split("/")[0];
+    try{ const items = sxRss(await fetchVia(u), host); blogs.push(...items); st["Your feed: " + host] = `${items.length} posts`; }catch(e){ st["Your feed: " + host] = "not reached — " + e.message; } })()));
+  // social media: what Social media monitoring collected (fetch it if it hasn't run yet)
+  jobs.push((async () => { try{ if (!SOC.posts.length && typeof socRefresh === "function") await socRefresh(); }catch(e){} })());
+  await Promise.all(jobs);
+  const social = ((serverBase() && typeof SOCS !== "undefined" && SOCS.data ? SOCS.data.posts : SOC.posts) || []).map(p => ({ title: "", text: p.text, url: p.url, t: p.t, src: p.src || p.source || "Social", score: p.score }));
+  st["Social media monitoring"] = `${social.length} posts${Object.keys(SOC.status || {}).length ? " (" + Object.entries(SOC.status).map(([k, v]) => `${k}: ${v}`).join("; ") + ")" : ""}`;
+  const relevant = x => { const s = (x.title + " " + x.text).toLowerCase(); return x.kw || kws.some(k => k.toLowerCase().split(/\s+/).every(w => s.includes(w))) || kws.some(k => s.includes(k.toLowerCase())); };
+  const dedupe = a => { const seen = new Set(); return a.filter(x => { const k = (x.url || x.title).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; }); };
+  const fin = (a, ch) => dedupe(a).filter(x => x.t > Date.now() - CFG.sentx.window * 3600e3).map(x => Object.assign(x, { ch, score: x.score != null ? x.score : lexScore(x.title + " " + x.text) }));
+  SX.items = { media: fin(media.filter(x => x.q || relevant(x)), "media"), social: fin(social, "social"), blogs: fin(blogs.filter(x => x.q || x.kw || relevant(x)), "blogs") };
+  SX.at = Date.now(); SX.busy = false; renderSx(); }
+const renderSx = () => { if (UI.mode === "sent-all") renderPanel(); };
+function sxAll(){ const f = UI.sxF || {}, words = (UI.sxQ || "").toLowerCase().trim();
+  return Object.values(SX.items).flat().filter(x => (!f.ch || x.ch === f.ch) && (!f.s || sentLabel(x.score) === f.s) && (!words || (x.title + " " + x.text + " " + x.src).toLowerCase().includes(words))); }
+function sxStats(list){ const n = list.length, avg = n ? list.reduce((a, x) => a + x.score, 0) / n : 0, neg = list.filter(x => sentLabel(x.score) === "negative").length, pos = list.filter(x => sentLabel(x.score) === "positive").length; return { n, avg, neg, pos, negPct: n ? Math.round(neg / n * 100) : 0 }; }
+function sxTrend(list){ const H = 24, now = Date.now(), step = Math.max(1, Math.ceil(CFG.sentx.window / H)) * 3600e3, start = now - H * step;
+  const lines = Object.keys(SX_CH).map(ch => { const pts = []; for (let i = 0; i < H; i++){ const a = start + i * step, b = a + step, xs = list.filter(x => x.ch === ch && x.t >= a && x.t < b); pts.push(xs.length ? xs.reduce((s, x) => s + x.score, 0) / xs.length : null); } return [ch, pts]; });
+  const W = 520, Ht = 120, y = v => Ht / 2 - v * (Ht / 2 - 8), xpos = i => 30 + i * (W - 40) / (H - 1);
+  return `<svg viewBox="0 0 ${W} ${Ht + 16}" class="sxsvg" role="img" aria-label="Average sentiment over time by channel"><line x1="30" x2="${W - 10}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/><text x="2" y="${y(.8) + 4}" class="sxax">+</text><text x="2" y="${y(-.8) + 4}" class="sxax">−</text>
+    ${lines.map(([ch, pts]) => { let d = "", on = false; pts.forEach((v, i) => { if (v == null){ on = false; return; } d += `${on ? "L" : "M"}${xpos(i).toFixed(1)},${y(Math.max(-1, Math.min(1, v))).toFixed(1)}`; on = true; }); return d ? `<path d="${d}" fill="none" stroke="${SX_CH[ch][1]}" stroke-width="2"/>` : ""; }).join("")}
+    <text x="30" y="${Ht + 14}" class="sxax">${CFG.sentx.window >= 48 ? Math.round(CFG.sentx.window / 24) + " days ago" : CFG.sentx.window + " h ago"}</text><text x="${W - 10}" y="${Ht + 14}" class="sxax" text-anchor="end">now</text></svg>`; }
+function sxTopicsOf(list){ const c = {}; list.forEach(x => (x.title + " " + x.text).toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(w => w.length > 3 && !SENT_STOPWORDS.has(w)).forEach(w => c[w] = (c[w] || 0) + 1));
+  return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 14); }
+function sxItem(x){ const l = sentLabel(x.score); return `<div class="sxit ${l}"><div class="sxmeta"><span class="sxch" style="--c:${SX_CH[x.ch][1]}">${esc(SX_CH[x.ch][0])}</span> <span class="s">${esc(x.src || "")} · ${esc(ago(x.t))}</span> <span class="bdg ${l === "negative" ? "red" : l === "positive" ? "green" : ""}">${l} ${x.score.toFixed(2)}</span></div>
+  <div>${x.url ? `<a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener">${esc(trunc(x.title || x.text, 160))}</a>` : esc(trunc(x.title || x.text, 160))}</div>${x.title && x.text ? `<div class="s">${esc(trunc(x.text, 200))}</div>` : ""}</div>`; }
+function sentAllPanel(){ if (!SX.at && !SX.busy) setTimeout(() => sxLoad(), 0);
+  const list = sxAll(), f = UI.sxF || {}, chs = Object.keys(SX_CH), by = Object.fromEntries(chs.map(c => [c, sxStats(list.filter(x => x.ch === c))])), tot = sxStats(list), maxN = Math.max(1, ...chs.map(c => by[c].n));
+  const chip = (k, v, l) => `<button class="tab-mini${(f[k] || "") === v ? " on" : ""}" data-sxf="${k}:${v}">${l}</button>`;
+  const neg = list.filter(x => sentLabel(x.score) === "negative").sort((a, b) => a.score - b.score);
+  return `<div class="pbody"><div class="sec">Sentiment across channels <small>${esc(sxTopics().join(" · "))}${SX.at ? " · updated " + esc(ago(SX.at)) : ""}</small>
+      <span style="flex:1"></span><button class="tab-mini" data-sxtopic>Topics…</button><button class="tab-mini" data-sxsrc>Sources…</button><button class="tab-mini primary" data-sxload>${SX.busy ? "Collecting…" : "↻ Refresh"}</button></div>
+    <div class="acts sxchips" style="flex-wrap:wrap;gap:4px">${chip("ch", "", "All channels")}${chs.map(c => chip("ch", c, SX_CH[c][0])).join("")}<span style="width:10px"></span>${chip("s", "", "Any")}${chip("s", "negative", "Negative")}${chip("s", "neutral", "Neutral")}${chip("s", "positive", "Positive")}<span style="width:10px"></span>
+      <select data-sxwin aria-label="Time window">${[[24, "Last 24 hours"], [72, "Last 3 days"], [168, "Last 7 days"]].map(([h, l]) => `<option value="${h}"${+CFG.sentx.window === h ? " selected" : ""}>${l}</option>`).join("")}</select>
+      <input data-sxq value="${esc(UI.sxQ || "")}" placeholder="Filter by words — place, company, topic…" style="min-width:240px"></div>
+    <div class="sxcards">${chs.map(c => { const s = by[c]; return `<div class="sxcard" style="--c:${SX_CH[c][1]}"><div class="sxct">${esc(SX_CH[c][0])}</div><div class="sxbig ${s.avg <= -.15 ? "neg" : s.avg >= .15 ? "pos" : ""}">${s.n ? (s.avg > 0 ? "+" : "") + s.avg.toFixed(2) : "—"}</div>
+      <div class="s">${s.n} items · ${s.negPct}% negative</div><div class="sxbar"><i style="width:${s.n / maxN * 100}%"></i></div></div>`; }).join("")}
+      <div class="sxcard" style="--c:var(--muted)"><div class="sxct">Overall</div><div class="sxbig ${tot.avg <= -.15 ? "neg" : tot.avg >= .15 ? "pos" : ""}">${tot.n ? (tot.avg > 0 ? "+" : "") + tot.avg.toFixed(2) : "—"}</div><div class="s">${tot.n} items · ${tot.negPct}% negative · ${tot.pos} positive</div>
+      <div class="sxsov" title="Share of voice">${chs.map(c => `<i style="flex:${by[c].n || 0};background:${SX_CH[c][1]}" title="${esc(SX_CH[c][0])}: ${tot.n ? Math.round(by[c].n / tot.n * 100) : 0}%"></i>`).join("")}</div></div></div>
+    <div class="sxgrid"><div class="chbox"><h4>Average sentiment over time</h4>${sxTrend(list)}<div class="sxleg">${chs.map(c => `<span><i style="background:${SX_CH[c][1]}"></i>${esc(SX_CH[c][0])}</span>`).join("")}</div></div>
+      <div class="chbox"><h4>What's being talked about</h4><div class="sxtags">${sxTopicsOf(list).map(([w, n]) => `<button class="sxtag" data-sxword="${esc(w)}">${esc(w)} <small>${n}</small></button>`).join("") || `<span class="s">Nothing yet.</span>`}</div></div></div>
+    <div class="sxcols">${chs.filter(c => !f.ch || f.ch === c).map(c => { const xs = list.filter(x => x.ch === c).sort((a, b) => (f.s ? b.t - a.t : a.score - b.score)).slice(0, 12);
+      return `<div class="sxcol"><h4 style="border-color:${SX_CH[c][1]}">${esc(SX_CH[c][0])} <small class="s">${f.s ? "newest" : "most negative first"}</small></h4>${xs.map(sxItem).join("") || `<div class="s">No items${SX.busy ? " yet — collecting…" : ""}.</div>`}</div>`; }).join("")}</div>
+    <details class="sxsrc"><summary>Where this comes from (${Object.keys(SX.status).length} sources)</summary><table class="acc"><tbody>${Object.entries(SX.status).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td class="${/not reached|blocked/.test(v) ? "s" : ""}">${esc(v)}</td></tr>`).join("")}</tbody></table>
+      <p class="help">Scores run from −1 (very negative) to +1 (very positive), using the built-in scorer${SOC.model ? " and the AI model" : " (load the AI model in Social media monitoring for better accuracy)"}. Facebook, Instagram and TikTok aren't read (their terms don't allow it); X and Bluesky need keys on the ITE server. Some blog sites block browsers — the desktop app or ITE server reads them.</p></details>
+    ${neg.length ? `<p class="help">Most negative right now: ${esc(trunc(neg[0].title || neg[0].text, 120))} (${esc(SX_CH[neg[0].ch][0])}, ${esc(neg[0].src)}).</p>` : ""}</div>`; }
+function sxSources(){ const S = CFG.sentx;
+  openModal(head("Sentiment sources") + `<div class="bd"><div class="sec" style="margin-top:0">Mainstream media</div><p class="help" style="margin-top:0">All news the console collects about your cities and risks is always included (add more sources under Integrations → More news). GDELT adds worldwide coverage of your topics.</p>
+    <label class="ctl"><input type="checkbox" id="sx1"${S.gdelt ? " checked" : ""}> GDELT — worldwide news index, 65 languages</label>
+    <div class="sec">Social media</div><p class="help" style="margin-top:0">Comes from <b>Social media monitoring</b> (Mastodon, plus Bluesky, Reddit and X when connected on the ITE server).</p>
+    <div class="sec">Blogs & forums</div>
+    <label class="ctl"><input type="checkbox" id="sx2"${S.hn ? " checked" : ""}> Hacker News (posts and comments)</label><label class="ctl"><input type="checkbox" id="sx3"${S.reddit ? " checked" : ""}> Reddit discussions</label>
+    <label class="ctl"><input type="checkbox" id="sx4"${S.medium ? " checked" : ""}> Medium blogs (by topic tag)</label><label class="ctl"><input type="checkbox" id="sx5"${S.wp ? " checked" : ""}> WordPress blogs (by topic tag)</label>
+    <label class="fld">Your blog and forum feeds — RSS or Atom addresses, one per line<textarea id="sx6" style="min-height:80px" placeholder="https://someblog.example/feed/">${esc(S.blogFeeds)}</textarea></label></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="sxSv">Save and refresh</button></div>`);
+  $("#sxSv").onclick = () => { Object.assign(CFG.sentx, { gdelt: $("#sx1").checked, hn: $("#sx2").checked, reddit: $("#sx3").checked, medium: $("#sx4").checked, wp: $("#sx5").checked, blogFeeds: $("#sx6").value }); saveCfg(); $("#ov").classList.remove("show"); sxLoad(true); }; }
+function sxTopicEdit(){ openModal(head("Topics to follow") + `<div class="bd"><label class="fld">Topics, separated by commas<input id="sxT" value="${esc(CFG.sentx.topic)}" placeholder="${esc(socKeywords().slice(0, 6).join(", "))}"></label><p class="help">Leave empty to use the Social media monitoring keywords. Use names of places, companies, events or issues — e.g. "Jakarta flooding, data centre water use, Johor power".</p></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="sxTs">Save and refresh</button></div>`);
+  $("#sxTs").onclick = () => { CFG.sentx.topic = $("#sxT").value; saveCfg(); $("#ov").classList.remove("show"); sxLoad(true); }; }
+{ const g = G("sentiment"); if (g && !g.tabs.some(t => t[0] === "sent-all")) g.tabs.unshift(["sent-all", "All channels"]); }
+NON_CITY_MODES.push("sent-all"); KEYS["sent-all"] = ["SENTIMENT — ALL CHANNELS", [], "Mainstream media, social media, and blogs & forums compared"];
+const _rpiSX = renderPanelInner;
+renderPanelInner = function(p){ if (UI.mode !== "sent-all") return _rpiSX(p);
+  if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+  const q = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.sxq !== undefined; p.innerHTML = sentAllPanel();
+  if (q){ const i = $("[data-sxq]"); if (i){ i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } };
+document.addEventListener("click", e => { const t = e.target.closest("[data-sxf],[data-sxload],[data-sxsrc],[data-sxtopic],[data-sxword]"); if (!t) return; const d = t.dataset;
+  if (d.sxf){ const [k, v] = d.sxf.split(":"); UI.sxF = Object.assign({}, UI.sxF, { [k]: v }); saveUI(); renderPanel(); return; }
+  if (d.sxload !== undefined){ sxLoad(true); return; } if (d.sxsrc !== undefined){ sxSources(); return; } if (d.sxtopic !== undefined){ sxTopicEdit(); return; }
+  if (d.sxword){ UI.sxQ = d.sxword; saveUI(); renderPanel(); } });
+document.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.sxq !== undefined){ UI.sxQ = e.target.value; clearTimeout(sxLoad.t); sxLoad.t = setTimeout(() => { saveUI(); renderPanel(); }, 250); } });
+document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.sxwin !== undefined){ CFG.sentx.window = +e.target.value; saveCfg(); sxLoad(true); } });
+{ const st = document.createElement("style"); st.textContent = `
+.sxcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}.sxcard{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:6px;padding:8px 12px}
+.sxct{font-weight:700;font-size:12.5px}.sxbig{font:800 26px var(--font)}.sxbig.neg{color:#E8634A}.sxbig.pos{color:#2BB673}.sxbar{height:5px;background:var(--line);border-radius:3px;margin-top:5px}.sxbar i{display:block;height:100%;background:var(--c);border-radius:3px}
+.sxsov{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:5px;background:var(--line)}
+.sxgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px}.sxsvg{width:100%;height:auto;max-height:200px;display:block}.sxchips .on{background:var(--accent,#0F6CBD);color:#fff;border-color:transparent}.sxax{font-size:10px;fill:var(--muted)}.sxleg{display:flex;gap:12px;font-size:12px}.sxleg i{display:inline-block;width:10px;height:3px;margin-right:4px;vertical-align:middle}
+.sxtags{display:flex;flex-wrap:wrap;gap:5px}.sxtag{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:2px 9px;cursor:pointer;font-size:12.5px}.sxtag small{color:var(--muted)}
+.sxcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-top:10px}.sxcol h4{border-left:4px solid;padding-left:8px;margin:0 0 6px}
+.sxit{border-bottom:1px solid var(--line);padding:6px 0}.sxit.negative{border-left:3px solid #E8634A;padding-left:6px}.sxmeta{font-size:11.5px}.sxch{color:var(--c);font-weight:700}.sxsrc{margin-top:10px}
+@media (max-width:1000px){.sxcards{grid-template-columns:repeat(2,minmax(0,1fr))}.sxgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
