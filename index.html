@@ -12764,6 +12764,140 @@ addEventListener("resize", () => { if (UI.mode === "livenews") lnApply(); });
 .lngrid{position:relative}.lnsplit{position:absolute;top:0;bottom:0;width:8px;margin-left:-6px;cursor:col-resize;z-index:4;border-radius:3px;touch-action:none}
 .lnsplit:hover,.lngrid.lndrag .lnsplit{background:color-mix(in srgb,var(--teal) 70%,transparent)}.lngrid.lndrag iframe,.lngrid.lndrag video{pointer-events:none}.lngrid.lndrag{user-select:none}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   CAMERA WALL — traffic and fixed cameras you can actually watch, with or
+   without the ITE server (Vision Command Centre → Camera wall)
+   - Official open-data traffic cameras, refreshed automatically:
+       · Singapore — LTA traffic cameras (data.gov.sg, ~90 cameras, every minute)
+       · Hong Kong — Transport Department snapshots (every 2 minutes)
+       · Queensland — QLDTraffic webcams (public API)
+   - Your own cameras: a YouTube live link (fixed webcams), an HLS stream (.m3u8),
+     a snapshot image address (refreshed), or a camera web page.
+   - Each tile shows when the picture was last updated and the nearest site.
+   ===================================================================== */
+CFG.camwall = Object.assign({ tiles: [], layout: "auto", refresh: 60, custom: [] }, CFG.camwall || {});
+const CW = { cams: {}, err: {}, loading: {}, at: {}, timer: null };
+const HK_FALLBACK = [   // codes listed on data.gov.hk (used if the full camera list can't be read); positions approximate
+  ["SM936F", "Cheung Pei Shan Road", 22.3725, 114.1130], ["NL184F", "HZMB Hong Kong Port — Outbound Clearance Plaza", 22.3090, 113.9450],
+  ["AID01221", "Wong Chuk Hang Road near Aberdeen Police Station — Westbound", 22.2480, 114.1610], ["AID01219", "Wong Chuk Hang Road near Wong Chuk Hang Recreation Ground — Westbound", 22.2470, 114.1680],
+  ["TDSTCKR10004", "Tai Chung Kiu Road near Sha Tin Road — Northbound", 22.3830, 114.1930], ["TDSTPR10009", "Tai Po Road — Tai Po Kau near Cheung Shue Tan Road — Southbound", 22.4310, 114.1830],
+  ["TDSCPRHSK20001", "Castle Peak Road–Hung Shui Kiu near Shun Tat Street — Southbound", 22.4280, 113.9970], ["TDSCPRHSK20003", "Castle Peak Road–Hung Shui Kiu near Hung Shui Kiu Main Street — Southbound", 22.4300, 113.9930]];
+async function cwJson(url){ try{ const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); } catch(e){ return JSON.parse(await fetchVia(url)); } }
+const CW_SRC = {
+  sg: { name: "Singapore — LTA traffic cameras", every: 60, country: "Singapore",
+    async load(){ const j = await cwJson("https://api.data.gov.sg/v1/transport/traffic-images"); const cams = ((j.items || [])[0] || {}).cameras || [];
+      if (!cams.length) throw new Error("no cameras in the reply");
+      return cams.map(c => ({ key: String(c.camera_id), name: `LTA camera ${c.camera_id}`, lat: +c.location.latitude, lon: +c.location.longitude, img: c.image, at: Date.parse(c.timestamp) || Date.now() })); } },
+  hk: { name: "Hong Kong — Transport Department snapshots", every: 120, country: "Hong Kong",
+    async load(){ try{ const d = xml(await fetchVia("https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml"));
+        const list = Array.from(d.getElementsByTagName("image")).map(n => ({ key: tx(n, "key"), name: [tx(n, "description"), tx(n, "district")].filter(Boolean).join(" · "), lat: +tx(n, "latitude"), lon: +tx(n, "longitude") })).filter(c => c.key && isFinite(c.lat));
+        if (list.length) return list.map(c => Object.assign(c, { img: `https://tdcctv.data.one.gov.hk/${c.key}.JPG` })); }catch(e){ CW.err.hkList = e.message; }
+      return HK_FALLBACK.map(([key, name, lat, lon]) => ({ key, name, lat, lon, img: `https://tdcctv.data.one.gov.hk/${key}.JPG`, approx: true })); } },
+  qld: { name: "Queensland — QLDTraffic webcams", every: 120, country: "Australia",
+    async load(){ const j = await cwJson("https://api.qldtraffic.qld.gov.au/v1/webcams?apikey=3e83add325cbb69ac4d8e5bf433d770b");
+      const f = j.features || []; if (!f.length) throw new Error("no cameras in the reply");
+      return f.map(x => { const p = x.properties || {}, g = (x.geometry || {}).coordinates || []; return { key: String(p.id), name: [p.description, p.locality].filter(Boolean).join(" · "), lat: +g[1], lon: +g[0], img: p.image_url }; }).filter(c => c.img); } } };
+async function cwLoad(src, force){ if (!CW_SRC[src]) return []; if (CW.cams[src] && !force && Date.now() - (CW.at[src] || 0) < 50e3) return CW.cams[src];
+  if (CW.loading[src]) return CW.loading[src];
+  CW.loading[src] = CW_SRC[src].load().then(list => { CW.cams[src] = list; CW.at[src] = Date.now(); delete CW.err[src]; return list; })
+    .catch(e => { CW.err[src] = e.message || String(e); return CW.cams[src] || []; }).finally(() => { delete CW.loading[src]; });
+  return CW.loading[src]; }
+function cwNearest(c){ if (!isFinite(c.lat) || !isFinite(c.lon)) return null; let best = null;
+  SITES.forEach(s => { if (!isFinite(s.lat)) return; const d = km(c.lat, c.lon, s.lat, s.lon); if (!best || d < best.d) best = { s, d }; }); return best; }
+function cwCam(t){ if (t.src === "custom") return t; const l = CW.cams[t.src] || []; return l.find(c => c.key === t.key) || t; }
+function cwImgUrl(t){ const c = cwCam(t); if (!c.img) return ""; return t.src === "sg" ? c.img : c.img + (c.img.includes("?") ? "&" : "?") + "t=" + Math.floor(Date.now() / 30e3); }
+function cwKind(url){ if (/youtube\.com|youtu\.be/.test(url)) return "youtube"; if (/\.m3u8(\?|$)/i.test(url)) return "hls"; if (/\.(jpe?g|png|gif|webp)(\?|$)/i.test(url) || /snapshot|image|jpg/i.test(url)) return "image"; return "page"; }
+function cwTileBody(t){ const c = cwCam(t);
+  if (t.src !== "custom" || t.kind === "image"){ const u = t.src === "custom" ? t.url + (t.url.includes("?") ? "&" : "?") + "t=" + Math.floor(Date.now() / 30e3) : cwImgUrl(t);
+    return u ? `<img data-cwimg="${esc(t.id)}" src="${esc(u)}" alt="${esc(c.name || "camera")}" loading="lazy">` : `<div class="ltvmsg">Loading camera list…</div>`; }
+  if (t.kind === "youtube"){ const m = /(?:v=|youtu\.be\/|live\/|embed\/)([\w-]{11})/.exec(t.url), ch = /channel\/(UC[\w-]{22})/.exec(t.url);
+    const src = m ? `https://www.youtube.com/embed/${m[1]}?autoplay=1&mute=1&playsinline=1` : ch ? `https://www.youtube.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1&playsinline=1` : "";
+    return src ? `<iframe src="${esc(ltvRelayWrap(src))}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="${esc(t.name)}"></iframe>` : `<div class="ltvmsg">Not a YouTube video or channel link.</div>`; }
+  if (t.kind === "hls") return `<video data-cwhls="${esc(t.id)}" muted autoplay playsinline controls></video>`;
+  return `<iframe src="${esc(safeUrl(t.url))}" title="${esc(t.name)}" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="cwnote">If this stays blank, the website doesn't allow being shown inside another page — use ↗.</div>`; }
+function cwAge(t){ const a = t.src === "sg" ? (cwCam(t).at || CW.at.sg) : CW.at[t.src] || t.at; if (!a) return ""; const s = Math.max(0, Math.round((Date.now() - a) / 1000)); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; }
+function cwTile(t){ const c = cwCam(t), n = cwNearest(c), open = t.src === "custom" ? t.url : c.img;
+  return `<div class="cwtile" data-cwt="${esc(t.id)}"><div class="vwh"><i class="ltvdot" style="background:${CW.err[t.src] ? "#C4314B" : "#13A10E"}"></i><b title="${esc(c.name || t.name || "")}">${esc(c.name || t.name || t.key)}</b>
+    <span class="cwage" data-cwage="${esc(t.id)}">${esc(cwAge(t))}</span>${open ? `<a class="ltvb" href="${esc(safeUrl(open))}" target="_blank" rel="noopener" title="Open the camera" aria-label="Open ${esc(c.name || "camera")}">↗</a>` : ""}<button class="ltvb" data-cwrm="${esc(t.id)}" aria-label="Remove ${esc(c.name || "camera")}">×</button></div>
+    <div class="vwb cwb">${cwTileBody(t)}</div>${n ? `<div class="cwsite">${t.src === "custom" ? "" : esc(CW_SRC[t.src].country) + " · "}nearest site ${esc(n.s.code)} · ${n.d < 10 ? n.d.toFixed(1) : Math.round(n.d)} km${c.approx ? " (position approx.)" : ""}</div>` : ""}</div>`; }
+function cwShape(n){ const L = CFG.camwall.layout, cap = { "4": 4, "9": 9, "16": 16 }[L] || n, m = Math.max(1, Math.min(n, cap)), cols = m <= 1 ? 1 : m <= 4 ? 2 : m <= 9 ? 3 : 4; return { m, cols, rows: Math.ceil(m / cols) }; }
+const cwSig = () => [CFG.camwall.tiles.map(t => t.id).join(), CFG.camwall.layout, ltvNoPlay(), Object.keys(CW.cams).join(), JSON.stringify(CW.err)].join("|");
+function camWallPanel(){ const T = CFG.camwall.tiles, sh = cwShape(T.length), list = T.slice(0, sh.m);
+  const errs = Object.entries(CW.err).filter(([k]) => CW_SRC[k]).map(([k, e]) => `<div class="banner warn" style="margin:0 0 6px"><b>${esc(CW_SRC[k].name)}:</b> couldn't read the camera list (${esc(e)}). ${serverBase() ? "" : "Your network or browser may block it; the desktop app or ITE server fetches it for you."}</div>`).join("");
+  return `<div class="vw cw" data-sig="${esc(cwSig())}"><div class="vwbar"><b>Camera wall</b><span class="s">${list.length} of ${T.length} cameras · pictures refresh every ${CFG.camwall.refresh} s</span><span class="sp"></span>
+    <span class="vwlay">${[["auto", "Auto"], ["4", "2 × 2"], ["9", "3 × 3"], ["16", "4 × 4"]].map(([k, l]) => `<button class="tab-mini${CFG.camwall.layout === k ? " on" : ""}" data-cwlay="${k}" aria-pressed="${CFG.camwall.layout === k}">${l}</button>`).join("")}</span>
+    <button class="tab-mini primary" data-cwadd>+ Add cameras</button><button class="tab-mini" data-cwcustom>+ Your own camera</button><button class="tab-mini" data-cwnow>↻ Refresh now</button><button class="tab-mini" data-cwfs>⛶ Full screen</button></div>${errs}
+    <div class="vwmain">${list.length ? `<div class="vwgrid cwgrid" style="grid-template-columns:repeat(${sh.cols},minmax(0,1fr));grid-template-rows:repeat(${sh.rows},minmax(0,1fr))">${list.map(cwTile).join("")}</div>` : `<div class="empty" style="flex:1">No cameras yet — <button class="linkbtn" data-cwadd>add traffic cameras</button> from Singapore, Hong Kong or Queensland, or <button class="linkbtn" data-cwcustom>your own camera</button>.</div>`}</div></div>`; }
+function cwFit(){ const v = $(".cw"); if (!v) return; if (document.fullscreenElement === v) v.style.height = ""; else v.style.height = Math.max(360, innerHeight - v.getBoundingClientRect().top - 10) + "px"; }
+function cwMount(){ cwFit();
+  $$("[data-cwimg]").forEach(i => { i.onerror = () => { const b = i.parentElement; if (b && !b.querySelector(".ltvmsg")) b.insertAdjacentHTML("beforeend", `<div class="ltvmsg cwoff">No picture — the camera may be offline, or your network blocks the image.</div>`); i.style.display = "none"; };
+    i.onload = () => { i.style.display = ""; const m = i.parentElement && i.parentElement.querySelector(".cwoff"); if (m) m.remove(); }; });
+  $$("[data-cwhls]").forEach(v => { if (v.__on) return; v.__on = 1; const t = CFG.camwall.tiles.find(x => x.id === v.dataset.cwhls); if (t) attachHls(v, t.url).then(() => v.play().catch(() => {})).catch(() => {}); });
+  clearInterval(CW.timer); CW.timer = setInterval(cwTick, 5000); }
+let CW_LAST = 0;
+async function cwTick(force){ if (UI.mode !== "camwall"){ clearInterval(CW.timer); return; }
+  $$("[data-cwage]").forEach(e => { const t = CFG.camwall.tiles.find(x => x.id === e.dataset.cwage); if (t) e.textContent = cwAge(t); });
+  if (!force && Date.now() - CW_LAST < CFG.camwall.refresh * 1000) return; CW_LAST = Date.now();
+  const srcs = [...new Set(CFG.camwall.tiles.map(t => t.src).filter(s => s !== "custom"))]; if (srcs.includes("sg")) await cwLoad("sg", true);
+  srcs.filter(s => s !== "sg").forEach(s => { CW.at[s] = Date.now(); });
+  $$("[data-cwimg]").forEach(i => { const t = CFG.camwall.tiles.find(x => x.id === i.dataset.cwimg); if (!t) return; const u = t.src === "custom" ? t.url + (t.url.includes("?") ? "&" : "?") + "t=" + Date.now() : cwImgUrl(t) + (t.src === "sg" ? "" : "&f=" + Date.now()); if (u) i.src = u; }); }
+async function cwEnsure(){ const need = [...new Set(CFG.camwall.tiles.map(t => t.src).filter(s => s !== "custom" && !CW.cams[s]))];
+  if (!CFG.camwall.tiles.length && !CFG.camwall.__seeded){ CFG.camwall.__seeded = 1;            // first visit: 6 Singapore + 6 Hong Kong cameras near sites
+    const [sg, hk] = await Promise.all([cwLoad("sg"), cwLoad("hk")]);
+    const pick = (src, list, n) => list.map(c => ({ c, d: (cwNearest(c) || { d: 1e9 }).d })).sort((a, b) => a.d - b.d).slice(0, n).map(({ c }) => ({ id: src + ":" + c.key, src, key: c.key, name: c.name }));
+    CFG.camwall.tiles = pick("sg", sg, 6).concat(pick("hk", hk, 6)); saveCfg(); }
+  else if (need.length) await Promise.all(need.map(s => cwLoad(s)));
+  if (UI.mode === "camwall") renderPanel(); }
+function cwPicker(){ let src = "sg";
+  openModal(head("Add cameras") + `<div class="bd"><div class="fgrid"><label class="fld">Source<select id="cwS">${Object.entries(CW_SRC).map(([k, s]) => `<option value="${k}">${esc(s.name)}</option>`).join("")}</select></label><label class="fld">Find<input id="cwQ" placeholder="road, district or camera number"></label></div>
+    <div class="acts"><span class="s" id="cwN">Loading…</span><span style="flex:1"></span><button class="pill" id="cwNear">Add the 6 nearest to our sites</button></div><div id="cwL" class="ltvlist"></div></div><div class="ft"><button class="pill primary" data-x>Done</button></div>`, true);
+  const draw = () => { const q = $("#cwQ").value.trim().toLowerCase(), all = (CW.cams[src] || []).map(c => Object.assign({ n: cwNearest(c) }, c)), on = new Set(CFG.camwall.tiles.map(t => t.id));
+    const list = all.filter(c => !q || (c.name + " " + c.key).toLowerCase().includes(q)).sort((a, b) => ((a.n || {}).d || 1e9) - ((b.n || {}).d || 1e9));
+    $("#cwN").textContent = CW.err[src] ? "Couldn't read the camera list: " + CW.err[src] : `${all.length} cameras${src === "hk" && all.some(c => c.approx) ? " (short list — the full list couldn't be read)" : ""} · nearest to our sites first`;
+    $("#cwL").innerHTML = list.slice(0, 200).map(c => { const id = src + ":" + c.key; return `<label class="ltvrow"><input type="checkbox" data-cwpick="${esc(id)}"${on.has(id) ? " checked" : ""}> <b>${esc(c.name || c.key)}</b> <span class="s">${c.n ? `${esc(c.n.s.code)} · ${c.n.d < 10 ? c.n.d.toFixed(1) : Math.round(c.n.d)} km` : ""}</span><span class="sp"></span>${c.img ? `<a class="linkbtn" href="${esc(safeUrl(c.img))}" target="_blank" rel="noopener">view ↗</a>` : ""}</label>`; }).join("") || `<div class="s">No cameras match.</div>`; };
+  const load = async () => { $("#cwN").textContent = "Loading the camera list…"; $("#cwL").innerHTML = ""; await cwLoad(src); draw(); };
+  $("#cwS").onchange = () => { src = $("#cwS").value; load(); }; $("#cwQ").oninput = draw;
+  $("#cwL").addEventListener("change", e => { const id = e.target.dataset.cwpick; if (!id) return; const [s, key] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)], c = (CW.cams[s] || []).find(x => x.key === key);
+    CFG.camwall.tiles = e.target.checked ? CFG.camwall.tiles.concat([{ id, src: s, key, name: c ? c.name : key }]) : CFG.camwall.tiles.filter(t => t.id !== id); saveCfg(); });
+  $("#cwNear").onclick = () => { const on = new Set(CFG.camwall.tiles.map(t => t.id)); (CW.cams[src] || []).map(c => ({ c, d: (cwNearest(c) || { d: 1e9 }).d })).sort((a, b) => a.d - b.d).filter(({ c }) => !on.has(src + ":" + c.key)).slice(0, 6)
+    .forEach(({ c }) => CFG.camwall.tiles.push({ id: src + ":" + c.key, src, key: c.key, name: c.name })); saveCfg(); draw(); toast("Cameras added", "", "var(--teal)"); };
+  load();
+  const ov = $("#ov"), obs = new MutationObserver(() => { if (!ov.classList.contains("show")){ obs.disconnect(); renderPanel(); } }); obs.observe(ov, { attributes: true, attributeFilter: ["class"] }); }
+function cwCustom(){ openModal(head("Your own camera") + `<div class="bd"><p class="help" style="margin-top:0">Paste the address of a camera you're allowed to view:</p>
+    <ul class="help"><li><b>YouTube live link</b> — fixed live webcams (city views, ports, weather cams). Plays inside the wall.</li><li><b>HLS stream</b> ending in <code>.m3u8</code> — plays if the camera allows it.</li><li><b>Snapshot picture</b> (.jpg / .png address) — refreshed every ${CFG.camwall.refresh} s.</li><li><b>Camera web page</b> — shown if the website allows it; otherwise use ↗ to open it.</li></ul>
+    <div class="fgrid"><label class="fld">Name<input id="cwNm" placeholder="e.g. Shibuya crossing"></label><label class="fld">Address<input id="cwU" placeholder="https://…"></label></div>
+    <div class="fgrid"><label class="fld">Latitude (optional)<input id="cwLa" inputmode="decimal"></label><label class="fld">Longitude (optional)<input id="cwLo" inputmode="decimal"></label></div></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="cwOk">Add to the wall</button></div>`);
+  $("#cwOk").onclick = () => { const name = $("#cwNm").value.trim(), url = $("#cwU").value.trim(); if (!/^https?:\/\//.test(url)){ toast("Enter the camera's full address", "It starts with https://", "var(--amber)"); return; }
+    const t = { id: "c" + Date.now().toString(36), src: "custom", name: name || url.replace(/^https?:\/\//, "").slice(0, 40), url, kind: cwKind(url), lat: parseFloat($("#cwLa").value), lon: parseFloat($("#cwLo").value), at: Date.now() };
+    CFG.camwall.tiles.push(t); saveCfg(); audit("Camera added to the wall", t.name, url); $("#ov").classList.remove("show"); renderPanel(); }; }
+{ const t = G("vcc").tabs; if (!t.some(x => x[0] === "camwall")) t.splice(t.findIndex(x => x[0] === "videowall") + 1, 0, ["camwall", "Camera wall"]); }
+NOMAP.push("camwall"); NON_CITY_MODES.push("camwall"); KEYS.camwall = ["CAMERA WALL", [], "Official traffic cameras and your own fixed cameras, refreshed automatically"];
+const _rpiCW = renderPanelInner;
+renderPanelInner = function(p){ if (UI.mode !== "camwall") return _rpiCW(p);
+  if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+  const cur = p.querySelector(".cw"); if (cur && cur.dataset.sig === cwSig()){ setTimeout(cwFit, 0); return; }
+  p.innerHTML = `<div class="pbody vwbody">${camWallPanel()}</div>`; setTimeout(cwMount, 30);
+  if (!p.__cwEnsured || CFG.camwall.tiles.some(t => t.src !== "custom" && !CW.cams[t.src] && !CW.err[t.src] && !CW.loading[t.src])){ p.__cwEnsured = 1; cwEnsure(); } };
+addEventListener("resize", () => { if (UI.mode === "camwall") cwFit(); });
+document.addEventListener("click", e => { const t = e.target.closest("[data-cwadd],[data-cwcustom],[data-cwnow],[data-cwfs],[data-cwlay],[data-cwrm],[data-cwgo]"); if (!t) return; const d = t.dataset;
+  if (d.cwgo !== undefined){ setMode("camwall"); return; }
+  if (d.cwadd !== undefined){ cwPicker(); return; } if (d.cwcustom !== undefined){ cwCustom(); return; }
+  if (d.cwnow !== undefined){ cwTick(true); toast("Refreshing cameras", "", "var(--teal)"); return; }
+  if (d.cwlay){ CFG.camwall.layout = d.cwlay; saveCfg(); renderPanel(); return; }
+  if (d.cwrm){ CFG.camwall.tiles = CFG.camwall.tiles.filter(x => x.id !== d.cwrm); saveCfg(); renderPanel(); return; }
+  if (d.cwfs !== undefined){ const el = $(".cw"); if (!el) return; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else (el.requestFullscreen ? el.requestFullscreen() : Promise.reject()).catch(() => toast("Full screen not available", "Press F11 instead.", "var(--amber)")); } });
+document.addEventListener("fullscreenchange", () => setTimeout(cwFit, 50));
+// the camera-websites list points to the wall for cameras that play without the server
+const _camSitCW = camSitPanel; camSitPanel = function(){ return `<div class="banner ok" style="margin-bottom:8px"><b>Want to watch cameras now?</b> The <button class="linkbtn" data-cwgo>Camera wall</button> plays official traffic cameras (Singapore, Hong Kong, Queensland) and your own YouTube / stream / snapshot cameras — no server needed. This list below is for testing camera <i>websites</i>, which needs the ITE server.</div>` + _camSitCW(); };
+{ const st = document.createElement("style"); st.textContent = `
+.cwtile{display:flex;flex-direction:column;background:#000;border:2px solid #000;border-radius:6px;overflow:hidden;min-width:0;min-height:0}
+.cwb{position:relative}.cwb img{width:100%;height:100%;object-fit:cover;background:#000;display:block}.cwb iframe{width:100%;height:100%;border:0}.cwb .ltvmsg{position:absolute;inset:0}
+.cwage{font-size:11px;color:#9aa4ab;flex:none}.cwsite{font-size:11px;color:#9aa4ab;background:#1d2327;padding:1px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.cwnote{position:absolute;bottom:0;left:0;right:0;font-size:11px;color:#bbb;background:rgba(0,0,0,.6);padding:2px 6px}
+.cw:fullscreen .cwsite{display:none}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
