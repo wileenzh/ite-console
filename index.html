@@ -12920,7 +12920,7 @@ function wcvName(t){ const b = t.querySelector(".vwh b"); return b ? b.textConte
 function wcvSite(t){ const id = t.dataset.cwt, x = id && CFG.camwall.tiles.find(y => y.id === id); if (!x) return ""; const n = cwNearest(cwCam(x)); return n && n.d < 15 ? n.s.code : ""; }
 async function wcvStart(){ if (WCV.on) return;
   cvLoadModel();                                                              // the model loads while you pick the tab
-  const needCapture = wcvTiles().some(t => !t.querySelector("video[data-cwcam]"));
+  const needCapture = wcvTiles().some(t => !t.querySelector("video[data-cwcam], video[data-opsim], video[data-opcam]"));
   if (needCapture){
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ toast("Not supported in this browser", "Use Chrome or Edge on a computer.", "var(--amber)"); return; }
     try{ const reuse = typeof TR !== "undefined" && TR.stream && TR.stream.getVideoTracks().some(v => v.readyState === "live");
@@ -12937,7 +12937,7 @@ async function wcvStart(){ if (WCV.on) return;
 function wcvStop(msg){ WCV.on = false; clearInterval(WCV.timer); if (WCV.stream && !WCV.shared) WCV.stream.getTracks().forEach(t => t.stop()); WCV.stream = null; WCV.video = null; if (msg) WCV.err = msg;
   $$(".wcvov,.wcvbadge").forEach(e => e.remove()); wcvBar(); }
 // cut one tile out of the captured tab (or read a local webcam directly)
-function wcvGrab(t){ const body = t.querySelector(".vwb") || t; const own = t.querySelector("video[data-cwcam]");
+function wcvGrab(t){ const body = t.querySelector(".vwb") || t; const own = t.querySelector("video[data-cwcam], video[data-opsim], video[data-opcam]");
   const c = document.createElement("canvas"); let w, h;
   if (own && own.readyState >= 2){ w = own.videoWidth; h = own.videoHeight; const k = Math.min(1, 640 / w); c.width = w * k; c.height = h * k; c.getContext("2d").drawImage(own, 0, 0, c.width, c.height); return c; }
   const v = WCV.video; if (!v || v.readyState < 2) return null; const r = body.getBoundingClientRect(), sx = v.videoWidth / innerWidth, sy = v.videoHeight / innerHeight;
@@ -13025,6 +13025,99 @@ document.addEventListener("click", e => { const b = e.target.closest("[data-cs2w
 { const st = document.createElement("style"); st.textContent = `
 .wcvov{position:absolute;inset:0;pointer-events:none;z-index:2}.vwb{position:relative}.wcvbadge{flex:none;font-size:11px;background:#2a3238;border-radius:8px;padding:0 6px;color:#fff}
 .cwb video{width:100%;height:100%;object-fit:cover;background:#000}.wcvstat{font-size:12px}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   CAMERA WALL — two views
+   · Public cameras: official traffic cameras and public webcams (as before).
+   · Operational (Lenel): cameras at our own sites, grouped by site, with the
+     site's Lenel status (from Lenel outages) and any open camera outage on the
+     tile. Feeds come from your video system's gateway (HLS, snapshot or MJPEG
+     address), a camera web page, or a capture card / webcam on this computer.
+     Until real feeds are connected, demo feeds keep the wall working (clearly marked).
+   Computer vision works on both views.
+   ===================================================================== */
+CFG.camwall.view = CFG.camwall.view || "public";
+CFG.camwall.ops = CFG.camwall.ops || null;
+CFG.camwall.opsFilter = CFG.camwall.opsFilter || "all";
+CFG.camwall.opsLayout = CFG.camwall.opsLayout || "auto";
+const OPS = { sim: {}, cams: {} };
+const OPS_KINDS = [["demo", "Demo feed (until the real camera is connected)"], ["hls", "Video stream from the video system / gateway (.m3u8)"], ["image", "Snapshot picture address (refreshed)"], ["mjpeg", "MJPEG stream address"], ["page", "Camera web page"], ["webcam", "Camera or capture card on this computer"]];
+function opsLenelSites(){ try{ if (LENEL.api) return LENEL.api.sites().map(s => ({ code: s.site, city: s.city, country: s.country, cls: s.cls, sub: s.sub })); }catch(e){}
+  return SITES.filter(s => !isOffice(s) && /CLASS A|CLASS B|C-PE/.test(s.cls) && /OPERATIONAL/i.test(s.status)).map(s => ({ code: s.code, city: s.city, country: s.country, cls: s.cls.replace("CLASS ", ""), sub: s.region })); }
+function opsSeed(){ if (CFG.camwall.ops) return; const sites = opsLenelSites().slice(0, 8);
+  CFG.camwall.ops = sites.map((s, i) => ({ id: "op" + (i + 1), site: s.code, name: i % 2 ? "Perimeter fence" : "Main gate", kind: "demo", url: "" })); saveCfg(); }
+const opsDownSet = () => { try{ return new Set(lenelDown().map(d => d.code)); }catch(e){ return new Set(); } };
+const opsOutage = code => SHARED.camout.filter(c => !c.deleted && !c.end && c.site === code);
+function opsTileBody(t){
+  if (t.kind === "demo") return `<video data-opsim="${esc(t.id)}" muted autoplay playsinline></video><div class="opsdemo">DEMO feed — connect the real camera with ✎</div>`;
+  if (t.kind === "image") return `<img data-opimg="${esc(t.id)}" src="${esc(t.url + (t.url.includes("?") ? "&" : "?") + "t=" + Math.floor(Date.now() / 30e3))}" alt="${esc(t.name)}">`;
+  if (t.kind === "mjpeg") return `<img src="${esc(t.url)}" alt="${esc(t.name)}">`;
+  if (t.kind === "hls") return `<video data-ophls="${esc(t.id)}" muted autoplay playsinline></video>`;
+  if (t.kind === "webcam") return `<video data-opcam="${esc(t.id)}" muted autoplay playsinline></video>`;
+  return `<iframe src="${esc(safeUrl(t.url))}" title="${esc(t.name)}" referrerpolicy="strict-origin-when-cross-origin"></iframe>`; }
+function opsTile(t, down){ const s = SITES.find(x => x.code === t.site) || {}, out = opsOutage(t.site), isDown = down.has(t.site);
+  return `<div class="cwtile${isDown || out.length ? " opsissue" : ""}" data-cwt="ops:${esc(t.id)}"><div class="vwh"><i class="ltvdot" style="background:${isDown ? "#C4314B" : out.length ? "#E8873A" : "#13A10E"}"></i><b title="${esc(t.site)} · ${esc(t.name)}">${esc(t.site)} · ${esc(t.name)}</b>
+    <span class="opschip ${isDown ? "bad" : "ok"}" title="Lenel status from Lenel outages">Lenel ${isDown ? "DOWN" : LENEL.api ? "up" : "—"}</span>${out.length ? `<span class="opschip warn" title="${esc(out.map(o => [o.cams, o.cause].filter(Boolean).join(" — ")).join("; "))}">camera outage</span>` : ""}
+    <button class="ltvb" data-opsedit="${esc(t.id)}" title="Connect or change this camera" aria-label="Edit ${esc(t.name)}">✎</button><button class="ltvb" data-opsrm="${esc(t.id)}" aria-label="Remove ${esc(t.name)}">×</button></div>
+    <div class="vwb cwb">${opsTileBody(t)}</div><div class="cwsite">${esc([s.city, s.country].filter(Boolean).join(", "))} · ${esc((s.cls || "").replace("CLASS ", "Class "))}${isDown ? " · Lenel down — see Lenel outages" : ""}</div></div>`; }
+const opsSig = () => [CFG.camwall.view, CFG.camwall.opsLayout, CFG.camwall.opsFilter, (CFG.camwall.ops || []).map(t => t.id + t.kind + t.url).join(), [...opsDownSet()].join(), SHARED.camout.filter(c => !c.deleted && !c.end).map(c => c.site).join(), typeof WCV !== "undefined" && WCV.on].join("|");
+function opsList(){ const down = opsDownSet(); let L = (CFG.camwall.ops || []).slice();
+  if (CFG.camwall.opsFilter === "issues") L = L.filter(t => down.has(t.site) || opsOutage(t.site).length);
+  return L.sort((a, b) => ((down.has(b.site) || opsOutage(b.site).length ? 1 : 0) - (down.has(a.site) || opsOutage(a.site).length ? 1 : 0))); }
+const cwViewSwitch = () => `<span class="vwlay cwview" role="group" aria-label="Which cameras">${[["public", "Public cameras"], ["ops", "Operational (Lenel)"]].map(([k, l]) => `<button class="tab-mini${CFG.camwall.view === k ? " on" : ""}" data-cwview="${k}" aria-pressed="${CFG.camwall.view === k}">${l}</button>`).join("")}</span>`;
+function opsPanel(){ opsSeed(); const down = opsDownSet(), L = opsList(), lay = CFG.camwall.opsLayout, cap = { "4": 4, "9": 9, "16": 16 }[lay] || L.length, m = Math.max(1, Math.min(L.length, cap)), cols = m <= 1 ? 1 : m <= 4 ? 2 : m <= 9 ? 3 : 4, rows = Math.ceil(m / cols);
+  const issues = (CFG.camwall.ops || []).filter(t => down.has(t.site) || opsOutage(t.site).length).length, demo = (CFG.camwall.ops || []).filter(t => t.kind === "demo").length;
+  return `<div class="vw cw ops" data-sig="${esc(opsSig())}"><div class="vwbar">${cwViewSwitch()}<span class="s">${m} of ${(CFG.camwall.ops || []).length} site cameras${issues ? ` · <b style="color:#E8873A">${issues} at sites with issues</b>` : ""}</span><span class="sp"></span>
+    <span class="vwlay">${[["all", "All"], ["issues", "Sites with issues"]].map(([k, l]) => `<button class="tab-mini${CFG.camwall.opsFilter === k ? " on" : ""}" data-opsf="${k}">${l}</button>`).join("")}</span>
+    <span class="vwlay">${[["auto", "Auto"], ["4", "2 × 2"], ["9", "3 × 3"], ["16", "4 × 4"]].map(([k, l]) => `<button class="tab-mini${lay === k ? " on" : ""}" data-opslay="${k}">${l}</button>`).join("")}</span>
+    <button class="tab-mini primary" data-opsadd>+ Site camera</button>${wcvBtn()}<button class="tab-mini" data-cwfs>⛶ Full screen</button></div>${wcvStatLine()}
+    ${demo ? `<div class="banner warn" style="margin:0 0 6px"><b>${demo} demo feed${demo > 1 ? "s" : ""}.</b> Connect each camera with ✎: the video stream address from your video system (a gateway that turns camera feeds into .m3u8 / snapshot / MJPEG addresses), a camera web page, or a capture card on this computer. Addresses stay in this browser; use them only on the company network.</div>` : ""}
+    <div class="vwmain">${L.length ? `<div class="vwgrid cwgrid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));grid-template-rows:repeat(${rows},minmax(0,1fr))">${L.slice(0, m).map(t => opsTile(t, down)).join("")}</div>` : `<div class="empty" style="flex:1">${CFG.camwall.opsFilter === "issues" ? "No site cameras at sites with Lenel or camera issues right now." : `No site cameras yet — <button class="linkbtn" data-opsadd>add one</button>.`}</div>`}</div></div>`; }
+function opsMount(){ cwFit(); wcvBar();
+  $$("video[data-opsim]").forEach(v => { if (v.srcObject) return; const id = v.dataset.opsim; OPS.sim[id] = OPS.sim[id] || simStream(); v.srcObject = OPS.sim[id]; v.play().catch(() => {}); });
+  $$("video[data-ophls]").forEach(v => { if (v.__on) return; v.__on = 1; const t = (CFG.camwall.ops || []).find(x => x.id === v.dataset.ophls); if (t) attachHls(v, t.url).then(() => v.play().catch(() => {})).catch(e => v.insertAdjacentHTML("afterend", `<div class="ltvmsg">Stream not reachable: ${esc(e.message || e)}. Check the address, and that this computer is on the company network.</div>`)); });
+  $$("video[data-opcam]").forEach(async v => { if (v.srcObject) return; const t = (CFG.camwall.ops || []).find(x => x.id === v.dataset.opcam); if (!t) return;
+    try{ OPS.cams[t.id] = OPS.cams[t.id] && OPS.cams[t.id].active ? OPS.cams[t.id] : await navigator.mediaDevices.getUserMedia({ video: t.deviceId ? { deviceId: { exact: t.deviceId } } : true, audio: false }); v.srcObject = OPS.cams[t.id]; v.play().catch(() => {}); }
+    catch(e){ v.insertAdjacentHTML("afterend", `<div class="ltvmsg">Camera not available: ${esc(e.message)}</div>`); } });
+  $$("img[data-opimg]").forEach(i => { i.onerror = () => { if (!i.parentElement.querySelector(".ltvmsg")) i.insertAdjacentHTML("afterend", `<div class="ltvmsg cwoff">No picture — check the address and that you're on the company network.</div>`); }; });
+  clearInterval(OPS.timer); OPS.timer = setInterval(() => { if (UI.mode !== "camwall" || CFG.camwall.view !== "ops"){ clearInterval(OPS.timer); return; }
+    $$("img[data-opimg]").forEach(i => { const t = (CFG.camwall.ops || []).find(x => x.id === i.dataset.opimg); if (t) i.src = t.url + (t.url.includes("?") ? "&" : "?") + "t=" + Date.now(); }); }, CFG.camwall.refresh * 1000); }
+function opsEdit(id){ const t = id ? (CFG.camwall.ops || []).find(x => x.id === id) : null, sites = opsLenelSites();
+  openModal(head(t ? "Site camera — " + t.site : "Add a site camera") + `<div class="bd"><div class="fgrid"><label class="fld">Site (Lenel-monitored)<select id="opS">${sites.map(s => `<option value="${esc(s.code)}"${t && t.site === s.code ? " selected" : ""}>${esc(s.code)} — ${esc(s.city || "")}</option>`).join("")}</select></label>
+    <label class="fld">Camera name<input id="opN" value="${esc(t ? t.name : "")}" placeholder="e.g. Main gate, Loading bay, Fence north"></label></div>
+    <label class="fld">How this camera is connected<select id="opK">${OPS_KINDS.map(([k, l]) => `<option value="${k}"${(t ? t.kind : "hls") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+    <label class="fld" id="opUW">Address<input id="opU" value="${esc(t ? t.url : "")}" placeholder="https://video-gateway.company.local/cameras/…"></label><label class="fld" id="opDW" style="display:none">Camera on this computer<select id="opD"></select></label>
+    <p class="help">Lenel's video system (and most others) can publish each camera through a gateway or media server as a <b>.m3u8</b> stream, a <b>snapshot</b> or an <b>MJPEG</b> address — ask your video system administrator for the address. The browser can't open RTSP addresses directly. The address is kept in this browser only.</p></div>
+    <div class="ft">${t ? `<button class="pill" data-opsdel="${esc(t.id)}">Remove</button>` : ""}<span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="opOk">${t ? "Save" : "Add"}</button></div>`);
+  const sync = async () => { const k = $("#opK").value; $("#opUW").style.display = ["demo", "webcam"].includes(k) ? "none" : ""; $("#opDW").style.display = k === "webcam" ? "" : "none";
+    if (k === "webcam" && !$("#opD").options.length){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(x => x.stop()); const d = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === "videoinput"); $("#opD").innerHTML = d.map((x, i) => `<option value="${esc(x.deviceId)}"${t && t.deviceId === x.deviceId ? " selected" : ""}>${esc(x.label || "Camera " + (i + 1))}</option>`).join(""); }catch(e){ $("#opD").innerHTML = `<option value="">No camera access (${esc(e.message)})</option>`; } } };
+  $("#opK").onchange = sync; sync();
+  $("#opOk").onclick = () => { const k = $("#opK").value, url = $("#opU").value.trim(); if (!["demo", "webcam"].includes(k) && !/^https?:\/\//.test(url)){ toast("Enter the camera's address", "It starts with http:// or https://", "var(--amber)"); return; }
+    const rec = { site: $("#opS").value, name: $("#opN").value.trim() || "Camera", kind: k, url: ["demo", "webcam"].includes(k) ? "" : url, deviceId: k === "webcam" ? $("#opD").value : "" };
+    if (t) Object.assign(t, rec); else CFG.camwall.ops.push(Object.assign({ id: "op" + Date.now().toString(36) }, rec));
+    saveCfg(); audit(t ? "Site camera changed" : "Site camera added", `${rec.site} · ${rec.name}`, k); $("#ov").classList.remove("show"); renderPanel(); }; }
+// the public view gets the same switch
+const _cwPanelOps = camWallPanel; camWallPanel = function(){ return _cwPanelOps().replace(`<b>Camera wall</b>`, cwViewSwitch()); };
+const _rpiOps = renderPanelInner;
+renderPanelInner = function(p){ if (UI.mode !== "camwall" || CFG.camwall.view !== "ops") return _rpiOps(p);
+  if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+  const cur = p.querySelector(".cw.ops"); if (cur && cur.dataset.sig === opsSig()){ setTimeout(cwFit, 0); return; }
+  p.innerHTML = `<div class="pbody vwbody">${opsPanel()}</div>`; setTimeout(opsMount, 30); };
+// computer-vision alarms name the site for operational cameras
+const _wcvSiteOps = wcvSite; wcvSite = function(t){ const id = t.dataset.cwt || ""; if (id.startsWith("ops:")){ const x = (CFG.camwall.ops || []).find(y => y.id === id.slice(4)); return x ? x.site : ""; } return _wcvSiteOps(t); };
+document.addEventListener("click", e => { const b = e.target.closest("[data-cwview],[data-opsf],[data-opslay],[data-opsadd],[data-opsedit],[data-opsrm],[data-opsdel]"); if (!b) return; const d = b.dataset;
+  if (d.cwview){ if (CFG.camwall.view !== d.cwview && typeof WCV !== "undefined" && WCV.on) $$(".wcvov,.wcvbadge").forEach(x => x.remove()); CFG.camwall.view = d.cwview; saveCfg(); const p = $("#panel"); if (p) p.innerHTML = ""; renderPanel(); return; }
+  if (d.opsf){ CFG.camwall.opsFilter = d.opsf; saveCfg(); renderPanel(); return; }
+  if (d.opslay){ CFG.camwall.opsLayout = d.opslay; saveCfg(); renderPanel(); return; }
+  if (d.opsadd !== undefined){ opsEdit(null); return; } if (d.opsedit){ opsEdit(d.opsedit); return; }
+  if (d.opsrm || d.opsdel){ const id = d.opsrm || d.opsdel; CFG.camwall.ops = CFG.camwall.ops.filter(x => x.id !== id); saveCfg(); $("#ov").classList.remove("show"); renderPanel(); return; } });
+// Lenel / camera-outage changes redraw the operational view
+setInterval(() => { if (UI.mode === "camwall" && CFG.camwall.view === "ops" && !document.querySelector("#ov.show")){ const cur = document.querySelector(".cw.ops"); if (cur && cur.dataset.sig !== opsSig()) renderPanel(); } }, 15e3);
+{ const st = document.createElement("style"); st.textContent = `
+.cwview .tab-mini{font-weight:700}.opschip{flex:none;font-size:10.5px;border-radius:8px;padding:0 6px;background:#2a3238;color:#ddd}.opschip.ok{background:#1f4d2a;color:#cfe9d4}.opschip.bad{background:#C4314B;color:#fff}.opschip.warn{background:#E8873A;color:#111}
+.cwtile.opsissue{border-color:#C4314B}.opsdemo{position:absolute;left:0;right:0;bottom:0;font-size:11px;color:#ffd58a;background:rgba(0,0,0,.55);padding:2px 6px;pointer-events:none}
+.cwb video{width:100%;height:100%;object-fit:cover;background:#000}`; document.head.appendChild(st); }
 
 boot();
 
