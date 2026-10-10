@@ -12898,6 +12898,134 @@ const _camSitCW = camSitPanel; camSitPanel = function(){ return `<div class="ban
 .cwnote{position:absolute;bottom:0;left:0;right:0;font-size:11px;color:#bbb;background:rgba(0,0,0,.6);padding:2px 6px}
 .cw:fullscreen .cwsite{display:none}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   COMPUTER VISION ON THE WALLS — people, vehicles, crowds and dead feeds on
+   any camera you can see (Camera wall and Video wall)
+   - Browsers don't let a page read the pixels of most outside cameras (YouTube,
+     other websites, many snapshot servers). So, with your permission, the console
+     watches its own tab (Chrome/Edge "share this tab"), cuts out each camera tile
+     and runs the object-detection model (COCO-SSD, already used by Camera
+     analytics) on it. Your own webcams are analysed directly.
+   - Boxes and counts appear on each tile. Crowds, heavy traffic, people in view
+     and blank/frozen feeds raise camera alarms in the same queue as Camera
+     analytics (with a snapshot), so they can become incidents.
+   ===================================================================== */
+CFG.wcv = Object.assign({ every: 2, crowd: 8, traffic: 25, person: false, frozen: true, show: true }, CFG.wcv || {});
+const WCV = { on: false, stream: null, video: null, timer: null, idx: 0, stats: {}, last: {}, busy: false, err: "", cam: {} };
+const WCV_VEH = new Set(["car", "truck", "bus", "motorcycle", "bicycle"]);
+function wcvTiles(){ return $$(".cwtile, .vwtile").filter(t => { const r = t.getBoundingClientRect(); return r.width > 40 && r.height > 40 && r.bottom > 0 && r.top < innerHeight; }); }
+const wcvId = t => t.dataset.cwt || ("tv:" + ((t.querySelector("[data-vwaudio]") || {}).dataset || {}).vwaudio);
+function wcvName(t){ const b = t.querySelector(".vwh b"); return b ? b.textContent.trim() : "Camera"; }
+function wcvSite(t){ const id = t.dataset.cwt, x = id && CFG.camwall.tiles.find(y => y.id === id); if (!x) return ""; const n = cwNearest(cwCam(x)); return n && n.d < 15 ? n.s.code : ""; }
+async function wcvStart(){ if (WCV.on) return;
+  cvLoadModel();                                                              // the model loads while you pick the tab
+  const needCapture = wcvTiles().some(t => !t.querySelector("video[data-cwcam]"));
+  if (needCapture){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ toast("Not supported in this browser", "Use Chrome or Edge on a computer.", "var(--amber)"); return; }
+    try{ const reuse = typeof TR !== "undefined" && TR.stream && TR.stream.getVideoTracks().some(v => v.readyState === "live");
+      const s = reuse ? TR.stream : await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include", surfaceSwitching: "exclude" });
+      const vt = s.getVideoTracks()[0]; if (!vt){ toast("Nothing was shared", "", "var(--amber)"); return; }
+      try{ vt.applyConstraints({ frameRate: 5, width: { ideal: screen.width * devicePixelRatio }, height: { ideal: screen.height * devicePixelRatio } }); }catch(e){}
+      const settings = vt.getSettings ? vt.getSettings() : {}; if (settings.displaySurface && settings.displaySurface !== "browser") toast("Please share this tab", "You shared a window or screen. It works best with “This tab”.", "var(--amber)");
+      vt.addEventListener("ended", () => wcvStop("Tab sharing stopped."));
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.srcObject = s; await v.play().catch(() => {});
+      WCV.stream = s; WCV.video = v; WCV.shared = reuse; }
+    catch(e){ if (!/NotAllowed|Permission|AbortError/i.test(e.name + e.message)) toast("Could not start", e.message, "var(--amber)"); return; } }
+  WCV.on = true; WCV.err = ""; clearInterval(WCV.timer); WCV.timer = setInterval(wcvTick, Math.max(1, CFG.wcv.every) * 1000 / 2);
+  audit("Computer vision started on the wall", UI.mode, ""); wcvBar(); }
+function wcvStop(msg){ WCV.on = false; clearInterval(WCV.timer); if (WCV.stream && !WCV.shared) WCV.stream.getTracks().forEach(t => t.stop()); WCV.stream = null; WCV.video = null; if (msg) WCV.err = msg;
+  $$(".wcvov,.wcvbadge").forEach(e => e.remove()); wcvBar(); }
+// cut one tile out of the captured tab (or read a local webcam directly)
+function wcvGrab(t){ const body = t.querySelector(".vwb") || t; const own = t.querySelector("video[data-cwcam]");
+  const c = document.createElement("canvas"); let w, h;
+  if (own && own.readyState >= 2){ w = own.videoWidth; h = own.videoHeight; const k = Math.min(1, 640 / w); c.width = w * k; c.height = h * k; c.getContext("2d").drawImage(own, 0, 0, c.width, c.height); return c; }
+  const v = WCV.video; if (!v || v.readyState < 2) return null; const r = body.getBoundingClientRect(), sx = v.videoWidth / innerWidth, sy = v.videoHeight / innerHeight;
+  w = r.width * sx; h = r.height * sy; if (w < 30 || h < 30) return null; const k = Math.min(1, 640 / w); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext("2d", { willReadFrequently: true }).drawImage(v, r.left * sx, r.top * sy, w, h, 0, 0, c.width, c.height); return c; }
+function wcvSig(c){ const s = document.createElement("canvas"); s.width = 16; s.height = 9; const g = s.getContext("2d", { willReadFrequently: true }); g.drawImage(c, 0, 0, 16, 9); const d = g.getImageData(0, 0, 16, 9).data;
+  let sum = 0, a = []; for (let i = 0; i < d.length; i += 4){ const y = (d[i] + d[i + 1] + d[i + 2]) / 3; a.push(y); sum += y; } const mean = sum / a.length; const sd = Math.sqrt(a.reduce((x, y) => x + (y - mean) ** 2, 0) / a.length); return { a, mean, sd }; }
+async function wcvTick(){ if (!WCV.on || WCV.busy) return; if (!["camwall", "videowall"].includes(UI.mode)) return;
+  const tiles = wcvTiles(); if (!tiles.length) return; if (!CV.model){ wcvBar(); return; }
+  WCV.busy = true; try{
+    const per = Math.max(1, Math.ceil(tiles.length / 2));                     // every tile about once per interval
+    for (let n = 0; n < per; n++){ const t = tiles[WCV.idx++ % tiles.length]; if (!t) continue; const id = wcvId(t), c = wcvGrab(t); if (!c) continue;
+      const preds = (await CV.model.detect(c, 30, 0.45)).filter(p => p.class === "person" || WCV_VEH.has(p.class));
+      const people = preds.filter(p => p.class === "person").length, veh = preds.filter(p => WCV_VEH.has(p.class)).length, sig = wcvSig(c);
+      const S = WCV.stats[id] = Object.assign(WCV.stats[id] || { same: 0 }, { people, veh, at: Date.now(), preds, w: c.width, h: c.height });
+      // frozen / blank picture (snapshot cameras change every 1–2 minutes, so only after 6 minutes unchanged)
+      const diff = S.sig ? S.sig.a.reduce((x, y, i) => x + Math.abs(y - S.sig.a[i]), 0) / S.sig.a.length : 99; S.same = diff < 0.8 ? S.same + 1 : 0; S.sig = sig;
+      wcvDraw(t, S); wcvRules(t, id, S, c); } }
+  catch(e){ WCV.err = "Detection: " + e.message; wcvBar(); } finally { WCV.busy = false; } }
+function wcvDraw(t, S){ const body = t.querySelector(".vwb") || t; let ov = body.querySelector(".wcvov"); if (!ov){ ov = document.createElement("canvas"); ov.className = "wcvov"; body.appendChild(ov); }
+  const r = body.getBoundingClientRect(); ov.width = r.width; ov.height = r.height; const g = ov.getContext("2d"); g.clearRect(0, 0, ov.width, ov.height);
+  if (CFG.wcv.show){ const kx = r.width / S.w, ky = r.height / S.h; g.lineWidth = 2; g.font = "11px sans-serif";
+    S.preds.forEach(p => { const [x, y, w, h] = p.bbox, col = p.class === "person" ? "#E8873A" : "#3B8BEB"; g.strokeStyle = col; g.strokeRect(x * kx, y * ky, w * kx, h * ky); g.fillStyle = col; g.fillText(`${p.class} ${Math.round(p.score * 100)}%`, x * kx + 2, Math.max(10, y * ky - 2)); }); }
+  let b = t.querySelector(".wcvbadge"); if (!b){ b = document.createElement("span"); b.className = "wcvbadge"; const h = t.querySelector(".vwh b"); if (h) h.after(b); }
+  b.textContent = `👤 ${S.people} · 🚗 ${S.veh}`; b.title = `Detected now: ${S.people} people, ${S.veh} vehicles`; }
+function wcvRaise(t, id, type, detail, c){ const k = id + ":" + type, now = Date.now(); if (WCV.last[k] && now - WCV.last[k] < 5 * 60e3) return; WCV.last[k] = now;
+  let snap = ""; try{ const s = document.createElement("canvas"); s.width = 320; s.height = Math.round(320 * c.height / c.width); s.getContext("2d").drawImage(c, 0, 0, s.width, s.height); snap = s.toDataURL("image/jpeg", .6); }catch(e){}
+  const name = wcvName(t), site = wcvSite(t);
+  putShared("cvalerts", { id: nid("cv"), createdAt: now, cam: "wall:" + id, camName: name, site, type, detail, conf: null, snap, status: "new" });
+  audit("Camera analytics alarm", `${name}: ${CV_TYPES[type][0]}`, detail);
+  if (typeof attention === "function") attention(`Camera alarm: ${CV_TYPES[type][0]}`, `${name}${site ? " · " + site : ""} — ${detail}`, () => setMode("cv")); }
+function wcvRules(t, id, S, c){ const R = CFG.wcv;
+  if (R.crowd && S.people >= R.crowd) wcvRaise(t, id, "crowd", `${S.people} people in view (alarm at ${R.crowd})`, c);
+  else if (R.person && S.people > 0) wcvRaise(t, id, "person", `${S.people} ${S.people === 1 ? "person" : "people"} in view`, c);
+  if (R.traffic && S.veh >= R.traffic) wcvRaise(t, id, "vehicle", `${S.veh} vehicles in view — heavy traffic (alarm at ${R.traffic})`, c);
+  if (R.frozen){ S.blank = (S.sig.mean < 5 || S.sig.sd < 1.2) ? (S.blank || 0) + 1 : 0; if (S.blank >= 3) wcvRaise(t, id, "tamper", "Picture is blank or covered", c);
+    else if (S.same * (CFG.wcv.every || 2) > 360) wcvRaise(t, id, "lost", "Picture hasn't changed for over 6 minutes — camera may be frozen", c); } }
+function wcvBar(){ $$("[data-wcv]").forEach(b => { b.classList.toggle("on", WCV.on); b.textContent = WCV.on ? "👁 Vision: on" : "👁 Computer vision"; b.setAttribute("aria-pressed", WCV.on); });
+  $$(".wcvstat").forEach(e => { e.innerHTML = WCV.on ? `Computer vision on · ${CV.model ? `analysing ${wcvTiles().length} cameras` : CV.modelState === "failed" ? `model couldn't load (${esc(CV.modelErr || "")})` : "loading the detection model…"} · alarms: crowd ≥ ${CFG.wcv.crowd}, traffic ≥ ${CFG.wcv.traffic}${CFG.wcv.person ? ", any person" : ""}${CFG.wcv.frozen ? ", blank/frozen" : ""} · <button class="linkbtn" data-wcvset>change</button>`
+    : WCV.err ? esc(WCV.err) : ""; e.style.display = WCV.on || WCV.err ? "" : "none"; }); }
+function wcvSettings(){ const R = CFG.wcv;
+  openModal(head("Computer vision on the wall") + `<div class="bd"><p class="help" style="margin-top:0">When you start it, Chrome or Edge asks what to share: choose <b>this tab</b>. The console only looks at its own camera tiles; nothing leaves your computer. Keep the wall on screen (it can be full screen). The detection model downloads once (about 6 MB).</p>
+    <div class="fgrid"><label class="fld">Crowd alarm — people in one camera<input id="wR1" type="number" min="0" value="${R.crowd}"></label><label class="fld">Heavy-traffic alarm — vehicles in one camera<input id="wR2" type="number" min="0" value="${R.traffic}"></label></div>
+    <label class="ctl"><input type="checkbox" id="wR3"${R.person ? " checked" : ""}> Alarm when any person is in view (for cameras on empty yards or fences)</label>
+    <label class="ctl"><input type="checkbox" id="wR4"${R.frozen ? " checked" : ""}> Alarm when a picture goes blank, is covered, or stops changing</label>
+    <label class="ctl"><input type="checkbox" id="wR5"${R.show ? " checked" : ""}> Draw boxes around what's detected</label>
+    <label class="fld">Look at every camera about every<select id="wR6">${[2, 4, 6, 10].map(n => `<option value="${n}"${+R.every === n ? " selected" : ""}>${n} seconds</option>`).join("")}</select></label>
+    <p class="help">Set an alarm to 0 to turn it off. Alarms go to <b>BAU Operations → Camera analytics</b> with a snapshot, at most once every 5 minutes per camera and type.</p></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="wRs">Save</button></div>`);
+  $("#wRs").onclick = () => { Object.assign(CFG.wcv, { crowd: +$("#wR1").value || 0, traffic: +$("#wR2").value || 0, person: $("#wR3").checked, frozen: $("#wR4").checked, show: $("#wR5").checked, every: +$("#wR6").value }); saveCfg();
+    if (WCV.on){ clearInterval(WCV.timer); WCV.timer = setInterval(wcvTick, CFG.wcv.every * 1000 / 2); } if (!CFG.wcv.show) $$(".wcvov").forEach(o => o.getContext("2d").clearRect(0, 0, o.width, o.height)); $("#ov").classList.remove("show"); wcvBar(); }; }
+// buttons on both walls
+const wcvBtn = () => `<button class="tab-mini${WCV.on ? " on" : ""}" data-wcv aria-pressed="${WCV.on}" title="Detect people, vehicles, crowds and dead feeds on these cameras">${WCV.on ? "👁 Vision: on" : "👁 Computer vision"}</button>`;
+const wcvStatLine = () => `<div class="s wcvstat" style="${WCV.on || WCV.err ? "" : "display:none"};margin:-2px 0 2px"></div>`;
+const _cwPanelWCV = camWallPanel; camWallPanel = function(){ return _cwPanelWCV().replace(`<button class="tab-mini" data-cwnow>`, wcvBtn() + `<button class="tab-mini" data-cwnow>`).replace(/(<\/div>)(\s*)(<div class="banner warn"|<div class="vwmain">)/, `$1${wcvStatLine()}$2$3`); };
+const _vwPanelWCV = videoWallPanel; videoWallPanel = function(){ return _vwPanelWCV().replace(`<button class="tab-mini primary" data-vwfs>`, wcvBtn() + `<button class="tab-mini primary" data-vwfs>`).replace(/(<\/div>)(\s*)(<div class="banner warn"|<div class="vwmain">)/, `$1${wcvStatLine()}$2$3`); };
+const _cwMountWCV = cwMount; cwMount = function(){ _cwMountWCV(); wcvBar(); wcvCams(); };
+const _vwMountWCV = mountVideoWall; mountVideoWall = function(){ _vwMountWCV(); wcvBar(); };
+document.addEventListener("click", e => { const t = e.target.closest("[data-wcv],[data-wcvset]"); if (!t) return; if (t.dataset.wcvset !== undefined){ wcvSettings(); return; } if (WCV.on){ wcvStop(); audit("Computer vision stopped on the wall", "", ""); } else wcvStart(); });
+setInterval(() => { if (WCV.on) wcvBar(); }, 3000);
+
+/* ---------- your own webcams on the Camera wall ---------- */
+const _cwBodyWCV = cwTileBody; cwTileBody = function(t){ if (t.kind === "webcam") return `<video data-cwcam="${esc(t.id)}" muted autoplay playsinline></video>`; return _cwBodyWCV(t); };
+async function wcvCams(){ for (const v of $$("video[data-cwcam]")){ if (v.srcObject) continue; const t = CFG.camwall.tiles.find(x => x.id === v.dataset.cwcam); if (!t) continue;
+    try{ let s = WCV.cam[t.id]; if (!s || !s.active){ s = WCV.cam[t.id] = await navigator.mediaDevices.getUserMedia({ video: t.deviceId ? { deviceId: { exact: t.deviceId } } : true, audio: false }); }
+      v.srcObject = s; v.play().catch(() => {}); }
+    catch(e){ v.insertAdjacentHTML("afterend", `<div class="ltvmsg">Camera not available: ${esc(e.message)}. Allow camera access for this page and check the camera isn't in use by another app.</div>`); } } }
+const _cwCustomWCV = cwCustom; cwCustom = function(){ _cwCustomWCV();
+  const bd = $("#ov .bd"); if (!bd) return;
+  bd.insertAdjacentHTML("afterbegin", `<div class="banner ok" style="margin:0 0 8px"><b>A camera plugged into this computer</b> (USB or built-in webcam, or a capture card)? <button class="pill" id="cwWeb">Add a webcam</button></div>`);
+  $("#cwWeb").onclick = async () => { try{ const tmp = await navigator.mediaDevices.getUserMedia({ video: true }); tmp.getTracks().forEach(x => x.stop()); const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+      openModal(head("Add a webcam") + `<div class="bd"><label class="fld">Camera<select id="cwD">${devs.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || "Camera " + (i + 1))}</option>`).join("")}</select></label><label class="fld">Name<input id="cwDn" placeholder="e.g. Front gate"></label><label class="fld">Site (optional)<input id="cwDs" list="cvSites2" placeholder="site code"><datalist id="cvSites2">${SITES.filter(s => !isOffice(s)).map(s => `<option value="${esc(s.code)}">`).join("")}</datalist></label></div>
+        <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="cwDo">Add to the wall</button></div>`);
+      $("#cwDo").onclick = () => { const sel = $("#cwD"), s = SITES.find(x => x.code === $("#cwDs").value.trim().toUpperCase());
+        CFG.camwall.tiles.push({ id: "w" + Date.now().toString(36), src: "custom", kind: "webcam", deviceId: sel.value, name: $("#cwDn").value.trim() || sel.options[sel.selectedIndex].text, url: "", lat: s ? s.lat : NaN, lon: s ? s.lon : NaN, at: Date.now() });
+        saveCfg(); $("#ov").classList.remove("show"); renderPanel(); }; }
+    catch(e){ toast("No camera access", e.message, "var(--amber)"); } }; };
+const _cwAgeWCV = cwAge; cwAge = function(t){ return t.kind === "webcam" ? "live" : _cwAgeWCV(t); };
+
+/* ---------- camera websites list: put them on the wall ---------- */
+const _camSitWCV = camSitPanel; camSitPanel = function(){ return _camSitWCV().replace(/(<button class="act" data-csedit="([^"]+)">Edit<\/button>)/g, (m, b, id) => { const x = SHARED.camsources.find(y => y.id === id); return x && (x.urls || []).length ? `<button class="act on" data-cs2wall="${esc(id)}" title="Show this camera website on the Camera wall">On the wall</button>` + b : b; }); };
+document.addEventListener("click", e => { const b = e.target.closest("[data-cs2wall]"); if (!b) return; const x = SHARED.camsources.find(y => y.id === b.dataset.cs2wall); if (!x) return; const url = x.urls[0];
+  CFG.camwall.tiles.push({ id: "c" + Date.now().toString(36), src: "custom", name: x.title, url, kind: cwKind(url), at: Date.now() }); saveCfg();
+  toast("Added to the Camera wall", "Many camera websites won't show inside another page — if the tile stays blank, use ↗ to open it, or add the camera's own YouTube or stream link instead.", "var(--teal)"); setMode("camwall"); });
+{ const st = document.createElement("style"); st.textContent = `
+.wcvov{position:absolute;inset:0;pointer-events:none;z-index:2}.vwb{position:relative}.wcvbadge{flex:none;font-size:11px;background:#2a3238;border-radius:8px;padding:0 6px;color:#fff}
+.cwb video{width:100%;height:100%;object-fit:cover;background:#000}.wcvstat{font-size:12px}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
