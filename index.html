@@ -13244,6 +13244,82 @@ document.addEventListener("change", e => { if (e.target.dataset && e.target.data
 .sxit{border-bottom:1px solid var(--line);padding:6px 0}.sxit.negative{border-left:3px solid #E8634A;padding-left:6px}.sxmeta{font-size:11.5px}.sxch{color:var(--c);font-weight:700}.sxsrc{margin-top:10px}
 @media (max-width:1000px){.sxcards{grid-template-columns:repeat(2,minmax(0,1fr))}.sxgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   STREAMLINE — one clear path from detection to report
+   - A process bar under the tabs: 1 Detect → 2 Triage → 3 Escalate →
+     4 Respond → 5 Report, each with what's waiting and one click to the
+     place where it's handled.
+   - Navigation tidied: a Response section (action queue, escalations, welfare,
+     mass notification, comms, action history) instead of a 24-tab Intelligence
+     section; Intelligence grouped into Now / Hazards / Analysis; BAU grouped into
+     My work / Sites & systems; camera sources sit with the camera walls; the
+     archive of risk-register snapshots is named as such.
+   - One triage inbox: camera alarms (Camera analytics and the walls) and
+     all-channel sentiment surges land in the Action queue like every other trigger.
+   ===================================================================== */
+// ---------- navigation ----------
+{ const intel = G("intel"), take = ids => { const out = []; ids.forEach(id => { const i = intel.tabs.findIndex(t => t[0] === id); if (i >= 0) out.push(intel.tabs.splice(i, 1)[0]); }); return out; };
+  const resp = take(["actions", "escalations", "welfare", "massnotify", "comms", "history"]);
+  if (resp.length && !GROUPS.some(g => g.id === "respond")) GROUPS.splice(GROUPS.findIndex(g => g.id === "intel") + 1, 0, { id: "respond", label: "Response", tabs: resp });
+  const order = ["todo", "alertstream", "livenews", "news", "overview", "hazards", "typhoon", "protests", "disasters", "global", "quake", "weather", "forecast", "air", "river", "risk", "trends", "stats"];
+  intel.tabs.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99));
+  const cam = G("bau").tabs.findIndex(t => t[0] === "camsit"); if (cam >= 0){ const t = G("bau").tabs.splice(cam, 1)[0]; t[1] = "Camera sources"; const v = G("vcc").tabs; v.splice(v.findIndex(x => x[0] === "camwall") + 1, 0, t); }
+  const bauOrder = ["alerts", "incidents", "myreq", "releases", "bau-dash", "bau-lenel", "bau-access", "bau-cams", "bau-cctv", "cv"]; G("bau").tabs.sort((a, b) => (bauOrder.indexOf(a[0]) + 1 || 99) - (bauOrder.indexOf(b[0]) + 1 || 99));
+  const rg = G("repo"); if (rg){ const r = rg.tabs.find(t => t[0] === "register"); if (r) r[1] = "Risk register snapshots"; } }
+const SUBNAV_GROUPS = { todo: "Now", hazards: "Hazards", risk: "Analysis", alerts: "My work", "bau-lenel": "Sites & systems", vcc: "Watch", "vcc-alerts": "Manage" };
+// ---------- the process bar ----------
+function flowCounts(){ const now = Date.now(), cnt = (a, f) => (a || []).filter(f).length;
+  let fresh = 0; try{ fresh = asEvents().filter(e => now - e.first <= 60 * 60e3).length; }catch(e){}
+  const detect = fresh + cnt(SHARED.cvalerts, a => !a.deleted && a.status === "new");
+  const pend = cnt(SHARED.actions, a => a.status === "pending"), late = cnt(SHARED.actions, a => a.status === "pending" && now - a.createdAt > (ACT_SLA[a.pri] || 60) * 60e3);
+  let open = [], over = 0; try{ open = openEvents(); over = open.filter(e => evalEvent(e, now).worst === "overdue").length; }catch(e){}
+  const inc = cnt(SHARED.incidents, x => !x.deleted && x.status === "active"), sev12 = cnt(SHARED.incidents, x => !x.deleted && x.status === "active" && sevNum(x.sev) <= 2);
+  const rel = cnt(SHARED.releases, r => !r.deleted && !r.servId && (r.recipients || []).length), welf = cnt(SHARED.welfare, w => !w.deleted && !w.closed);
+  return { detect, pend, late, open: open.length, over, inc, sev12, rel, welf }; }
+const FLOW = [["detect", "Detect", "alertstream", c => c.detect ? `${c.detect} new in the last hour` : "nothing new", c => c.detect ? 2 : 0, "New alerts and camera alarms — Live alert stream"],
+  ["triage", "Triage", "actions", c => c.pend ? `${c.pend} to decide${c.late ? ` · ${c.late} late` : ""}` : "nothing waiting", c => c.late ? 3 : c.pend ? 2 : 0, "Every trigger waits here for a decision — Action queue"],
+  ["escalate", "Escalate", "escalations", c => c.open ? `${c.open} open${c.over ? ` · ${c.over} overdue` : ""}` : "none open", c => c.over ? 3 : c.open ? 1 : 0, "Escalations with their notification and update timers"],
+  ["respond", "Respond", "incidents", c => c.inc ? `${c.inc} active${c.sev12 ? ` · ${c.sev12} SEV 1–2` : ""}${c.welf ? ` · ${c.welf} welfare` : ""}` : "no active incidents", c => c.sev12 ? 3 : c.inc ? 2 : 0, "Incidents, welfare checks and mass notification"],
+  ["report", "Report", "releases", c => c.rel ? `${c.rel} awaiting reports` : "up to date", c => c.rel ? 1 : 0, "Releases to operations, situation reports and the executive snapshot"]];
+function renderFlow(){ let bar = $("#flowbar"); const sub = $("#subnav"); if (!sub) return;
+  if (!bar){ sub.insertAdjacentHTML("afterend", `<nav id="flowbar" aria-label="Process"></nav>`); bar = $("#flowbar"); }
+  if (isLimited() || ["videowall", "camwall"].includes(UI.mode) || CFG.flowbar === false){ bar.style.display = "none"; return; } bar.style.display = "";
+  const c = flowCounts(), here = { alertstream: "detect", alerts: "detect", cv: "detect", todo: "detect", actions: "triage", escalations: "escalate", incidents: "respond", welfare: "respond", massnotify: "respond", comms: "respond", releases: "report", "sh-snap": "report" }[UI.mode];
+  bar.innerHTML = FLOW.map(([k, l, mode, txt, lvl, tip], i) => `${i ? `<span class="flowarr" aria-hidden="true">→</span>` : ""}<button class="flowstep t${lvl(c)}${here === k ? " here" : ""}" data-flow="${mode}" title="${esc(tip)}"><b>${i + 1} ${l}</b><span>${esc(txt(c))}</span></button>`).join("")
+    + `<button class="flowhide" data-flowhide title="Hide the process bar (Settings → show it again)" aria-label="Hide the process bar">×</button>`; }
+const _rmFlow = renderModes; renderModes = function(){ _rmFlow();
+  // section labels inside long tab rows
+  const sub = $("#subnav"); if (sub) Object.entries(SUBNAV_GROUPS).forEach(([m, l]) => { const b = sub.querySelector(`.subtab[data-mode="${m}"]`); if (b && !(b.previousElementSibling && b.previousElementSibling.classList.contains("subgrp"))) b.insertAdjacentHTML("beforebegin", `<span class="subgrp">${esc(l)}</span>`); });
+  const rb = $(`#modes .mode[data-group="respond"]`); if (rb && !rb.querySelector(".b")){ const c = flowCounts(), n = c.pend + c.over;
+    if (n) rb.insertAdjacentHTML("beforeend", `<span class="b t${c.late || c.over ? 3 : 2}" title="${c.pend} actions to decide${c.over ? `, ${c.over} escalations overdue` : ""}">${n}</span>`); }
+  renderFlow(); };
+document.addEventListener("click", e => { const f = e.target.closest("[data-flow]"); if (f){ setMode(f.dataset.flow); return; } if (e.target.closest("[data-flowhide]")){ CFG.flowbar = false; saveCfg(); renderFlow(); toast("Process bar hidden", "Settings → Show the process bar brings it back.", "var(--teal)"); } });
+setInterval(() => { if (!document.hidden) renderFlow(); }, 20e3);
+// settings: bring the bar back
+const _osFlow = typeof openSettings === "function" ? openSettings : null;
+if (_osFlow) openSettings = function(){ _osFlow(); const bd = $("#ov .bd"); if (bd && !$("#flowOn")){ bd.insertAdjacentHTML("beforeend", `<label class="ctl" style="margin-top:8px"><input type="checkbox" id="flowOn"${CFG.flowbar === false ? "" : " checked"}> Show the process bar (Detect → Triage → Escalate → Respond → Report)</label>`);
+  $("#flowOn").onchange = e => { CFG.flowbar = e.target.checked; saveCfg(); renderFlow(); }; } };
+// ---------- one triage inbox ----------
+const CV_PRI = { person: "P2", object: "P2", tamper: "P2", lost: "P3", crowd: "P2", vehicle: "P3", loiter: "P3", motion: "P4" };
+function cvToAction(a){ if (!a || !CV_PRI[a.type]) return; const s = a.site && SITES.find(x => x.code === a.site);
+  enqueueAction({ srcKey: "cva:" + a.id, source: "Camera analytics", pri: CV_PRI[a.type], title: `${CV_TYPES[a.type][0]} — ${a.camName}${a.site ? " (" + a.site + ")" : ""}`, detail: a.detail, site: a.site || "",
+    suggested: a.type === "person" || a.type === "object" ? ["escalate", "notify", "monitor"] : ["monitor", "escalate"], payload: { cat: a.type === "crowd" ? "protest" : "operational_security", sev: CV_PRI[a.type] === "P2" ? "P2" : "P3", desc: `${a.camName}: ${a.detail}`, sites: a.site ? [a.site] : [], lat: s ? s.lat : null, lon: s ? s.lon : null } }); }
+{ const _put = putShared; putShared = function(type, rec){ const r = _put.apply(this, arguments); try{ if (type === "cvalerts" && rec && rec.status === "new" && Date.now() - (rec.createdAt || 0) < 60e3) cvToAction(rec); }catch(e){} return r; }; }
+// all-channel sentiment: a surge of negative coverage becomes an action too
+if (typeof sxLoad === "function"){ const _sx = sxLoad; sxLoad = async function(){ const r = await _sx.apply(this, arguments);
+  try{ const all = Object.values(SX.items).flat(), st = sxStats(all); if (st.n >= 15 && st.negPct >= 60) enqueueAction({ srcKey: "sxs:" + Math.floor(Date.now() / (6 * 3600e3)), source: "Sentiment — all channels", pri: "P3", title: `Negative coverage: ${st.negPct}% of ${st.n} items across media, social and blogs`, detail: `Topics: ${sxTopics().join(", ")}`, suggested: ["monitor", "notify"] }); }catch(e){}
+  return r; }; }
+{ const st = document.createElement("style"); st.textContent = `
+#flowbar{display:flex;align-items:stretch;gap:4px;padding:5px 12px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--panel) 70%,transparent);overflow-x:auto}
+.flowstep{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:6px;padding:3px 10px;cursor:pointer;min-width:130px;text-align:left;font:12px var(--font)}
+.flowstep b{font-size:12px}.flowstep span{color:var(--muted);font-size:11.5px;white-space:nowrap}.flowstep.here{outline:2px solid var(--accent,#0F6CBD)}
+.flowstep.t1{border-left:4px solid var(--teal)}.flowstep.t2{border-left:4px solid var(--amber)}.flowstep.t3{border-left:4px solid var(--red)}.flowstep.t3 span{color:var(--red);font-weight:700}
+.flowarr{align-self:center;color:var(--muted)}.flowhide{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px}
+.subgrp{align-self:center;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 2px 0 10px;padding-left:8px;border-left:1px solid var(--line)}
+.subgrp:first-child{border-left:0;margin-left:0;padding-left:0}
+@media (max-width:760px){.flowstep{min-width:110px}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
