@@ -13467,6 +13467,84 @@ const _opsTileSP = opsTile; opsTile = function(t, down){ return _opsTileSP(t, do
 .spcambox{height:340px;display:flex;background:#000;border-radius:6px;overflow:hidden;position:relative}
 @media (max-width:900px){.spgrid{grid-template-columns:1fr}.sppl{border-right:0;border-bottom:1px solid var(--line)}.spzones{grid-template-rows:110px 64px 64px;font-size:11px}.splist{max-height:none}}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   COMMAND VIEW — your own layout (Vision Command Centre → Command view)
+   - Customise…: choose which parts show (headline ticker, each summary tile,
+     alerts list, map, alert details, live news & TV, needs attention / site
+     status) and whether the details sit above or below the map. Intelligence
+     and BAU Operations views each keep their own choice.
+   - Resize by dragging: the map's height (bar under the map) and the column
+     widths (bars between the columns). Double-click a bar to reset it.
+   - Quick presets: Standard, Map focus, Alerts focus.
+   ===================================================================== */
+CFG.vccLay = CFG.vccLay || {};
+const VCL_PARTS = [["ticker", "Headline ticker", ".vccticker"], ["kpis", "Summary tiles", ".vccstrip"], ["list", "Alerts / issues list", ".vcclist"], ["map", "Map", "#vccmap"], ["card", "Selected alert details", ".vcccard"],
+  ["news", "Live news & TV", ".vccnews"], ["needs", "Needs attention / site status", ""]];
+const vclLens = () => UI.vccLens === "bau" ? "bau" : "intel";
+function vcl(){ const k = vclLens(), d = { off: {}, kpiOff: {}, mapH: 460, left: 300, right: 290, cardFirst: false }, L = CFG.vccLay[k] = CFG.vccLay[k] || {};
+  Object.keys(d).forEach(x => { if (L[x] == null) L[x] = d[x]; }); return L; }   // same object every time, so changes are never lost
+const VCL_PRESETS = { standard: { off: {}, mapH: 460, left: 300, right: 290, cardFirst: false }, map: { off: { list: 1, needs: 1, card: 1 }, mapH: 640, left: 300, right: 290, cardFirst: false }, alerts: { off: { news: 1 }, mapH: 300, left: 420, right: 290, cardFirst: true } };
+function vclApply(){ const root = $("#panel .pbody.vcc"); if (!root) return; const L = vcl(), off = L.off;
+  // which parts show
+  VCL_PARTS.forEach(([k, , sel]) => { if (sel) root.querySelectorAll(sel).forEach(e => e.style.display = off[k] ? "none" : ""); });
+  const needs = root.querySelector(".vccneeds"); if (needs) [...needs.children].forEach(c => { if (!c.classList.contains("vccnews")) c.style.display = off.needs ? "none" : ""; });
+  const mid = root.querySelector(".vccmid"); if (mid){ const empty = [...mid.children].find(c => c.classList.contains("empty")); if (empty) empty.style.display = off.card ? "none" : ""; }
+  root.querySelectorAll(".vcck").forEach(b => { const l = (b.querySelector("span") || {}).textContent || ""; b.style.display = L.kpiOff[l] ? "none" : ""; });
+  // details above or below the map
+  const map = root.querySelector("#vccmap"), card = mid && ([...mid.children].find(c => c.classList.contains("vcccard") || c.classList.contains("empty")));
+  // map height (the drag bar always sits right under the map)
+  if (map){ map.style.height = L.mapH + "px"; let g = root.querySelector(".vclgrip.h"); if (!g){ map.insertAdjacentHTML("afterend", `<div class="vclgrip h" role="separator" aria-orientation="horizontal" title="Drag to make the map taller or shorter · double-click to reset"></div>`); g = root.querySelector(".vclgrip.h"); }
+    if (g.previousElementSibling !== map) map.after(g); g.style.display = off.map ? "none" : ""; }
+  if (map && card && mid){ const g = root.querySelector(".vclgrip.h"); if (L.cardFirst) mid.insertBefore(card, map); else (g || map).after(card); }
+  // columns
+  const grid = root.querySelector(".vccgrid"); if (grid && innerWidth > 1250){ const showL = !off.list, showR = !(off.news && off.needs) && !!needs;
+    if (needs) needs.style.display = showR ? "" : "none";
+    grid.style.gridTemplateColumns = [showL ? L.left + "px" : null, "minmax(0,1fr)", showR ? L.right + "px" : null].filter(Boolean).join(" ");
+    grid.querySelectorAll(".vclgrip.v").forEach(x => x.remove()); grid.style.position = "relative";
+    requestAnimationFrame(() => { const gr = grid.getBoundingClientRect(); const add = (el, side) => { if (!el || el.style.display === "none") return; const r = el.getBoundingClientRect(), x = side === "l" ? r.right - gr.left + 2 : r.left - gr.left - 8;
+      grid.insertAdjacentHTML("beforeend", `<div class="vclgrip v" data-side="${side}" style="left:${x}px" role="separator" aria-orientation="vertical" title="Drag to resize · double-click to reset"></div>`); };
+      if (showL) add(grid.querySelector(".vcclist"), "l"); if (showR) add(needs, "r"); }); }
+  else if (grid) grid.style.gridTemplateColumns = "";
+  setTimeout(() => { try{ VCC.map && VCC.map.invalidateSize(); }catch(e){} }, 60); }
+const _rpiVCL = renderPanelInner; renderPanelInner = function(p){ _rpiVCL(p); if (UI.mode === "vcc"){ vclButton(); vclApply(); } };
+function vclButton(){ const t = $("#panel .ptools"); if (!t || t.querySelector("[data-vcl]")) return; const s = t.querySelector(":scope > .s") || null;
+  const html = `<span class="vclpre" role="group" aria-label="Layout presets">${[["standard", "Standard"], ["map", "Map focus"], ["alerts", "Alerts focus"]].map(([k, l]) => `<button class="tab-mini" data-vclpre="${k}">${l}</button>`).join("")}</span><button class="tab-mini primary" data-vcl>⚙ Customise…</button>`;
+  if (s) s.insertAdjacentHTML("beforebegin", html); else t.insertAdjacentHTML("beforeend", html); }
+function vclCustomise(){ const L = vcl(), kpis = [...document.querySelectorAll("#panel .vcck span")].map(s => s.textContent);
+  openModal(head(`Customise Command view — ${vclLens() === "bau" ? "BAU Operations" : "Intelligence"}`) + `<div class="bd"><div class="fgrid"><div><div class="sec" style="margin-top:0">Show</div>${VCL_PARTS.map(([k, l]) => `<label class="ctl"><input type="checkbox" data-vclp="${k}"${L.off[k] ? "" : " checked"}> ${esc(l)}</label>`).join("")}
+      <label class="ctl" style="margin-top:8px"><input type="checkbox" id="vclCF"${L.cardFirst ? " checked" : ""}> Alert details above the map</label></div>
+    <div><div class="sec" style="margin-top:0">Summary tiles</div>${kpis.map(l => `<label class="ctl"><input type="checkbox" data-vclk="${esc(l)}"${L.kpiOff[l] ? "" : " checked"}> ${esc(l)}</label>`).join("") || `<span class="s">None on this view.</span>`}</div></div>
+    <div class="fgrid3" style="margin-top:8px"><label class="fld">Map height <span class="s" id="vclHv">${L.mapH} px</span><input type="range" id="vclH" min="200" max="1100" step="20" value="${L.mapH}"></label>
+      <label class="fld">Left column <span class="s" id="vclLv">${L.left} px</span><input type="range" id="vclL" min="200" max="700" step="10" value="${L.left}"></label>
+      <label class="fld">Right column <span class="s" id="vclRv">${L.right} px</span><input type="range" id="vclR" min="200" max="700" step="10" value="${L.right}"></label></div>
+    <p class="help">You can also drag the bars under the map and between the columns. Changes show straight away; each view (Intelligence, BAU Operations) keeps its own layout.</p></div>
+    <div class="ft"><button class="pill" id="vclReset">Back to standard</button><span style="flex:1"></span><button class="pill primary" data-x>Done</button></div>`);
+  const live = () => { saveCfg(); vclApply(); };
+  $$("#ov [data-vclp]").forEach(c => c.onchange = () => { L.off[c.dataset.vclp] = !c.checked; if (!c.checked) L.off[c.dataset.vclp] = 1; else delete L.off[c.dataset.vclp]; live(); });
+  $$("#ov [data-vclk]").forEach(c => c.onchange = () => { if (c.checked) delete L.kpiOff[c.dataset.vclk]; else L.kpiOff[c.dataset.vclk] = 1; live(); });
+  $("#vclCF").onchange = e => { L.cardFirst = e.target.checked; live(); };
+  [["vclH", "mapH", "vclHv"], ["vclL", "left", "vclLv"], ["vclR", "right", "vclRv"]].forEach(([id, key, lab]) => $("#" + id).oninput = e => { L[key] = +e.target.value; $("#" + lab).textContent = L[key] + " px"; live(); });
+  $("#vclReset").onclick = () => { Object.assign(L, JSON.parse(JSON.stringify(VCL_PRESETS.standard)), { kpiOff: {} }); saveCfg(); $("#ov").classList.remove("show"); renderPanel(); }; }
+document.addEventListener("click", e => { const t = e.target.closest("[data-vcl],[data-vclpre]"); if (!t) return;
+  if (t.dataset.vcl !== undefined){ vclCustomise(); return; }
+  const L = vcl(); Object.assign(L, JSON.parse(JSON.stringify(VCL_PRESETS[t.dataset.vclpre]))); saveCfg(); vclApply(); toast("Layout: " + t.textContent, "Change anything with ⚙ Customise…", "var(--teal)"); });
+// dragging the bars
+document.addEventListener("pointerdown", e => { const g = e.target.closest(".vclgrip"); if (!g) return; e.preventDefault(); const L = vcl(), root = $("#panel .pbody.vcc"); root.classList.add("vcldrag");
+  const x0 = e.clientX, y0 = e.clientY, h0 = L.mapH, l0 = L.left, r0 = L.right, side = g.dataset.side;
+  const mv = ev => { if (g.classList.contains("h")){ L.mapH = Math.max(200, Math.min(1400, Math.round(h0 + ev.clientY - y0))); const m = $("#vccmap"); if (m) m.style.height = L.mapH + "px"; }
+    else if (side === "l") L.left = Math.max(180, Math.min(800, Math.round(l0 + ev.clientX - x0)));
+    else L.right = Math.max(180, Math.min(800, Math.round(r0 - (ev.clientX - x0))));
+    if (!g.classList.contains("h")){ const grid = root.querySelector(".vccgrid"); const cols = grid.style.gridTemplateColumns.split(" "); if (side === "l") cols[0] = L.left + "px"; else cols[cols.length - 1] = L.right + "px"; grid.style.gridTemplateColumns = cols.join(" "); } };
+  const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); root.classList.remove("vcldrag"); saveCfg(); vclApply(); };
+  addEventListener("pointermove", mv); addEventListener("pointerup", up); });
+document.addEventListener("dblclick", e => { const g = e.target.closest(".vclgrip"); if (!g) return; const L = vcl(); if (g.classList.contains("h")) L.mapH = 460; else if (g.dataset.side === "l") L.left = 300; else L.right = 290; saveCfg(); vclApply(); });
+addEventListener("resize", () => { if (UI.mode === "vcc") vclApply(); });
+{ const st = document.createElement("style"); st.textContent = `
+.vclpre{display:inline-flex;gap:2px;margin-right:4px}.vclgrip{touch-action:none;z-index:4}.vclgrip.h{height:8px;margin:2px 0 6px;border-radius:4px;cursor:row-resize;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 10px)}
+.vclgrip.v{position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;border-radius:4px}.vclgrip:hover,.vcldrag .vclgrip{background:color-mix(in srgb,var(--teal) 60%,transparent)}
+.vcldrag{user-select:none}.vcldrag iframe,.vcldrag .leaflet-container{pointer-events:none}.vccmap{min-height:0}.vccmaphost{height:100%}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
