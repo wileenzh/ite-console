@@ -2973,7 +2973,7 @@ function openSettings(){
       o[path[path.length - 1]] = i.type === "checkbox" ? i.checked : i.type === "number" ? parseFloat(i.value) : i.value.trim(); });
     const keyChanged = lsGet(K.cfg, {}).gKey !== CFG.gKey; saveCfg(); $("#ov").classList.remove("show");
     if (keyChanged){ lsSet(K.gsess, {}); if (map) setBase(UI.ly.base); } if (map) setOverlays(); refreshFast(); refreshSlow(); refreshGoogle(); refreshNews(); refreshAgencies(); if (DATA.news.length){ scoreNews(); renderPanel(); } };
-  $("#cfgReset").onclick = async () => { if (await confirmBox("Restore defaults?", "Every threshold, range and the WAQI token go back to the console defaults.")){ CFG = deepMerge(DEFAULTS, {}); lsSet(K.cfg, {}); refreshFast(); refreshSlow(); } };
+  $("#cfgReset").onclick = async () => { if (await confirmBox("Restore defaults?", "Every threshold, range and the WAQI token go back to the console defaults.")){ const fresh = deepMerge(DEFAULTS, {}); Object.keys(fresh).forEach(k => { CFG[k] = fresh[k]; }); saveCfg(); refreshFast(); refreshSlow(); renderAll(); toast("Defaults restored", "Your channels, cameras, keywords and connections were kept.", "var(--teal)"); } };
 }
 
 /* =====================================================================
@@ -12108,7 +12108,7 @@ function vccBau(){
   const k = (n, l, c, mode, small) => `<button class="vcck" style="--c:${c}" data-vccgo="${mode}"><b>${n}</b><span>${l}</span>${small ? `<small class="s">${small}</small>` : ""}</button>`;
   const strip = `<div class="vccstrip">${k(inc.filter(x => sevNum(x.sev) <= 2).length + " / " + inc.length, "SEV 1–2 / all open incidents", "#C4314B", "incidents")}${k(inc.filter(x => x.outage).length, "Outages declared", "#C4314B", "incidents")}
     ${k(lDown + (nL ? " / " + nL : ""), "Lenel sites down now", lDown ? "#C4314B" : "#13A10E", "bau-lenel")}${k(avail == null ? "—" : avail.toFixed(2) + "%", "Lenel availability (period)", avail != null && avail < 99.5 ? "#E8873A" : "#13A10E", "bau-dash")}
-    ${k(SHARED.camout.filter(c => !c.deleted && !c.end).length, "Camera outages open", "#E8873A", "bau-cams")}${k(issues.filter(i => i.kind === "Access alarm").length, "High access alarms (unacked)", "#E8873A", "acc")}
+    ${k(SHARED.camout.filter(c => !c.deleted && !c.end).length, "Camera outages open", "#E8873A", "bau-cams")}${k(issues.filter(i => i.kind === "Access alarm").length, "High access alarms (unacked)", "#E8873A", "bau-access")}
     ${k(issues.filter(i => i.kind === "Camera analytics").length, "Camera analytics alarms", "#C19C00", "cv")}${k(SHARED.edgecams.filter(c => c.status === "offline").length + " / " + SHARED.edgecams.length, "Analytics servers offline", "#C19C00", "cv")}${k(unack + " / " + patrolOpen.length, "Patrol taskings not acknowledged", "#0F6CBD", "secops")}</div>`;
   const list = issues.map(i => `<button class="vccal${i === sel ? " on" : ""}" data-vccbsel="${esc(i.id)}"><div><span class="vccsev" style="--c:${i.level >= 2 ? "#C4314B" : "#E8873A"}">${esc(i.chip)}</span> <span class="tag">${esc(i.kind)}</span></div><b>${esc(trunc(i.title, 80))}</b><div class="s">${esc(i.site || "")} · ${esc(ago(i.since))}</div></button>`).join("") || `<div class="empty">No open operational issues. All sites normal.</div>`;
   const red = live.filter(s => (st[s.code] || {}).level >= 2).length, amber = live.filter(s => (st[s.code] || {}).level === 1).length;
@@ -13319,6 +13319,25 @@ if (typeof sxLoad === "function"){ const _sx = sxLoad; sxLoad = async function()
 .subgrp{align-self:center;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 2px 0 10px;padding-left:8px;border-left:1px solid var(--line)}
 .subgrp:first-child{border-left:0;margin-left:0;padding-left:0}
 @media (max-width:760px){.flowstep{min-width:110px}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   GUARDS — a link to a tab that doesn't exist (or isn't open to your role)
+   never breaks the screen: it is ignored with a short note instead.
+   ===================================================================== */
+{ const _sm = setMode; setMode = function(m){ const ok = GROUPS.some(g => g.tabs.some(t => t[0] === m)) && KEYS[m];
+    if (!ok){ console.warn("ITE: no tab called", m); if (typeof toast === "function") toast("That screen isn't available", "", "var(--amber)"); return; }
+    return _sm.apply(this, arguments); }; }
+// phones: wide tables scroll inside their own box instead of stretching the page; toolbars wrap
+{ const st = document.createElement("style"); st.textContent = `
+@media (max-width:760px){
+  #panel table{display:block;max-width:100%;overflow-x:auto}#panel .tbl{max-width:100%;overflow-x:auto}
+  #panel .ptools,#panel .acts,#panel .sec,#panel .vwbar,#panel .todoh{flex-wrap:wrap}#panel span[style*="margin-left:auto"]{flex-wrap:wrap;margin-left:0 !important}
+  #panel input,#panel select,#panel textarea{max-width:100%}#panel [style*="min-width:240px"],#panel [style*="min-width:200px"]{min-width:0 !important}
+  #panel pre{white-space:pre-wrap;word-break:break-word}#panel img{max-width:100%}
+}`; document.head.appendChild(st); }
+// "Online now" (who is signed in and what they're looking at) was missing from the Administrator menu
+{ const a = G("admin"); if (a && !a.tabs.some(t => t[0] === "adm-online")) a.tabs.splice(Math.max(0, a.tabs.findIndex(t => t[0] === "adm-users")) + 1, 0, ["adm-online", "Online now"]); }
 
 boot();
 
