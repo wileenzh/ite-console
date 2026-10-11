@@ -13046,7 +13046,7 @@ const OPS_KINDS = [["demo", "Demo feed (until the real camera is connected)"], [
 function opsLenelSites(){ try{ if (LENEL.api) return LENEL.api.sites().map(s => ({ code: s.site, city: s.city, country: s.country, cls: s.cls, sub: s.sub })); }catch(e){}
   return SITES.filter(s => !isOffice(s) && /CLASS A|CLASS B|C-PE/.test(s.cls) && /OPERATIONAL/i.test(s.status)).map(s => ({ code: s.code, city: s.city, country: s.country, cls: s.cls.replace("CLASS ", ""), sub: s.region })); }
 function opsSeed(){ if (CFG.camwall.ops) return; const sites = opsLenelSites().slice(0, 8);
-  CFG.camwall.ops = sites.map((s, i) => ({ id: "op" + (i + 1), site: s.code, name: i % 2 ? "Perimeter fence" : "Main gate", kind: "demo", url: "" })); saveCfg(); }
+  CFG.camwall.ops = sites.map((s, i) => ({ id: "op" + (i + 1), site: s.code, name: i % 2 ? "Perimeter fence" : "Main gate", zone: i % 2 ? "fence" : "gate", kind: "demo", url: "" })); saveCfg(); }
 const opsDownSet = () => { try{ return new Set(lenelDown().map(d => d.code)); }catch(e){ return new Set(); } };
 const opsOutage = code => SHARED.camout.filter(c => !c.deleted && !c.end && c.site === code);
 function opsTileBody(t){
@@ -13086,6 +13086,7 @@ function opsMount(){ cwFit(); wcvBar();
 function opsEdit(id){ const t = id ? (CFG.camwall.ops || []).find(x => x.id === id) : null, sites = opsLenelSites();
   openModal(head(t ? "Site camera — " + t.site : "Add a site camera") + `<div class="bd"><div class="fgrid"><label class="fld">Site (Lenel-monitored)<select id="opS">${sites.map(s => `<option value="${esc(s.code)}"${t && t.site === s.code ? " selected" : ""}>${esc(s.code)} — ${esc(s.city || "")}</option>`).join("")}</select></label>
     <label class="fld">Camera name<input id="opN" value="${esc(t ? t.name : "")}" placeholder="e.g. Main gate, Loading bay, Fence north"></label></div>
+    <label class="fld">Zone on the site plan<select id="opZ"></select></label>
     <label class="fld">How this camera is connected<select id="opK">${OPS_KINDS.map(([k, l]) => `<option value="${k}"${(t ? t.kind : "hls") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
     <label class="fld" id="opUW">Address<input id="opU" value="${esc(t ? t.url : "")}" placeholder="https://video-gateway.company.local/cameras/…"></label><label class="fld" id="opDW" style="display:none">Camera on this computer<select id="opD"></select></label>
     <p class="help">Lenel's video system (and most others) can publish each camera through a gateway or media server as a <b>.m3u8</b> stream, a <b>snapshot</b> or an <b>MJPEG</b> address — ask your video system administrator for the address. The browser can't open RTSP addresses directly. The address is kept in this browser only.</p></div>
@@ -13093,8 +13094,10 @@ function opsEdit(id){ const t = id ? (CFG.camwall.ops || []).find(x => x.id === 
   const sync = async () => { const k = $("#opK").value; $("#opUW").style.display = ["demo", "webcam"].includes(k) ? "none" : ""; $("#opDW").style.display = k === "webcam" ? "" : "none";
     if (k === "webcam" && !$("#opD").options.length){ try{ const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(x => x.stop()); const d = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === "videoinput"); $("#opD").innerHTML = d.map((x, i) => `<option value="${esc(x.deviceId)}"${t && t.deviceId === x.deviceId ? " selected" : ""}>${esc(x.label || "Camera " + (i + 1))}</option>`).join(""); }catch(e){ $("#opD").innerHTML = `<option value="">No camera access (${esc(e.message)})</option>`; } } };
   $("#opK").onchange = sync; sync();
+  const zfill = () => { const zs = typeof spZones === "function" ? spZones($("#opS").value) : []; const cur = t ? (t.zone || (typeof spCamZone === "function" ? spCamZone(t) : "")) : ""; $("#opZ").innerHTML = zs.map(z => `<option value="${esc(z.id)}"${z.id === cur ? " selected" : ""}>${esc(z.name)}</option>`).join(""); };
+  $("#opS").addEventListener("change", zfill); zfill();
   $("#opOk").onclick = () => { const k = $("#opK").value, url = $("#opU").value.trim(); if (!["demo", "webcam"].includes(k) && !/^https?:\/\//.test(url)){ toast("Enter the camera's address", "It starts with http:// or https://", "var(--amber)"); return; }
-    const rec = { site: $("#opS").value, name: $("#opN").value.trim() || "Camera", kind: k, url: ["demo", "webcam"].includes(k) ? "" : url, deviceId: k === "webcam" ? $("#opD").value : "" };
+    const rec = { site: $("#opS").value, zone: $("#opZ").value || "", name: $("#opN").value.trim() || "Camera", kind: k, url: ["demo", "webcam"].includes(k) ? "" : url, deviceId: k === "webcam" ? $("#opD").value : "" };
     if (t) Object.assign(t, rec); else CFG.camwall.ops.push(Object.assign({ id: "op" + Date.now().toString(36) }, rec));
     saveCfg(); audit(t ? "Site camera changed" : "Site camera added", `${rec.site} · ${rec.name}`, k); $("#ov").classList.remove("show"); renderPanel(); }; }
 // the public view gets the same switch
@@ -13305,7 +13308,7 @@ const CV_PRI = { person: "P2", object: "P2", tamper: "P2", lost: "P3", crowd: "P
 function cvToAction(a){ if (!a || !CV_PRI[a.type]) return; const s = a.site && SITES.find(x => x.code === a.site);
   enqueueAction({ srcKey: "cva:" + a.id, source: "Camera analytics", pri: CV_PRI[a.type], title: `${CV_TYPES[a.type][0]} — ${a.camName}${a.site ? " (" + a.site + ")" : ""}`, detail: a.detail, site: a.site || "",
     suggested: a.type === "person" || a.type === "object" ? ["escalate", "notify", "monitor"] : ["monitor", "escalate"], payload: { cat: a.type === "crowd" ? "protest" : "operational_security", sev: CV_PRI[a.type] === "P2" ? "P2" : "P3", desc: `${a.camName}: ${a.detail}`, sites: a.site ? [a.site] : [], lat: s ? s.lat : null, lon: s ? s.lon : null } }); }
-{ const _put = putShared; putShared = function(type, rec){ const r = _put.apply(this, arguments); try{ if (type === "cvalerts" && rec && rec.status === "new" && Date.now() - (rec.createdAt || 0) < 60e3) cvToAction(rec); }catch(e){} return r; }; }
+{ const _put = putShared; putShared = function(type, rec){ const r = _put.apply(this, arguments); try{ if (type === "cvalerts" && rec && rec.status === "new" && Date.now() - (rec.createdAt || 0) < 60e3) cvToAction(rec); }catch(e){} if (["incidents", "actions", "releases", "welfare", "cvalerts"].includes(type)){ clearTimeout(renderFlow.t); renderFlow.t = setTimeout(renderFlow, 80); } return r; }; }
 // all-channel sentiment: a surge of negative coverage becomes an action too
 if (typeof sxLoad === "function"){ const _sx = sxLoad; sxLoad = async function(){ const r = await _sx.apply(this, arguments);
   try{ const all = Object.values(SX.items).flat(), st = sxStats(all); if (st.n >= 15 && st.negPct >= 60) enqueueAction({ srcKey: "sxs:" + Math.floor(Date.now() / (6 * 3600e3)), source: "Sentiment — all channels", pri: "P3", title: `Negative coverage: ${st.negPct}% of ${st.n} items across media, social and blogs`, detail: `Topics: ${sxTopics().join(", ")}`, suggested: ["monitor", "notify"] }); }catch(e){}
@@ -13338,6 +13341,131 @@ if (typeof sxLoad === "function"){ const _sx = sxLoad; sxLoad = async function()
 }`; document.head.appendChild(st); }
 // "Online now" (who is signed in and what they're looking at) was missing from the Administrator menu
 { const a = G("admin"); if (a && !a.tabs.some(t => t[0] === "adm-online")) a.tabs.splice(Math.max(0, a.tabs.findIndex(t => t[0] === "adm-users")) + 1, 0, ["adm-online", "Online now"]); }
+
+
+/* =====================================================================
+   SITE PLAN — one site at a glance (Security Operations → Site plan)
+   - The site drawn as zones (Perimeter fence, Data halls, Generator yard,
+     Security lobby, Loading dock, Main gate, Car park — rename, add or remove
+     zones per site). Each zone shows its active incidents, coloured by the
+     worst severity, and its cameras.
+   - Zone chips and a list of the site's incidents: Active / Resolved & closed /
+     All, newest first; click one to open it. Click a camera to watch it.
+   - Incidents carry a zone (chosen when the incident is created; older ones are
+     placed from their wording). Site cameras (Camera wall → Operational) carry a zone too.
+   ===================================================================== */
+CFG.siteplan = CFG.siteplan || {};
+const SP_DEFAULT = [["fence", "Perimeter Fence"], ["dh1", "Data Hall 1"], ["dh2", "Data Hall 2"], ["gen", "Generator Yard"], ["lobby", "Security Lobby"], ["dock", "Loading Dock"], ["gate", "Main Gate"], ["park", "Car Park"]];
+const SP_AREAS = `'fence dh1 dh1 dh2 gen' 'fence lobby dock dock gen' 'gate park park x1 x2'`;   // single quotes: it sits inside a style="" attribute
+const SP_SEV = { "1": ["Critical", "#C4314B"], "2": ["High", "#D9541E"], "3": ["Medium", "#C2700A"], "4": ["Low", "#34475A"] };
+const SP_WORDS = [[/\bdh ?2\b|data hall 2/i, "dh2"], [/\bdh ?1\b|data hall 1|data hall\b|white space|server room/i, "dh1"], [/generator|genset|fuel|ups\b|utility|power/i, "gen"], [/lobby|reception|turnstile|tailgat|visitor|card.?reader/i, "lobby"],
+  [/dock|loading|bay|pallet|deliver/i, "dock"], [/gate|barrier|guard ?house|vehicle check/i, "gate"], [/car ?park|parking/i, "park"], [/fence|perimeter|boundary|intrusion|cctv|camera|patrol/i, "fence"]];
+function spZones(site){ const z = (CFG.siteplan[site] || {}).zones; return z && z.length ? z : SP_DEFAULT.map(([id, name]) => ({ id, name })); }
+function spZoneOf(inc){ const zs = spZones(inc.site); if (inc.zone && zs.some(z => z.id === inc.zone)) return inc.zone;
+  const t = `${inc.title || ""} ${inc.scenario || ""} ${inc.summary || ""}`; for (const [re, id] of SP_WORDS) if (re.test(t) && zs.some(z => z.id === id)) return id; return zs.some(z => z.id === "fence") ? "fence" : zs[0].id; }
+function spStatus(inc){ if (inc.status === "resolved") return ["Resolved", "closed"]; if (inc.status === "mitigated") return ["Mitigated", "inv"];
+  return inc.owner || (inc.trouble || []).length || (inc.discussion || []).length > 1 ? ["Investigating", "inv"] : ["Open", "open"]; }
+function spType(inc){ return inc.scenario ? trunc(inc.scenario, 40) : (CATS[inc.cat] || {}).label || "Incident"; }
+const spSites = () => { const ops = new Set((CFG.camwall.ops || []).map(t => t.site)), inc = new Set(SHARED.incidents.filter(x => !x.deleted).map(x => x.site));
+  return SITES.filter(s => !isOffice(s)).sort((a, b) => ((inc.has(b.code) ? 2 : 0) + (ops.has(b.code) ? 1 : 0)) - ((inc.has(a.code) ? 2 : 0) + (ops.has(a.code) ? 1 : 0)) || a.code.localeCompare(b.code)); };
+function spSite(){ const list = spSites(); if (!UI.spSite || !SITES.some(s => s.code === UI.spSite)) UI.spSite = (list[0] || {}).code; return UI.spSite; }
+function spIncidents(site){ return SHARED.incidents.filter(x => !x.deleted && x.site === site); }
+function spCams(site){ return (CFG.camwall.ops || []).filter(t => t.site === site); }
+function siteplanPanel(){ const site = spSite(), s = SITES.find(x => x.code === site) || {}, zones = spZones(site), all = spIncidents(site), active = all.filter(x => x.status !== "resolved"), cams = spCams(site);
+  const zf = UI.spZone || "", sf = UI.spF || "active", z = id => zones.find(x => x.id === id);
+  const per = {}; zones.forEach(x => per[x.id] = { n: 0, worst: 9, cams: cams.filter(c => (c.zone || spCamZone(c)) === x.id) }); active.forEach(i => { const k = spZoneOf(i); if (!per[k]) return; per[k].n++; per[k].worst = Math.min(per[k].worst, sevNum(i.sev)); });
+  const sevKey = n => n <= 1 ? "1" : n <= 2 ? "2" : n <= 3 ? "3" : "4";
+  const used = new Set(SP_DEFAULT.map(d => d[0])), extra = zones.filter(x => !used.has(x.id));
+  const areas = SP_AREAS.replace(/x1|x2/g, m => zones.some(q => q.id === m) ? m : "."), hasDefault = zones.filter(x => used.has(x.id));
+  const zoneBox = x => { const p = per[x.id]; return `<button class="spz${zf === x.id ? " on" : ""}" style="${used.has(x.id) ? `grid-area:${x.id}` : ""}" data-spz="${esc(x.id)}" aria-pressed="${zf === x.id}" title="${esc(x.name)}: ${p.n} active incident${p.n === 1 ? "" : "s"}, ${p.cams.length} camera${p.cams.length === 1 ? "" : "s"}">
+      <b>${esc(x.name)}</b>${p.cams.length ? `<span class="spcams">${p.cams.map(c => `<span class="spcam" data-spcam="${esc(c.id)}" role="button" tabindex="0" title="Watch ${esc(c.name)}">📷</span>`).join("")}</span>` : ""}
+      ${p.n ? `<span class="spbadge" style="background:${SP_SEV[sevKey(p.worst)][1]}">${p.n}</span>` : ""}</button>`; };
+  const list = (sf === "active" ? active : sf === "closed" ? all.filter(x => x.status === "resolved") : all).filter(x => !zf || spZoneOf(x) === zf).sort((a, b) => sevNum(a.sev) - sevNum(b.sev) || b.createdAt - a.createdAt);
+  const down = (() => { try{ return lenelDown().some(d => d.code === site); }catch(e){ return false; } })(), out = SHARED.camout.filter(c => !c.deleted && !c.end && c.site === site).length;
+  return `<div class="pbody spwrap"><div class="ptools"><span class="label">Site plan</span><select data-spsite aria-label="Site">${spSites().slice(0, 300).map(x => `<option value="${esc(x.code)}"${x.code === site ? " selected" : ""}>${esc(x.code)} — ${esc(x.city)}${spIncidents(x.code).some(i => i.status !== "resolved") ? " ●" : ""}</option>`).join("")}</select>
+      <span class="s">${esc([s.city, s.country, (s.cls || "").replace("CLASS ", "Class ")].filter(Boolean).join(" · "))}</span>${down ? `<span class="opschip bad">Lenel DOWN</span>` : ""}${out ? `<span class="opschip warn">${out} camera outage${out > 1 ? "s" : ""}</span>` : ""}<span class="sp"></span>
+      <button class="tab-mini" data-spedit>Edit zones…</button><button class="tab-mini" data-spcamwall>Site cameras</button><button class="tab-mini primary" data-spnew>+ Incident at this site</button></div>
+    <div class="spgrid"><section class="sppl"><h4>SITE PLAN</h4><div class="spbound"><div class="spblab">SITE BOUNDARY</div>
+        <div class="spzones" style="grid-template-areas:${hasDefault.length === SP_DEFAULT.length ? areas : "none"}">${(hasDefault.length === SP_DEFAULT.length ? hasDefault : []).map(zoneBox).join("")}</div>
+        ${extra.length || hasDefault.length !== SP_DEFAULT.length ? `<div class="spextra">${(hasDefault.length === SP_DEFAULT.length ? extra : zones).map(zoneBox).join("")}</div>` : ""}</div>
+      <div class="splegend">Active incidents per zone, coloured by highest severity: ${Object.values(SP_SEV).map(([l, c]) => `<span><i style="background:${c}"></i>${l}</span>`).join("")} · 📷 camera (click to watch)</div>
+      <div class="spchips"><button class="spchip${!zf ? " on" : ""}" data-spz="">All zones</button>${zones.map(x => `<button class="spchip${zf === x.id ? " on" : ""}" data-spz="${esc(x.id)}">${esc(x.name)} <b>${per[x.id].n}</b></button>`).join("")}</div></section>
+      <section class="splist"><div class="splh"><b>${zf ? esc((z(zf) || {}).name || "") : "ALL ZONES"}</b> <span class="s">(${list.length})</span><span class="sp"></span>${[["active", "Active"], ["closed", "Resolved & closed"], ["all", "All"]].map(([k, l]) => `<button class="tab-mini${sf === k ? " on" : ""}" data-spf="${k}">${l}</button>`).join("")}</div>
+        ${list.length ? list.map(i => { const [sl, sc] = spStatus(i), sv = SP_SEV[sevKey(sevNum(i.sev))]; return `<button class="spinc" data-spinc="${esc(i.id)}"><div class="spirow"><span class="spsev" style="background:${sv[1]}">${sv[0]}</span><span class="spst ${sc}">${esc(sl)}</span><span class="sp"></span><span class="spid">${esc(i.id)}</span></div>
+          <div class="spit">${esc(String(i.title || "").replace(new RegExp("^" + site + "\\s*\\|\\s*"), ""))}</div><div class="s">${esc((z(spZoneOf(i)) || {}).name || "")} · ${esc(spType(i))} · ${esc(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(i.createdAt))}</div></button>`; }).join("")
+          : `<div class="empty">${sf === "active" ? "No active incidents" : "No incidents"}${zf ? " in this zone" : " at this site"}.${!all.length ? ` <button class="linkbtn" data-spsample>Add sample incidents for this site</button>` : ""}</div>`}</section></div></div>`; }
+function spCamZone(c){ const t = c.name || ""; for (const [re, id] of SP_WORDS) if (re.test(t)) return id; return "gate"; }
+function spWatch(id){ const t = (CFG.camwall.ops || []).find(x => x.id === id); if (!t) return;
+  openModal(head(`${t.site} · ${t.name}`) + `<div class="bd"><div class="spcambox cwb vwb">${opsTileBody(t)}</div><p class="help">${esc((spZones(t.site).find(z => z.id === (t.zone || spCamZone(t))) || {}).name || "")} · ${t.kind === "demo" ? "demo feed — connect the real camera in Camera wall → Operational (✎)" : esc(t.kind)}</p></div>
+    <div class="ft"><button class="pill" data-spcw>Open the camera wall</button><span style="flex:1"></span><button class="pill primary" data-x>Close</button></div>`);
+  setTimeout(opsMount, 30); $("[data-spcw]").onclick = () => { $("#ov").classList.remove("show"); CFG.camwall.view = "ops"; saveCfg(); setMode("camwall"); }; }
+function spEditZones(){ const site = spSite(), zs = spZones(site);
+  openModal(head("Zones at " + site) + `<div class="bd"><p class="help" style="margin-top:0">One zone per line. The first eight keep their places on the plan (fence, data halls, generator yard, lobby, dock, gate, car park); extra zones appear below.</p>
+    <textarea id="spZ" style="width:100%;min-height:200px">${esc(zs.map(z => z.name).join("\n"))}</textarea><label class="ctl"><input type="checkbox" id="spAll"> Use these zones for every site</label></div>
+    <div class="ft"><button class="pill" id="spDef">Back to the standard zones</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="spOk">Save</button></div>`);
+  $("#spDef").onclick = () => { delete CFG.siteplan[site]; saveCfg(); $("#ov").classList.remove("show"); renderPanel(); };
+  $("#spOk").onclick = () => { const names = $("#spZ").value.split("\n").map(x => x.trim()).filter(Boolean); if (!names.length) return;
+    const zones = names.map((n, i) => ({ id: i < SP_DEFAULT.length ? SP_DEFAULT[i][0] : "z" + i, name: n }));
+    if ($("#spAll").checked) SITES.filter(s => !isOffice(s)).forEach(s => CFG.siteplan[s.code] = { zones }); else CFG.siteplan[site] = { zones };
+    saveCfg(); audit("Site zones changed", site, names.join(", ")); $("#ov").classList.remove("show"); renderPanel(); }; }
+function spSample(){ const site = spSite(), now = Date.now(), m = 60e3;
+  [["1", "dh2", "operational_security", "Door forced alarm on DH2 east fire exit", "Alarm activation", "active", 9 * 60, false],
+   ["2", "dh1", "operational_security", "Repeat card-reader denial at DH1", "Unauthorised access", "active", 3 * 60, false],
+   ["2", "lobby", "crime", "Visitor followed staff through turnstile", "Tailgating", "active", 5 * 60, true],
+   ["3", "gen", "industrial_hazards", "Generator 3 enclosure door unlatched", "Equipment fault", "active", 11 * 60, false],
+   ["3", "dock", "crime", "Unattended pallet left at bay 3", "Suspicious item", "active", 14 * 60, false],
+   ["3", "fence", "operational_security", "Fence sensor fault, section N4", "Equipment fault", "active", 17 * 60, true],
+   ["4", "gate", "crime", "Vehicle clipped barrier arm", "Property damage", "active", 27 * 60, false],
+   ["3", "park", "crime", "Unknown vehicle parked overnight", "Suspicious vehicle", "resolved", 50 * 60, true]]
+  .forEach(([sev, zone, cat, t, sc, status, mins, owned], i) => { const created = now - mins * m;
+    putShared("incidents", { id: `INC-${2601 + i + Math.floor(Math.random() * 90) * 10}`, createdAt: created, createdBy: "monitor", site, zone, cat, sev, status, title: `${site} | ${t}`, domain: "ps", scenario: sc, serv: {}, owner: owned ? incBy() : "", tags: ["SAMPLE"],
+      summary: "Sample incident for demonstration.", discussion: [{ t: created + 5 * m, by: "monitor", text: "Site team notified." }], trouble: owned ? [{ t: created + 20 * m, by: incBy(), text: "Checking on site." }] : [], links: [], files: [], followers: [], custom: { Sample: "Yes" },
+      resolvedAt: status === "resolved" ? created + 120 * m : null }); });
+  toast("Sample incidents added", "Marked SAMPLE — delete them any time.", "var(--teal)"); renderPanel(); }
+// navigation
+{ const g = G("secops"); if (g && !g.tabs.some(t => t[0] === "siteplan")) g.tabs.splice(1, 0, ["siteplan", "Site plan"]); }
+NOMAP.push("siteplan"); NON_CITY_MODES.push("siteplan"); KEYS.siteplan = ["SITE PLAN", [], "One site: zones, active incidents by severity, cameras"];
+const _rpiSP = renderPanelInner;
+renderPanelInner = function(p){ if (UI.mode !== "siteplan") return _rpiSP(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = siteplanPanel(); };
+document.addEventListener("click", e => { const t = e.target.closest("[data-spcam],[data-spz],[data-spf],[data-spinc],[data-spnew],[data-spedit],[data-spsample],[data-spcamwall],[data-spgo]"); if (!t) return; const d = t.dataset;
+  if (d.spcam){ e.stopPropagation(); spWatch(d.spcam); return; }
+  if (d.spz !== undefined){ UI.spZone = UI.spZone === d.spz && d.spz ? "" : d.spz; saveUI(); renderPanel(); return; }
+  if (d.spf){ UI.spF = d.spf; saveUI(); renderPanel(); return; }
+  if (d.spinc){ UI.incOpen = d.spinc; UI.incTab = "summary"; saveUI(); setMode("incidents"); return; }
+  if (d.spnew !== undefined){ if (guard("escalate")) openIncidentForm({ site: spSite(), zone: UI.spZone || "" }); return; }
+  if (d.spedit !== undefined){ spEditZones(); return; } if (d.spsample !== undefined){ spSample(); return; }
+  if (d.spcamwall !== undefined){ CFG.camwall.view = "ops"; CFG.camwall.opsFilter = "all"; saveCfg(); setMode("camwall"); return; }
+  if (d.spgo){ UI.spSite = d.spgo; UI.spZone = ""; saveUI(); setMode("siteplan"); } }, true);
+document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.spsite !== undefined){ UI.spSite = e.target.value; UI.spZone = ""; saveUI(); renderPanel(); } });
+document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.spcam){ e.preventDefault(); spWatch(e.target.dataset.spcam); } });
+// incidents get a zone when they're created
+const _oifSP = openIncidentForm; openIncidentForm = function(pre){ _oifSP(pre); pre = pre || {};
+  const site = $("#inSite"); if (!site) return; const w = site.closest(".fld");
+  const fill = () => { const zs = spZones(site.value.trim().toUpperCase()), cur = $("#inZone") ? $("#inZone").value : pre.zone || ""; $("#inZone").innerHTML = `<option value="">— work it out from the description —</option>` + zs.map(z => `<option value="${esc(z.id)}"${z.id === cur ? " selected" : ""}>${esc(z.name)}</option>`).join(""); };
+  w.insertAdjacentHTML("afterend", `<label class="fld">Zone<select id="inZone"></select></label>`); fill(); site.addEventListener("change", fill); };
+{ const _put = putShared; putShared = function(type, rec){ if (type === "incidents" && rec && !rec.zone && $("#inZone") && $("#inZone").value && document.getElementById("ov").classList.contains("show")) rec.zone = $("#inZone").value; return _put.apply(this, arguments); }; }
+// the operational camera view links to each site's plan
+const _opsTileSP = opsTile; opsTile = function(t, down){ return _opsTileSP(t, down).replace(`<button class="ltvb" data-opsedit=`, `<button class="ltvb" data-spgo="${esc(t.site)}" title="Site plan for ${esc(t.site)}" aria-label="Site plan for ${esc(t.site)}">▦</button><button class="ltvb" data-opsedit=`); };
+{ const st = document.createElement("style"); st.textContent = `
+.spgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;min-height:520px}
+.sppl{padding:12px 14px;border-right:1px solid var(--line)}.sppl h4,.splh b{font-size:12.5px;letter-spacing:.4px;margin:0 0 8px}
+.spbound{border:1px solid var(--line);border-radius:6px;padding:10px;background:color-mix(in srgb,var(--panel) 60%,transparent)}.spblab{font-size:10.5px;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
+.spzones{display:grid;grid-template-columns:1fr 1fr 1.4fr 1.3fr 1fr;grid-template-rows:130px 70px 70px;gap:8px;border:2px dashed var(--line);border-radius:6px;padding:8px}
+.spextra{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:8px}.spextra .spz{min-height:70px}
+.spz{position:relative;text-align:left;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--text);padding:7px 8px;cursor:pointer;font:12.5px var(--font);display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.spz.on{outline:2px solid var(--accent,#0F6CBD)}.spz:hover{border-color:var(--muted)}
+.spbadge{position:absolute;right:8px;bottom:8px;min-width:24px;height:24px;border-radius:12px;color:#fff;font:700 12px var(--font);display:flex;align-items:center;justify-content:center;padding:0 6px}
+.spcams{display:flex;gap:2px;flex-wrap:wrap}.spcam{cursor:pointer;font-size:13px;line-height:1;padding:1px 2px;border-radius:3px}.spcam:hover,.spcam:focus{background:var(--line)}
+.splegend{font-size:11.5px;color:var(--muted);margin:8px 0}.splegend span{margin-left:10px}.splegend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.spchips{display:flex;flex-wrap:wrap;gap:6px}.spchip{border:1px solid var(--line);background:color-mix(in srgb,var(--green) 12%,var(--panel));color:var(--text);border-radius:5px;padding:4px 10px;cursor:pointer;font:12.5px var(--font)}
+.spchip.on{background:#0F6B3A;color:#fff;border-color:transparent;font-weight:700}.spchip b{margin-left:4px;font-weight:600;color:var(--muted)}.spchip.on b{color:#fff}
+.splist{display:flex;flex-direction:column;max-height:calc(100vh - 230px);overflow:auto;background:var(--panel)}.splh{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+.splh .on{background:#0F6B3A;color:#fff;border-color:transparent}
+.spinc{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);padding:10px 12px;cursor:pointer;font:13px var(--font)}.spinc:hover{background:color-mix(in srgb,var(--line) 40%,transparent)}
+.spirow{display:flex;align-items:center;gap:6px}.spsev{color:#fff;font:700 11px var(--font);border-radius:3px;padding:1px 6px}.spst{font-size:11px;border:1px solid var(--line);border-radius:3px;padding:0 6px}.spst::before{content:"● ";font-size:8px}
+.spst.inv::before{color:#13A10E}.spst.closed::before{color:var(--muted)}.spid{font:11px Consolas,monospace;color:var(--muted)}.spit{font-weight:700;margin:5px 0 3px;font-size:14px}
+.spcambox{height:340px;display:flex;background:#000;border-radius:6px;overflow:hidden;position:relative}
+@media (max-width:900px){.spgrid{grid-template-columns:1fr}.sppl{border-right:0;border-bottom:1px solid var(--line)}.spzones{grid-template-rows:110px 64px 64px;font-size:11px}.splist{max-height:none}}`; document.head.appendChild(st); }
 
 boot();
 
