@@ -13466,6 +13466,34 @@ const _opsTileSP = opsTile; opsTile = function(t, down){ return _opsTileSP(t, do
 .spst.inv::before{color:#13A10E}.spst.closed::before{color:var(--muted)}.spid{font:11px Consolas,monospace;color:var(--muted)}.spit{font-weight:700;margin:5px 0 3px;font-size:14px}
 .spcambox{height:340px;display:flex;background:#000;border-radius:6px;overflow:hidden;position:relative}
 @media (max-width:900px){.spgrid{grid-template-columns:1fr}.sppl{border-right:0;border-bottom:1px solid var(--line)}.spzones{grid-template-rows:110px 64px 64px;font-size:11px}.splist{max-height:none}}`; document.head.appendChild(st); }
+// look: matches the reference design (two white cards on pale green), the same in light and dark themes
+{ const st = document.createElement("style"); st.textContent = `
+.spgrid{--spbg:#D6E8DA;--spcard:#FFFFFF;--spline:#C7D6CB;--spzone:#B9CDBF;--sptext:#1E2A23;--spmuted:#5D6B63;--spchip:#D3E8D8;--spgreen:#0F6B3A;
+  background:var(--spbg);border:0;border-radius:0;gap:18px;padding:20px 24px;grid-template-columns:minmax(0,1.15fr) minmax(320px,.8fr);align-items:start;color:var(--sptext);font-family:"Segoe UI",Inter,system-ui,sans-serif}
+.spgrid .sppl,.spgrid .splist{background:var(--spcard);border:1px solid var(--spline);border-radius:4px;color:var(--sptext)}
+.spgrid .sppl{padding:16px 14px 18px;border-right:1px solid var(--spline)}.spgrid .sppl h4{font:700 12.5px "Segoe UI",Inter,sans-serif;letter-spacing:.2px;color:var(--sptext);margin:0 0 14px}
+.spgrid .spbound{background:#FAFBFA;border:1px solid var(--spline);border-radius:3px;padding:8px 8px 10px}.spgrid .spblab{font-size:10px;letter-spacing:.8px;color:#6E7B73;margin:0 0 4px 2px}
+.spgrid .spzones{border:2px dashed #C3CEC6;border-radius:6px;padding:7px;gap:7px;grid-template-rows:196px 64px 64px;background:transparent}
+.spgrid .spz{background:#fff;border:1px solid var(--spzone);border-radius:3px;color:var(--sptext);font:600 11.5px "Segoe UI",Inter,sans-serif;padding:7px 7px}
+.spgrid .spz b{font-weight:600}.spgrid .spz:hover{border-color:#8FA898}.spgrid .spz.on{outline:2px solid var(--spgreen);outline-offset:-1px}
+.spgrid .spbadge{width:22px;min-width:22px;height:22px;right:8px;bottom:8px;font:700 11px "Segoe UI",Inter,sans-serif;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.06)}
+.spgrid .splegend{color:var(--sptext);font-size:10.5px;margin:12px 0 10px}.spgrid .splegend span{margin-left:8px}
+.spgrid .spchip{background:var(--spchip);border:1px solid #BCD6C3;color:var(--sptext);border-radius:3px;padding:5px 9px;font:500 12px "Segoe UI",Inter,sans-serif}
+.spgrid .spchip b{color:#4B5A51;font-weight:500;margin-left:5px}.spgrid .spchip.on{background:var(--spgreen);border-color:var(--spgreen);color:#fff;font-weight:700}.spgrid .spchip.on b{color:#fff}
+.spgrid .splist{max-height:none;overflow:hidden}.spgrid .splh{background:#fff;border-bottom:1px solid var(--spline);padding:14px 12px 12px 12px}
+.spgrid .splh b{font:700 12.5px "Segoe UI",Inter,sans-serif;color:var(--sptext);margin:0}.spgrid .splh .s{color:var(--sptext);font-size:12px}
+.spgrid .splh .tab-mini{background:none;border:0;color:var(--sptext);font:600 12px "Segoe UI",Inter,sans-serif;padding:6px 10px;border-radius:3px}
+.spgrid .splh .tab-mini.on{background:var(--spgreen);color:#fff}
+.spgrid .spinc{background:#fff;color:var(--sptext);border-bottom:1px solid var(--spline);padding:12px 12px 10px}.spgrid .spinc:hover{background:#F5F9F6}
+.spgrid .spsev{font:700 10.5px "Segoe UI",Inter,sans-serif;border-radius:2px;padding:2px 5px}
+.spgrid .spst{background:#fff;border:1px solid #2B3530;border-radius:3px;color:var(--sptext);font:500 10.5px "Segoe UI",Inter,sans-serif;padding:1px 5px}
+.spgrid .spst::before{content:"● ";font-size:9px;color:#1E2A23}.spgrid .spst.inv::before{color:#1C8B3E}.spgrid .spst.closed::before{color:#8C9890}
+.spgrid .spirow .sp{flex:1}.spgrid .spid{margin-left:auto;font:10.5px Consolas,"Courier New",monospace;color:#3E4A43}.spgrid .spit{font:600 14px "Segoe UI",Inter,sans-serif;color:var(--sptext);margin:7px 0 4px}
+.spgrid .spinc .s{color:var(--spmuted);font-size:10.5px}.spgrid .empty{color:var(--spmuted);background:transparent;border-color:var(--spline)}.spgrid .linkbtn{color:var(--spgreen)}
+.spgrid .spcam:hover,.spgrid .spcam:focus{background:#E4EFE7}
+@media (max-width:900px){.spgrid{grid-template-columns:1fr;padding:12px}.spgrid .spzones{grid-template-rows:150px 60px 60px}}`; document.head.appendChild(st); }
+// severity colours as in the reference
+SP_SEV["1"] = ["Critical", "#C0101E"]; SP_SEV["2"] = ["High", "#C9401A"]; SP_SEV["3"] = ["Medium", "#B45309"]; SP_SEV["4"] = ["Low", "#334457"];
 
 
 /* =====================================================================
