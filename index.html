@@ -7616,7 +7616,6 @@ G("intel").label = "Intelligence Monitoring"; G("intel").tabs = [["todo", "Watch
   ["weather", "Weather"], ["forecast", "Next 48 h"], ["air", "Air quality"], ["river", "River flow"], ["news", "Breaking news"], ["risk", "Risk register"], ["trends", "Trends & climate"], ["stats", "Statistics"], ["actions", "Action queue"], ["escalations", "Escalation timers"], ["welfare", "Welfare checks"]];
 G("travel").label = "Travel Advisories"; G("repo").label = "Intelligence Repository"; G("query").label = "RFI Query"; G("query").tabs = [["query", "RFI Query"]]; G("ai").label = "PSOC Chatbot"; G("ai").tabs = [["ai", "PSOC Chatbot"]];
 G("admin").label = "Administrator"; G("admin").tabs = [["adm-work", "Team & tasks"], ["adm-users", "Users & roles"], ["adm-people", "Personnel"], ["adm-audit", "Audit trail"], ["adm-check", "Shift checklist"], ["adm-sys", "System"]];
-{ const order = ["bau", "intel", "travel", "repo", "query", "ai", "admin"]; const gs = order.map(G).filter(Boolean); GROUPS.length = 0; gs.forEach(g => GROUPS.push(g)); }
 NON_CITY_MODES.push("bau-dash", "bau-cams", "hazards", "global", "trends", "welfare", "adm-work", "adm-people");
 Object.assign(KEYS, { "bau-dash": ["BAU DASHBOARD", [], "Lenel and camera outages: statistics, charts, Excel and PowerPoint export"], "bau-cams": ["CAMERA OUTAGES", [], "Record when camera outages start and end, why, and where"],
   hazards: ["HAZARD WATCH", [[1, "Monitor"], [2, "PSOC Manager"], [3, "Intel / SLT"]], "All 21 risk categories: what we watch, trigger points, items to triage"], global: ["GLOBAL DISASTERS", [], "GDACS orange/red and USGS M6+ worldwide"],
@@ -11278,8 +11277,6 @@ Object.assign(KEYS, { "sent-news": ["NEWS SENTIMENT", [], "Sentiment, emotion an
 // --- Vision Command Centre section (panels in module 82)
 if (!GROUPS.some(g => g.id === "vcc")) GROUPS.splice(GROUPS.findIndex(g => g.id === "intel"), 0, { id: "vcc", label: "Vision Command Centre", tabs: [["vcc", "Command view"], ["vcc-alerts", "Alert management"], ["vcc-reports", "Reports & analytics"]] });
 NOMAP.push("vcc"); NON_CITY_MODES.push("vcc", "vcc-alerts", "vcc-reports");
-// --- order: BAU · Security Operations · Vision Command Centre · Intelligence · Sentiment · the rest
-{ const order = ["bau", "secops", "vcc", "intel", "sentiment"]; const first = order.map(id => GROUPS.find(g => g.id === id)).filter(Boolean), rest = GROUPS.filter(g => !order.includes(g.id)); GROUPS.length = 0; first.concat(rest).forEach(g => GROUPS.push(g)); }
 { const so = GROUPS.find(g => g.id === "secops"); if (so) so.label = "Security Operations"; }
 // --- Sentiment panels
 function sentNewsPanel(){ const items = (DATA.news || []).slice(0, 150).map(n => ({ n, s: lexScore((n.title || "") + " " + (n.desc || "")) }));
@@ -13253,23 +13250,11 @@ document.addEventListener("change", e => { if (e.target.dataset && e.target.data
    - A process bar under the tabs: 1 Detect → 2 Triage → 3 Escalate →
      4 Respond → 5 Report, each with what's waiting and one click to the
      place where it's handled.
-   - Navigation tidied: a Response section (action queue, escalations, welfare,
-     mass notification, comms, action history) instead of a 24-tab Intelligence
-     section; Intelligence grouped into Now / Hazards / Analysis; BAU grouped into
-     My work / Sites & systems; camera sources sit with the camera walls; the
-     archive of risk-register snapshots is named as such.
+   - Navigation: see NAVIGATION at the end of this script (one definition).
    - One triage inbox: camera alarms (Camera analytics and the walls) and
      all-channel sentiment surges land in the Action queue like every other trigger.
    ===================================================================== */
-// ---------- navigation ----------
-{ const intel = G("intel"), take = ids => { const out = []; ids.forEach(id => { const i = intel.tabs.findIndex(t => t[0] === id); if (i >= 0) out.push(intel.tabs.splice(i, 1)[0]); }); return out; };
-  const resp = take(["actions", "escalations", "welfare", "massnotify", "comms", "history"]);
-  if (resp.length && !GROUPS.some(g => g.id === "respond")) GROUPS.splice(GROUPS.findIndex(g => g.id === "intel") + 1, 0, { id: "respond", label: "Response", tabs: resp });
-  const order = ["todo", "alertstream", "livenews", "news", "overview", "hazards", "typhoon", "protests", "disasters", "global", "quake", "weather", "forecast", "air", "river", "risk", "trends", "stats"];
-  intel.tabs.sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99));
-  const cam = G("bau").tabs.findIndex(t => t[0] === "camsit"); if (cam >= 0){ const t = G("bau").tabs.splice(cam, 1)[0]; t[1] = "Camera sources"; const v = G("vcc").tabs; v.splice(v.findIndex(x => x[0] === "camwall") + 1, 0, t); }
-  const bauOrder = ["alerts", "incidents", "myreq", "releases", "bau-dash", "bau-lenel", "bau-access", "bau-cams", "bau-cctv", "cv"]; G("bau").tabs.sort((a, b) => (bauOrder.indexOf(a[0]) + 1 || 99) - (bauOrder.indexOf(b[0]) + 1 || 99));
-  const rg = G("repo"); if (rg){ const r = rg.tabs.find(t => t[0] === "register"); if (r) r[1] = "Risk register snapshots"; } }
+// navigation: defined once in NAVIGATION at the end of this script
 const SUBNAV_GROUPS = { todo: "Now", hazards: "Hazards", risk: "Analysis", alerts: "My work", "bau-lenel": "Sites & systems", vcc: "Watch", "vcc-alerts": "Manage" };
 // ---------- the process bar ----------
 function flowCounts(){ const now = Date.now(), cnt = (a, f) => (a || []).filter(f).length;
@@ -13572,6 +13557,95 @@ addEventListener("resize", () => { if (UI.mode === "vcc") vclApply(); });
 .vclpre{display:inline-flex;gap:2px;margin-right:4px}.vclgrip{touch-action:none;z-index:4}.vclgrip.h{height:8px;margin:2px 0 6px;border-radius:4px;cursor:row-resize;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 10px)}
 .vclgrip.v{position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;border-radius:4px}.vclgrip:hover,.vcldrag .vclgrip{background:color-mix(in srgb,var(--teal) 60%,transparent)}
 .vcldrag{user-select:none}.vcldrag iframe,.vcldrag .leaflet-container{pointer-events:none}.vccmap{min-height:0}.vccmaphost{height:100%}`; document.head.appendChild(st); }
+
+/* =====================================================================
+   NAVIGATION — the one place the sections and tabs are defined.
+   Order follows the work: Detect (Intelligence) → Triage, Escalate,
+   Respond (Response) → Report (Stakeholders), with the command view
+   first and the supporting sections after.
+   A screen that showed the same records as another one is not a tab of
+   its own any more: it is a view inside that screen (NAV_INNER), so every
+   link, badge and process-bar step that opens it still works.
+   ===================================================================== */
+const NAV = [
+  { id: "vcc", label: "Command Centre", tabs: [["vcc", "Command view"], ["videowall", "Video wall"], ["camwall", "Camera wall"], ["cv", "Camera analytics"]] },
+  { id: "intel", label: "Intelligence", tabs: [["todo", "Watch officer to-do"], ["alertstream", "Live alert stream"], ["news", "News"],
+    ["overview", "Map & cities"], ["hazards", "Hazard watch & triggers"], ["typhoon", "Typhoons"], ["protests", "Protests"], ["disasters", "Warnings & disasters"], ["quake", "Earthquakes"], ["travel", "Travel advisories"],
+    ["risk", "Risk register"], ["stats", "Statistics & trends"]] },
+  { id: "respond", label: "Response", tabs: [["actions", "Action queue"], ["escalations", "Escalations"], ["incidents", "Incidents"], ["welfare", "Welfare checks"], ["massnotify", "Mass notification"], ["comms", "Comms"]] },
+  { id: "stake", label: "Stakeholders", tabs: [["releases", "Releases to operations"], ["sh-snap", "Executive snapshot"], ["sh-lead", "Leadership view"], ["sh-clients", "Clients"]] },
+  { id: "sentiment", label: "Sentiment", tabs: [["sent-all", "All channels"], ["social", "Social media"]] },
+  { id: "bau", label: "BAU Operations", tabs: [["alerts", "My alerts"], ["myreq", "My requests"], ["bau-dash", "Dashboard"], ["bau-lenel", "Lenel outages"], ["bau-access", "Access alarms"], ["bau-cctv", "Cameras"]] },
+  { id: "secops", label: "Security Operations", tabs: [["secops", "Security operations"], ["siteplan", "Site plan"], ["sh-secops", "Patrol officers"], ["patrol", "My patrol"]] },
+  { id: "repo", label: "Repository", tabs: [["search", "Search everything"], ["repo", "Intelligence repository"], ["opsrepo", "Operations repository"], ["myproducts", "Products sent to you"]] },
+  { id: "ask", label: "Ask PSOC", tabs: [["query", "RFI queries"], ["ai", "Chatbot"]] },
+  { id: "lead", label: "Leadership", tabs: [["lead-home", "Business impact"]] },
+  { id: "admin", label: "Administrator", tabs: [["adm-work", "Team & tasks"], ["adm-users", "Users & roles"], ["adm-people", "Personnel"], ["adm-opsop", "Operational SOP"], ["adm-audit", "Audit trail"],
+    ["adm-check", "Shift checklist"], ["adm-src", "Sources"], ["adm-sys", "System"]] },
+];
+// view inside another tab: [parent, label in the parent's switch (null = reachable from a button already on the parent)]
+const NAV_INNER = {
+  weather: ["overview", "Weather"], forecast: ["overview", "Next 48 h"], air: ["overview", "Air quality"], river: ["overview", "River flow"],
+  global: ["disasters", "Major disasters worldwide"], livenews: ["news", "Live TV"], register: ["risk", "Snapshots & baseline"],
+  trends: ["stats", "Trends & climate"], "vcc-reports": ["stats", "Threat & resilience"],
+  "sent-news": ["sent-all", "News only"], "sent-analyse": ["social", null], history: ["actions", null],
+  "vcc-alerts": ["massnotify", "Delivery & alert rules"], camsit: ["camwall", "Camera sources"], "bau-cams": ["bau-cctv", "Outage log"],
+  "adm-online": ["adm-work", "Online now"], "adm-trawl": ["adm-src", "Trawl & AI"],
+};
+const NAV_MAIN_LABEL = { overview: "All hazards", disasters: "Agency warnings", news: "Stories", risk: "Live register", stats: "Statistics", "sent-all": "All channels",
+  massnotify: "Notifications", camwall: "Camera wall", "bau-cctv": "Camera health (VMS)", "adm-work": "Team & tasks", "adm-src": "Sources" };
+{ const before = new Map(); GROUPS.forEach(g => g.tabs.forEach(t => before.set(t[0], t[1])));
+  const out = NAV.map(n => ({ id: n.id, label: n.label, tabs: n.tabs.filter(t => before.has(t[0])).map(t => [t[0], t[1]]) }));
+  Object.entries(NAV_INNER).forEach(([m, [parent]]) => { if (!before.has(m)) return; const g = out.find(x => x.tabs.some(t => t[0] === parent)); if (g) g.tabs.push([m, before.get(m)]); });
+  // anything a later module adds that isn't placed above stays reachable rather than disappearing
+  before.forEach((l, m) => { if (!out.some(g => g.tabs.some(t => t[0] === m))){ console.warn("ITE: tab not placed in NAV:", m); const g = out.find(x => x.id === "admin") || out[out.length - 1]; g.tabs.push([m, l]); } });
+  GROUPS.length = 0; out.filter(g => g.tabs.length).forEach(g => GROUPS.push(g)); }
+PSOC_ONLY_MODES.push("myreq");                                   // stakeholder placeholder, empty for PSOC staff
+Object.keys(SUBNAV_GROUPS).forEach(k => delete SUBNAV_GROUPS[k]);
+Object.assign(SUBNAV_GROUPS, { todo: "Now", overview: "Hazards", risk: "Analysis", vcc: "Watch", cv: "Detect", "bau-dash": "Sites & systems" });
+const navParent = m => NAV_INNER[m] ? NAV_INNER[m][0] : m;
+{ const _rmNav = renderModes; renderModes = function(){ _rmNav();
+    const here = navParent(UI.mode);
+    $$("#subnav .subtab").forEach(b => { const m = b.dataset.mode; if (NAV_INNER[m]){ b.style.display = "none"; return; } if (m === here) b.setAttribute("aria-pressed", "true"); });
+    const g = groupOf(UI.mode); $$("#modes .mode").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.group === g.id)));
+    // a section whose only visible tab is the one you're on doesn't need a tab row
+    const sub = $("#subnav"); if (sub && sub.style.display !== "none" && $$("#subnav .subtab").filter(b => b.style.display !== "none").length < 2) sub.style.display = "none";
+    // badges the old single-tab sections carried
+    const ask = $(`#modes .mode[data-group="ask"]`); if (ask && !ask.querySelector(".b") && !isLimited()){ const n = SHARED.queries.filter(q => !["answered", "closed"].includes(q.status)).length;
+      if (n) ask.insertAdjacentHTML("beforeend", `<span class="b t${SHARED.queries.some(q => q.status === "new" && q.pri <= "P2") ? 3 : 1}">${n}</span>`); }
+    const tr = $(`#subnav .subtab[data-mode="travel"]`); if (tr && !tr.querySelector(".b") && typeof travelUnseen === "function"){ const n = travelUnseen(); if (n) tr.insertAdjacentHTML("beforeend", `<span class="b t2">${n}</span>`); }
+    if (ME && ME.role === "ops"){ const b = $(`#modes .mode[data-group="ask"]`); if (b) b.firstChild.textContent = "Ask the PSOC"; }
+  }; }
+// the switch at the top of a screen that holds more than one view
+function navSwitch(){ const parent = navParent(UI.mode), views = Object.entries(NAV_INNER).filter(([m, [p, l]]) => p === parent && l && (!isLimited() || canSee(m)));
+  if (!views.length || (isLimited() && !canSee(parent))) return "";
+  return `<div class="innav" role="tablist" aria-label="Views">${[[parent, NAV_MAIN_LABEL[parent] || "Main"]].concat(views.map(([m, [, l]]) => [m, l])).map(([m, l]) =>
+    `<button role="tab" data-innav="${m}" aria-selected="${UI.mode === m}">${esc(l)}</button>`).join("")}</div>`; }
+{ const _rpiNav2 = renderPanelInner; renderPanelInner = function(p){ _rpiNav2(p); const sw = navSwitch(); if (sw) p.insertAdjacentHTML("afterbegin", sw); }; }
+document.addEventListener("click", e => { const b = e.target.closest("[data-innav]"); if (b && b.dataset.innav !== UI.mode) setMode(b.dataset.innav); });
+// process bar: the step lights up on the views inside its screens too
+{ const _rf = renderFlow; renderFlow = function(){ const m = UI.mode, p = navParent(m); if (p === m) return _rf(); UI.mode = p; try{ _rf(); } finally{ UI.mode = m; } }; }
+
+/* ---------- header: one menu for the occasional controls ---------- */
+{ function applyHdrMenu(){ ["testBtn", "sitesBtn", "intBtn"].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });
+    const sb = $("#setBtn"); if (sb){ sb.textContent = "⚙ Menu"; sb.setAttribute("aria-haspopup", "menu"); sb.onclick = e => { e.stopPropagation(); toggleHdrMenu(); }; } }
+  const _bootHdr = boot; boot = function(){ const r = _bootHdr.apply(this, arguments); applyHdrMenu(); return r; };
+  function toggleHdrMenu(){ const sb = $("#setBtn"); let m = $("#hdrMenu"); if (m){ m.remove(); return; }
+    const items = [["setBtnReal", "Settings", can("settings")], ["intBtn", "Integrations", can("settings")], ["sitesBtn", ($("#sitesBtn") || {}).textContent || "Sites", true], ["testBtn", "Test alarm (speaker check)", true]];
+    sb.insertAdjacentHTML("afterend", `<div id="hdrMenu" role="menu">${items.filter(i => i[2]).map(([id, l]) => `<button role="menuitem" data-hdrm="${id}">${esc(l)}</button>`).join("")}</div>`);
+    const r = sb.getBoundingClientRect(); m = $("#hdrMenu"); m.style.top = (r.bottom + 4) + "px"; m.style.left = Math.max(8, Math.min(innerWidth - 230, r.left)) + "px"; }
+  document.addEventListener("click", e => { const i = e.target.closest("[data-hdrm]"), m = $("#hdrMenu"); if (m && !e.target.closest("#hdrMenu")) m.remove(); if (!i) return; m && m.remove();
+    if (i.dataset.hdrm === "setBtnReal") openSettings(); else { const b = document.getElementById(i.dataset.hdrm); if (b && b.onclick) b.onclick(); } });
+  addEventListener("keydown", e => { if (e.key === "Escape" && $("#hdrMenu")) $("#hdrMenu").remove(); }); }
+{ const st = document.createElement("style"); st.textContent = `
+.innav{display:flex;flex-wrap:wrap;gap:2px;margin:8px 12px 0;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel);width:fit-content;max-width:calc(100% - 24px)}
+.innav button{border:0;background:transparent;color:var(--muted);font:650 12px var(--font);padding:4px 11px;border-radius:5px;cursor:pointer}
+.innav button:hover{color:var(--text)}.innav button[aria-selected="true"]{background:var(--brand);color:#fff}
+.hdr,#subnav,#flowbar,.keybar{flex-shrink:0}
+#hdrMenu{position:fixed;z-index:3000;min-width:210px;display:flex;flex-direction:column;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#hdrMenu button{text-align:left;border:0;background:transparent;color:var(--text);font:600 13px var(--font);padding:7px 10px;border-radius:5px;cursor:pointer}#hdrMenu button:hover{background:color-mix(in srgb,var(--brand) 16%,transparent)}`;
+  document.head.appendChild(st); }
+
 
 boot();
 
