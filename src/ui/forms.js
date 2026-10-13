@@ -1,7 +1,7 @@
 // The escalation form (from Watch, Inbox or Events) and the notify composer.
 import { $, $$, esc, copyText } from "../core.js";
 import { CFG } from "../config.js";
-import { SOP_REF, SITES, siteBy, siteCountries, isLive, isOffice, createEvent, decide, catFor, audit, eventLog, CITIES } from "../model.js";
+import { SOP_REF, SITES, siteBy, siteCountries, isLive, isOffice, createEvent, decide, catFor, audit, eventLog, CITIES, nearestSite } from "../model.js";
 import { dialog, closeDialog, toast, field } from "./kit.js";
 import { draftsForSignal, mailto, asHtml } from "./drafts.js";
 import { pickPoint, mapReady } from "./map.js";
@@ -22,7 +22,7 @@ export function escalateForm(pre = {}, opts = {}){
     <div class="fld wide">Affected sites <span id="efCount"></span><div class="filters" style="padding:4px 0"><input class="search" id="efFilter" placeholder="Filter by code or city"><label class="chk"><input type="checkbox" id="efAll"> all countries</label><button class="linkbtn" id="efNone" type="button">Clear</button></div><div class="checks" id="efSites" style="max-height:200px;overflow:auto"></div></div>
     ${field("Latitude", `<input id="efLat" type="number" step="any" value="${pre.lat ?? (sig && isFinite(sig.lat) ? sig.lat : "")}">`)}${field("Longitude", `<input id="efLon" type="number" step="any" value="${pre.lon ?? (sig && isFinite(sig.lon) ? sig.lon : "")}">`)}
     <div class="fld" style="justify-content:flex-end">${mapReady() ? `<button class="btn small" id="efPick" type="button">Pick on the map</button>` : ""}</div></div>
-    <p class="help" id="efSop"></p>`;
+    <p class="help" id="efNear"></p><p class="help" id="efSop"></p>`;
   dialog(opts.title || "Escalate", body, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="efGo">Open escalation</button>`, { wide: true });
   const drawSites = () => { const q = $("#efFilter").value.trim().toLowerCase(), c = $("#efCountry").value;
     const list = SITES.filter(s => (isLive(s) || isOffice(s) || chosen.has(s.code)) && (showAll || !c || s.country === c || chosen.has(s.code)) && (!q || (s.code + " " + s.city).toLowerCase().includes(q))).slice(0, 400);
@@ -30,16 +30,21 @@ export function escalateForm(pre = {}, opts = {}){
     $("#efCount").textContent = `— ${chosen.size} selected`; };
   const sop = () => { const k = $("#efCat").value, c = cadenceFor(k), t = SOP_REF[k] || {};
     $("#efSop").innerHTML = `${k === "protest" ? "Updates as it develops; no countdown. " : t.ttp ? `Updates: PSOC Manager every ${c.m} h, Intel / SLT every ${c.i} h (${esc(ttpName())}). ` : ""}<button class="linkbtn" type="button" id="efSopBtn">${esc(t.label || "")} procedure</button>`; $("#efSopBtn").onclick = () => sopDialog($("#efCat").value); };
-  drawSites(); sop(); $("#efCat").onchange = sop; $("#efCountry").onchange = drawSites; $("#efFilter").oninput = drawSites; $("#efAll").onchange = e => { showAll = e.target.checked; drawSites(); };
+  const near = () => { const la = parseFloat($("#efLat").value), lo = parseFloat($("#efLon").value), box = $("#efNear"); if (!isFinite(la) || !isFinite(lo)){ box.innerHTML = ""; return; }
+    const n = nearestSite(la, lo); if (!n){ box.innerHTML = ""; return; }
+    box.innerHTML = `Nearest site to these coordinates: <b>${esc(n.code)}</b>${n.s.city ? " (" + esc(n.s.city) + ")" : ""}, ${n.km < 10 ? n.km.toFixed(1) : Math.round(n.km)} km. ${chosen.has(n.code) ? "Already selected." : `<button class="linkbtn" type="button" id="efAddNear">Add this site</button>`}`;
+    if ($("#efAddNear")) $("#efAddNear").onclick = () => { chosen.add(n.code); if (!$("#efCountry").value) $("#efCountry").value = n.s.country || ""; drawSites(); near(); }; };
+  $("#efLat").oninput = near; $("#efLon").oninput = near;
+  drawSites(); sop(); near(); $("#efCat").onchange = sop; $("#efCountry").onchange = drawSites; $("#efFilter").oninput = drawSites; $("#efAll").onchange = e => { showAll = e.target.checked; drawSites(); };
   $("#efNone").onclick = () => { chosen.clear(); drawSites(); }; $("#efSites").onchange = e => { const i = e.target; if (i.checked) chosen.add(i.value); else chosen.delete(i.value); $("#efCount").textContent = `— ${chosen.size} selected`; };
-  if ($("#efPick")) $("#efPick").onclick = async () => { const d = $("#scrim"); d.hidden = true; toast("Click the map where the event is", "", null, null, 4000); const ll = await pickPoint(); d.hidden = false; if (ll){ $("#efLat").value = ll.lat.toFixed(5); $("#efLon").value = ll.lng.toFixed(5); } };
+  if ($("#efPick")) $("#efPick").onclick = async () => { const d = $("#scrim"); d.hidden = true; toast("Click the map where the event is", "", null, null, 4000); const ll = await pickPoint(); d.hidden = false; if (ll){ $("#efLat").value = ll.lat.toFixed(5); $("#efLon").value = ll.lng.toFixed(5); near(); } };
   $("#efGo").onclick = () => { const title = $("#efTitle").value.trim(); if (!title){ $("#efTitle").focus(); return; } const lat = parseFloat($("#efLat").value), lon = parseFloat($("#efLon").value);
     const ev = createEvent({ title, cat: $("#efCat").value, sev: $("#efSev").value, country: $("#efCountry").value, sites: [...chosen], lat: isFinite(lat) ? lat : null, lon: isFinite(lon) ? lon : null, ren: $("#efRen").value, signals: sig ? [sig.key] : [], from: opts.item ? opts.item.id : null });
     if (opts.item) decide(opts.item, "escalate", { eventId: ev.id }); closeDialog(); toast("Escalation opened", ev.title, 2); go("events", { eventSel: ev.id }); }; }
 
 export function sopDialog(cat){ const s = SOP_REF[cat] || {};
   dialog((s.label || cat) + (s.ttp ? " — " + ttpName() : " — procedure"), `<div class="ttp-body">${s.html || "No procedure recorded for this category."}</div>
-    <p class="help">${s.ttp ? `From ${esc(TTP.file || "the PULSE file")}${TTP.meta.date ? ", dated " + esc(TTP.meta.date) : ""}. Kept in this browser only.` : "This is a placeholder. Import a PULSE file under Sites to load your REN TTP; it stays in this browser."}</p>`, `<button class="btn" data-close>Close</button>`, { wide: true }); }
+    <p class="help">${s.ttp ? `${esc(ttpName())}${TTP.meta.date ? ", dated " + esc(TTP.meta.date) : ""}${TTP.builtin ? ", built in from the PULSE Master Tracker" : ", from " + esc(TTP.file)}.` : "This category is not in the REN TTP; the text is a placeholder."}</p>`, `<button class="btn" data-close>Close</button>`, { wide: true }); }
 
 export function notifyComposer(sig, opts = {}){ const ds = opts.drafts || draftsForSignal(sig);
   dialog(opts.title || "Notify", `<p class="help">Edit, then copy into the channel or open it in your email app. Nothing is sent from the console.</p>${ds.map((d, i) => `<details class="draft"${i ? "" : " open"}><summary>${esc(d.label)}<span class="s">${d.to ? "to " + esc(d.to) : ""}</span></summary>

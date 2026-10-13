@@ -1,8 +1,10 @@
 // WATCH — everything the sources report, on one map and in one feed. Hazard type is a filter, not a tab.
 import { $, esc, sgt, ago, safeUrl, copyText, trunc } from "../core.js";
-import { STATE, KINDS, CITIES, REGIONS, INBOX, METRO, HISTORY, isLiveKey, siteBy, airFor, signalBy, addManualItem, wmo } from "../model.js";
+import { STATE, KINDS, CITIES, REGIONS, INBOX, METRO, HISTORY, isLiveKey, siteBy, airFor, signalBy, addManualItem, wmo, who, audit } from "../model.js";
 import { briefFor } from "./brief.js";
 import { mountTV } from "./tv.js";
+import { summaryHtml } from "./summary.js";
+import { emit, load, save } from "../core.js";
 import { MODEL_NAME, outlook, outlookCached } from "../sources/conditions.js";
 import { CFG } from "../config.js";
 import { roman, magLabel, mmiWord, QSTATE, saveQ } from "../sources/quakes.js";
@@ -30,11 +32,16 @@ function draw(p){ const sel = UI.watchSel && signalBy(UI.watchSel);
   const base = STATE.list.filter(s => UI.watchAll || touches(s)), kinds = Object.keys(KINDS).filter(k => base.some(s => s.kind === k)), list = visible();
   const mode = MODES[UI.watchMode] ? UI.watchMode : "feed";
   p.innerHTML = `<div class="ph"><h1>Watch</h1><div class="seg" role="group" aria-label="View">${Object.entries(MODES).map(([k, l]) => `<button data-wmode="${k}" aria-pressed="${mode === k}">${l}</button>`).join("")}</div>
-      <div class="sum">${mode === "cities" ? `Conditions in ${CITIES.length} cities: weather now, next 48 hours, air, river, and hazards in force.` : mode === "history" ? `Everything that touched our sites in the last 7 days, kept after it ends so a missed alert isn't a lost one.` : mode === "tv" ? "" : `${list.length} ${UI.watchAll ? "reports" : "reports touching our sites"} from ${Object.values(STATE.feeds).filter(f => f.ok).length} working sources. Anything that needs a decision is already in the Inbox.`}</div></div>
-    ${mode === "cities" ? citiesHtml() : mode === "history" ? historyHtml() : mode === "tv" ? tvHtml() : `<div class="filters">${kinds.map(k => `<button class="fchip" data-wkind="${k}" aria-pressed="${UI.watchKinds.includes(k)}">${esc(KINDS[k].label)}<b>${base.filter(s => s.kind === k).length}</b></button>`).join("")}</div>
+      <div class="sum">${mode === "cities" ? `Conditions in ${CITIES.length} cities: weather now, next 48 hours, air, river, and hazards in force.` : mode === "history" ? `Everything that touched our sites in the last 7 days, kept after it ends so a missed alert isn't a lost one.` : mode === "tv" || mode === "summary" ? "" : `${list.length} ${UI.watchAll ? "reports" : "reports touching our sites"} from ${Object.values(STATE.feeds).filter(f => f.ok).length} working sources. Anything that needs a decision is already in the Inbox.`}</div></div>
+    ${mode === "cities" ? citiesHtml() : mode === "history" ? historyHtml() : mode === "tv" ? tvHtml() : mode === "summary" ? summaryHtml() : `<div class="filters">${kinds.map(k => `<button class="fchip" data-wkind="${k}" aria-pressed="${UI.watchKinds.includes(k)}">${esc(KINDS[k].label)}<b>${base.filter(s => s.kind === k).length}</b></button>`).join("")}</div>
     <div class="filters"><input class="search" type="search" placeholder="Search the feed" value="${esc(UI.q)}" data-wq><select class="search" data-wsort aria-label="Sort" style="width:auto">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}"${(UI.watchSort || "tier") === k ? " selected" : ""}>${l}</option>`).join("")}</select><label class="chk" style="font-size:12.5px;color:var(--muted)"><input type="checkbox" data-wall${UI.watchAll ? " checked" : ""}> Include reports that don't touch our sites</label></div>
-    <div class="scroll">${list.slice(0, 300).map(rowHtml).join("") || `<div class="empty"><b>Nothing is touching our sites right now.</b>${STATE.list.length ? `${STATE.list.length} reports elsewhere — tick “Include reports that don't touch our sites” to see them.` : "Sources are loading."}</div>`}</div>`}`; }
-const MODES = { feed: "Feed", cities: "Cities", history: "History", tv: "Live TV" };
+    <div class="scroll">${list.slice(0, 300).map(rowHtml).join("") || `<div class="empty"><b>Nothing is touching our sites right now.</b>${STATE.list.length ? `${STATE.list.length} reports elsewhere — tick “Include reports that don't touch our sites” to see them.` : "Sources are loading."}</div>`}${allClear()}</div>`}`; }
+// agencies that answered and have nothing in force: a missed warning and a quiet agency look the same unless said
+function allClear(){ if (UI.watchKinds.length && !UI.watchKinds.includes("warning")) return ""; const quiet = SOURCES.filter(x => x.group === "Official warnings" && (STATE.feeds[x.id] || {}).ok && !STATE.list.some(sg => sg.src === x.id));
+  return quiet.length ? `<p class="help" style="padding:10px 16px">Checked and clear: ${quiet.map(x => esc(x.name)).join(", ")}.</p>` : ""; }
+const MODES = { feed: "Feed", summary: "Summary", cities: "Cities", history: "History", tv: "Live TV" };
+const NOTES = load("notes", {});    // officers' notes on any report, by report key
+const CSORT = { region: "By region", tier: "Most serious first", hot: "Hottest first", rain: "Most rain first", air: "Worst air first" };
 function historyHtml(){ const q = UI.q.trim().toLowerCase(), list = HISTORY.filter(h => (!UI.watchKinds.length || UI.watchKinds.includes(h.kind)) && (!q || (h.title + " " + h.area + " " + h.cities.join(" ")).toLowerCase().includes(q)));
   return `<div class="filters"><input class="search" type="search" placeholder="Search the history" value="${esc(UI.q)}" data-wq></div>
     <div class="scroll">${list.slice(0, 400).map(h => { const live = isLiveKey(h.key);
@@ -61,19 +68,27 @@ function detail(s){ const e = s.extra || {}, item = INBOX.find(i => i.key === "s
     ${item && item.status !== "open" ? `<p class="help">Inbox: ${esc(item.decision)} by ${esc(item.by || "")} ${esc(ago(item.decidedAt))}${item.reason ? " — " + esc(item.reason) : ""}.</p>` : ""}
     ${qs ? `<div class="sec"><h3>Welfare at sites</h3><p class="help">Tick sites where personnel felt shaking or reported damage; the welfare update wording follows.</p>
       <table class="tbl"><tr><th>Site</th><th>Shaking felt</th><th>Damage</th></tr>${s.sites.slice(0, 20).map(x => `<tr><td>${esc(x.code)}</td><td><input type="checkbox" data-qshake="${esc(x.code)}"${(qs.shaking || []).includes(x.code) ? " checked" : ""}></td><td><input type="checkbox" data-qdmg="${esc(x.code)}"${(qs.damage || []).includes(x.code) ? " checked" : ""}></td></tr>`).join("")}</table></div>` : ""}
+    ${/^gdelt/.test(s.src) ? `<p class="help">News coverage found by GDELT, classified from the headline: not an official or verified report. Open the article and corroborate before acting. Article counts reflect news volume, not crowd size.</p>` : s.src === "acled" ? `<p class="help">ACLED researched event, published weekly; it describes what happened, not what is planned.</p>` : ""}
     ${s.kind === "cyclone" ? stormTiming(s) : ""}
+    <div class="sec"><h3>Notes</h3>${(NOTES[s.key] || []).map(n => `<p class="prose"><span class="help">${esc(sgt(n.t))} · ${esc(n.by)}</span><br>${esc(n.m)}</p>`).join("")}<form class="note" data-wnote><input placeholder="Add a note to this report" aria-label="Add a note"><button class="btn small">Add</button></form></div>
     <div class="sec"><h3>Sites ${s.sites.length ? `(${s.sites.length})` : ""}</h3>${s.kind === "cyclone" && s.sites.length ? `<p class="help">Timing for each site is above.</p>` : siteRows ? `<table class="tbl"><tr><th>Site</th><th>City</th><th>Distance</th><th></th></tr>${siteRows}</table>` : `<p class="help">No tracked site in range.${s.near ? ` Nearest: ${esc(s.near.code)}, ${Math.round(s.near.km)} km.` : ""}</p>`}</div></div>`; }
 
 // per site: when damaging winds arrive and leave, and when the centre is closest (hourly along the forecast track)
 const RISK = { direct: ["In the path", 3], possible: ["May be affected", 2], watch: ["Worth watching", 1] };
 function stormTiming(s){ const t = x => x ? esc(sgt(x)) : "—", rows = s.sites.slice(0, 60);
   if (!rows.length) return ""; const first = rows.filter(x => x.level !== "watch" && x.at).sort((a, b) => a.at - b.at)[0];
-  return `<div class="sec"><h3>What to expect at our sites</h3>${first ? `<p class="prose">Damaging winds first reach <b>${esc(first.code)}</b> around <b>${t(first.at)} SGT</b>. Times follow the official forecast track hour by hour and move as each new advisory is issued.</p>` : `<p class="help">No site is forecast inside the damaging-wind area; sites listed are within watch range.</p>`}
+  const pts = [s.extra.storm.now].concat(s.extra.storm.fc || []), last = Math.max(0, ...pts.map(p => p.h || 0)), h = Math.min(UI.tcHour || 0, last);
+  const play = last ? `<div class="tcplay"><label for="tcR" class="help">Forecast position: <b id="tcL">${h ? "+" + h + " h, " + esc(sgt(Date.now() + h * 3600e3)) + " SGT" : "now"}</b></label><input type="range" id="tcR" min="0" max="${last}" step="1" value="${h}" data-tcr></div>` : "";
+  return `<div class="sec"><h3>What to expect at our sites</h3>${play}${first ? `<p class="prose">Damaging winds first reach <b>${esc(first.code)}</b> around <b>${t(first.at)} SGT</b>. Times follow the official forecast track hour by hour and move as each new advisory is issued.</p>` : `<p class="help">No site is forecast inside the damaging-wind area; sites listed are within watch range.</p>`}
     <table class="tbl"><tr><th>Site</th><th>Risk</th><th>Damaging winds (SGT)</th><th>Closest</th><th>Closest at (SGT)</th></tr>${rows.map(x => { const st = siteBy(x.code) || {}, r = RISK[x.level] || [x.level, 0];
       return `<tr${x.level === "direct" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button><div class="help">${esc(st.city || "")}</div></td><td><span class="tierword t${r[1]}">${esc(r[0])}</span></td><td>${x.level === "watch" ? "—" : t(x.at) + (x.open ? " to the end of the forecast" : x.until && x.until !== x.at ? " to " + t(x.until) : "")}</td><td>${Math.round(x.km)} km</td><td>${t(x.closestAt)}</td></tr>`; }).join("")}</table></div>`; }
+function cityOrder(){ const k = UI.citySort || "region", sc = n => STATE.scores[n] || { tier: 0, parts: {} }, w = n => STATE.city.wx[n] || {}, a = n => airFor(n) || {};
+  const f = { tier: (x, y) => sc(y.name).tier - sc(x.name).tier, hot: (x, y) => ((w(y.name).current || {}).temperature_2m ?? -99) - ((w(x.name).current || {}).temperature_2m ?? -99),
+    rain: (x, y) => ((w(y.name).daily || {}).precipitation_sum || [0])[0] - ((w(x.name).daily || {}).precipitation_sum || [0])[0], air: (x, y) => (a(y.name).aqi ?? -1) - (a(x.name).aqi ?? -1) }[k];
+  return f ? CITIES.slice().sort(f) : null; }
 function citiesHtml(){ const cell = (p, cls) => p ? `<span class="c t${p.tier} ${cls}" title="${esc(p.text)}">${esc(p.value)}</span>` : `<span class="c ${cls}">—</span>`;
-  return `<div class="scroll"><div class="cityhead"><span></span><span>City</span><span>Weather</span><span>Next 48 h</span><span>Air</span><span class="x4">River</span><span class="x5">Hazards</span></div>
-    ${REGIONS.map(r => `<div class="region">${esc(r)}</div>${CITIES.filter(c => c.region === r).map(c => { const sc = STATE.scores[c.name] || { tier: 0, parts: {} }, P = sc.parts;
+  return `<div class="filters"><select class="search" data-csort aria-label="Order" style="width:auto">${Object.entries(CSORT).map(([k, l]) => `<option value="${k}"${(UI.citySort || "region") === k ? " selected" : ""}>${l}</option>`).join("")}</select></div><div class="scroll"><div class="cityhead"><span></span><span>City</span><span>Weather</span><span>Next 48 h</span><span>Air</span><span class="x4">River</span><span class="x5">Hazards</span></div>
+    ${(cityOrder() ? [[null, cityOrder()]] : REGIONS.map(r => [r, CITIES.filter(c => c.region === r)])).map(([r, list]) => `${r ? `<div class="region">${esc(r)}</div>` : ""}${list.map(c => { const sc = STATE.scores[c.name] || { tier: 0, parts: {} }, P = sc.parts;
       return `<button class="city" data-wcity="${esc(c.name)}"><span class="bar t${sc.tier}"></span><span class="n">${esc(c.name)}</span>${cell(P.weather, "")}${cell(P.forecast, "")}${cell(P.air, "")}${cell(P.river, "x4")}${P.hazards && P.hazards.list.length ? `<span class="c t${P.hazards.tier} x5">${P.hazards.list.length} in force</span>` : `<span class="c x5">none</span>`}</button>`; }).join("")}`).join("")}</div>`; }
 const SEASON = { dust: { cities: ["Tokyo", "Osaka", "Seoul", "Busan"], months: [2, 3, 4], text: "Spring Asian dust (kosa / hwangsa), March to May, often mixed with PM2.5 from across the region. It is PM10-led, so read PM10 alongside the AQI." },
   smoke: { cities: ["Sydney", "Melbourne", "Canberra", "Perth", "Auckland"], months: [11, 0, 1], text: "Bushfire smoke and inland dust, December to February." } };
@@ -98,16 +113,19 @@ export function mapSpec(){ const s = UI.watchSel && signalBy(UI.watchSel);
   if (UI.watchMode === "cities" && !s){ const c = UI.watchCity && CITIES.find(x => x.name === UI.watchCity);
     return { points: CITIES.map(x => ({ lat: x.lat, lon: x.lon, tier: (STATE.scores[x.name] || {}).tier || 0, label: x.name, on: c === x, go: () => go("watch", { watchCity: x.name }) })),
       signals: c ? STATE.list.filter(x => x.cities.includes(c.name) && x.kind !== "news") : [], hitSites: c ? (METRO[c.name] || []).map(x => x.code) : [], fitKey: c ? "c:" + c.name : "" }; }
-  const list = visible();
-  return { signals: list.slice(0, 400), selected: UI.watchSel, hitSites: s ? s.sites.map(x => x.code) : [], fitKey: s ? "w:" + s.key : "", tracks: true }; }
+  const list = visible(), rings = [];
+  if (s && s.kind === "cyclone" && UI.tcHour){ const st = s.extra.storm, pts = [st.now].concat(st.fc || []), h = UI.tcHour, i = pts.findIndex(p => (p.h || 0) >= h), b = pts[Math.max(0, i)], a = pts[Math.max(0, i - 1)] || b, f = b.h === a.h ? 0 : (h - (a.h || 0)) / ((b.h || 0) - (a.h || 0));
+    if (i >= 0){ const L = (x, y) => (x || 0) + ((y || 0) - (x || 0)) * f; rings.push({ lat: L(a.lat, b.lat), lon: L(a.lon, b.lon), km: L(a.stormKm, b.stormKm) || 30, label: `Forecast +${h} h: damaging winds` }); } }
+  return { signals: list.slice(0, 400), selected: UI.watchSel, hitSites: s ? s.sites.map(x => x.code) : [], fitKey: s ? "w:" + s.key : "", tracks: true, rings }; }
 
-export function bind(p, rerender){ p.onclick = async e => { const t = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site],[data-wbrief],[data-whist],[data-tv],[data-woutlook]"); if (!t) return; const d = t.dataset;
+export function bind(p, rerender){ p.onclick = async e => { const t = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site],[data-wbrief],[data-whist],[data-tv],[data-woutlook],[data-wkindgo]"); if (!t) return; const d = t.dataset;
     if (d.wsel){ UI.watchSel = d.wsel; UI.watchCity = null; saveUI(); rerender(); p.scrollTop = 0; return; }
     if (d.wback !== undefined){ UI.watchSel = null; saveUI(); rerender(); return; }
     if (d.wkind){ const k = d.wkind; UI.watchKinds = UI.watchKinds.includes(k) ? UI.watchKinds.filter(x => x !== k) : UI.watchKinds.concat(k); saveUI(); rerender(); return; }
     if (d.wmode){ UI.watchMode = d.wmode; UI.watchSel = null; UI.watchCity = null; saveUI(); rerender(); return; }
     if (d.wcity){ UI.watchCity = d.wcity; saveUI(); rerender(); return; } if (d.wcityback !== undefined){ UI.watchCity = null; saveUI(); rerender(); return; }
     if (d.goinbox){ go("inbox", { inboxSel: d.goinbox }); return; } if (d.site){ go("sites", { siteSel: d.site }); return; }
+    if (d.wkindgo){ UI.watchMode = "feed"; UI.watchKinds = [d.wkindgo]; UI.watchSel = null; saveUI(); rerender(); return; }
     if (d.woutlook){ const c = CITIES.find(x => x.name === d.woutlook), box = p.querySelector("#outlook"); t.textContent = "Loading…";
       try{ const o = await outlook(c); if (box) box.innerHTML = outlookHtml(o); t.remove(); }catch(err){ if (box) box.innerHTML = `<p class="help">The outlook could not load (${esc(err.message)}).</p>`; t.textContent = "Try again"; } return; }
     if (d.whist){ if (isLiveKey(d.whist)){ UI.watchSel = d.whist; UI.watchMode = "feed"; saveUI(); rerender(); return; } const h = HISTORY.find(x => x.key === d.whist); if (!h) return;
@@ -119,7 +137,10 @@ export function bind(p, rerender){ p.onclick = async e => { const t = e.target.c
     if (d.wbrief !== undefined){ const ok = await copyText(briefFor(s)); t.textContent = ok ? "Copied" : "Copy failed"; }
     if (d.wadd !== undefined){ const i = addManualItem({ title: s.title, tier: s.tier, pri: s.tier >= 3 ? "P1" : s.tier === 2 ? "P2" : "P3", kind: s.kind }); i.key = "sig:" + s.key; i.sigKey = s.key; toast("Added to the Inbox", s.title, s.tier); rerender(); } };
   p.oninput = e => { if (e.target.matches("[data-wq]")){ UI.q = e.target.value; saveUI(); clearTimeout(p._t); p._t = setTimeout(() => { const pos = e.target.selectionStart; rerender(); const i = p.querySelector("[data-wq]"); if (i){ i.focus(); i.setSelectionRange(pos, pos); } }, 250); } };
-  p.onchange = e => { const t = e.target; if (t.matches("[data-wall]")){ UI.watchAll = t.checked; saveUI(); rerender(); } if (t.matches("[data-wsort]")){ UI.watchSort = t.value; saveUI(); rerender(); }
+  p.onsubmit = e => { if (!e.target.matches("[data-wnote]")) return; e.preventDefault(); const i = e.target.querySelector("input"), v = i.value.trim(); if (!v || !UI.watchSel) return;
+    (NOTES[UI.watchSel] = NOTES[UI.watchSel] || []).push({ t: Date.now(), by: who(), m: v }); save("notes", NOTES); audit("Note added", (signalBy(UI.watchSel) || {}).title || UI.watchSel, v); rerender(); };
+  if (!p._tcr) p._tcr = true, p.addEventListener("input", e => { if (!e.target.matches("[data-tcr]")) return; UI.tcHour = +e.target.value; saveUI(); const l = p.querySelector("#tcL"); if (l) l.textContent = UI.tcHour ? `+${UI.tcHour} h, ${sgt(Date.now() + UI.tcHour * 3600e3)} SGT` : "now"; emit("map"); });
+  p.onchange = e => { const t = e.target; if (t.matches("[data-wall]")){ UI.watchAll = t.checked; saveUI(); rerender(); } if (t.matches("[data-csort]")){ UI.citySort = t.value; saveUI(); rerender(); } if (t.matches("[data-wsort]")){ UI.watchSort = t.value; saveUI(); rerender(); }
     const s = signalBy(UI.watchSel); if (s && (t.dataset.qshake || t.dataset.qdmg)){ const st = QSTATE[s.id] = QSTATE[s.id] || {}, k = t.dataset.qshake ? "shaking" : "damage", c = t.dataset.qshake || t.dataset.qdmg;
       st[k] = (st[k] || []).filter(x => x !== c).concat(t.checked ? [c] : []); saveQ(); } }; }
 

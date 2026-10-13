@@ -1,10 +1,11 @@
 // The one data model. Every source produces SIGNALS; rules turn the ones that touch our sites into
 // INBOX items; a decision on an Inbox item can open an EVENT (an escalation with timers);
 // events and the live picture feed REPORTS. Everything a person does is written to the AUDIT trail.
-import { load, save, km, nid, hash, emit, inAPAC } from "./core.js";
+import { load, save, km, nid, hash, emit, inAPAC, sgt } from "./core.js";
 import { CFG } from "./config.js";
 import CITIES_JSON from "./data/cities.json";
 import DEMO_SITES from "./data/demo-sites.json";
+import DEMO_CONTACTS from "./data/demo-contacts.json";
 import SOP from "./data/sop.json";
 import { cadenceFor, ttpName } from "./ttp.js";
 
@@ -28,17 +29,18 @@ export const auditLog = () => AUDIT;
 
 /* ---------- sites ---------- */
 export const LIVE = ["OPERATIONAL", "DEPLOYMENT", "SECURITY LOCK DOWN"];
-export let SITES = load("sites", null) || DEMO_SITES.map(s => Object.assign({}, s));
-export let SITES_META = load("sitesMeta", { source: "Demo sites (fictional)", at: null, demo: true });
-export let CONTACTS = load("contacts", { sites: {}, offices: {}, at: 0, file: "" });
+// The estate is fictional by design: PULSE-style codes and classes at made-up positions in each metro, plus any
+// sites an officer adds by hand. Real site lists and contacts are never loaded into this console.
+export let SITES = DEMO_SITES.map(s => Object.assign({}, s)).concat(load("manualSites", []));
+export let SITES_META = { source: "the fictional estate", at: null, demo: true };
+export const CONTACTS = DEMO_CONTACTS;
 export const isLive = s => LIVE.includes(s.status);
 export const isOffice = s => s.cls === "OFFICE";
 export const isBuild = s => s.status === "CONSTRUCTION";
 const CITY_ALIAS = { Bangalore: "Bengaluru", Delhi: "New Delhi", Saigon: "Ho Chi Minh City", Gurgaon: "New Delhi", Gurugram: "New Delhi", Noida: "New Delhi" };
 export function metroOf(s){ const c = CITY_ALIAS[s.city] || (s.city || "").trim(); if (CITIES.some(m => m.name === c)) return c;
   if (!isFinite(s.lat)) return null; let best = null; CITIES.forEach(m => { const d = km(m.lat, m.lon, s.lat, s.lon); if (d < 120 && (!best || d < best.d)) best = { n: m.name, d }; }); return best ? best.n : null; }
-export function setSites(list, meta){ SITES = list; SITES_META = meta; save("sites", SITES); save("sitesMeta", SITES_META); rebuildMetros(); emit("sites"); }
-export function setContacts(c){ CONTACTS = c; save("contacts", CONTACTS); emit("sites"); }
+export function setSites(list){ SITES = list; rebuildMetros(); emit("sites"); }
 export const contactFor = s => (CONTACTS.sites || {})[s.code] || null;
 export let METRO = {};
 export function rebuildMetros(){ METRO = {}; CITIES.forEach(c => { METRO[c.name] = []; }); SITES.forEach(s => { s.metro = metroOf(s); if (s.metro) METRO[s.metro].push(s); }); }
@@ -167,8 +169,8 @@ export function timers(ev, now = Date.now()){
 export const openEvents = () => EVENTS.filter(e => e.status !== "closed").sort((a, b) => timers(a).rank - timers(b).rank || a.sev.localeCompare(b.sev) || a.created - b.created);
 export function eventLog(ev, m, kind){ ev.log.push({ t: Date.now(), by: who(), m, kind }); ev.updatedAt = Date.now(); saveEvents(); emit("data"); }
 export function setRen(ev, ren){ ev.ren = ren; if (ren === "issued" && ev.timer === "awaiting"){ ev.timer = "running"; ev.last12 = ev.last24 = Date.now(); } eventLog(ev, "Event notice: " + REN[ren].toLowerCase() + (ren === "issued" ? ". Update timers started." : ".")); audit("Event notice " + ren, ev.title); }
-export function resetTimer(ev, which){ const now = Date.now(); if (which !== "24") ev.last12 = now; if (which !== "12") ev.last24 = now; if (ev.timer === "awaiting") ev.timer = "running";
-  const c = cad(ev); ev.notified = false; eventLog(ev, which === "12" ? `PSOC Manager update sent — ${c.m} h timer reset.` : which === "24" ? `Intel / SLT update sent — ${c.i} h timer reset.` : "Update sent — both timers reset.", "update"); audit("Escalation update", ev.title, which); }
+export function resetTimer(ev, which, at){ const now = at || Date.now(); if (which !== "24") ev.last12 = now; if (which !== "12") ev.last24 = now; if (ev.timer === "awaiting") ev.timer = "running";
+  const c = cad(ev); ev.notified = false; eventLog(ev, (which === "12" ? `PSOC Manager update sent — ${c.m} h timer reset` : which === "24" ? `Intel / SLT update sent — ${c.i} h timer reset` : "Update sent — both timers reset") + (at ? ` (sent at ${sgt(at)} SGT)` : "") + ".", "update"); audit("Escalation update", ev.title, which); }
 export function setCheck(ev, key, on, label){ ev.checks = ev.checks || {}; if (on) ev.checks[key] = { at: Date.now(), by: who() }; else delete ev.checks[key]; eventLog(ev, `${on ? "Done" : "Un-ticked"}: ${label}`, "check"); }
 export function setWelfare(ev, code, status, note){ ev.welfare[code] = { status, note: note || "", at: Date.now(), by: who() }; eventLog(ev, `Welfare ${code}: ${status}${note ? " — " + note : ""}`, "welfare"); }
 export function closeEvent(ev, summary){ ev.status = "closed"; ev.closed = { at: Date.now(), by: who(), summary }; eventLog(ev, "Closed. " + (summary || "")); audit("Escalation closed", ev.title, summary); }
@@ -183,16 +185,13 @@ export function deleteReport(id){ REPORTS = REPORTS.filter(r => r.id !== id); sa
 export function feedResult(id, patch){ const f = STATE.feeds[id] = Object.assign(STATE.feeds[id] || {}, patch);
   if (patch.ok === false) f.failSince = f.failSince || patch.at || Date.now(); else if (patch.ok) f.failSince = null; emit("feeds"); }
 
-/* ---------- first start: the current console's sites and open escalations ---------- */
+/* ---------- first start: the current console's open escalations (its sites are not brought over) ---------- */
 export function migrateData(loadRaw){
   if (load("migratedData", false)) return []; const out = [];
-  const oldSites = loadRaw("psoc.uni.sites.v1", null), oldMeta = loadRaw("psoc.uni.sitesmeta.v1", null);
-  if (Array.isArray(oldSites) && oldSites.length && !(oldMeta && /built-in/i.test(oldMeta.source || "") && oldSites.every(s => s.src === "DEMO" || s.src === "OFFICE"))){
-    setSites(oldSites.map(s => ({ code: s.code, name: s.name || "", city: s.city || "", country: s.country || "", region: s.region || "", cls: s.cls, status: s.status, lat: s.lat, lon: s.lon })), { source: (oldMeta && oldMeta.source) || "current console", at: Date.now(), demo: false }); out.push(oldSites.length + " sites"); }
-  const dci = loadRaw("psoc.uni.dci.v1", null); if (dci && dci.sites && Object.keys(dci.sites).length){ setContacts(dci); out.push(Object.keys(dci.sites).length + " site contacts"); }
   const oldEv = loadRaw("psoc.uni.events.v1", []).filter(e => e.status !== "closed");
   oldEv.forEach(d => { const t = x => (x ? new Date(x).getTime() : Date.now());
-    EVENTS.push({ id: d.id || nid("ev"), title: d.desc || "Imported escalation", cat: SOP[d.cat] ? d.cat : "weather", sev: d.sev || "P3", country: d.country || "", sites: d.sites || [], lat: d.eventLat ?? null, lon: d.eventLon ?? null,
+    const known = (d.sites || []).filter(c => SITES.some(x => x.code === c));   // only the fictional estate's codes come across
+    EVENTS.push({ id: d.id || nid("ev"), title: d.desc || "Imported escalation", cat: SOP[d.cat] ? d.cat : "weather", sev: d.sev || "P3", country: d.country || "", sites: known, lat: d.eventLat ?? null, lon: d.eventLon ?? null,
       ren: ["assess", "issued", "none"].includes(d.ren) ? d.ren : "assess", timer: d.timerMode === "awaiting" ? "awaiting" : "running", created: t(d.created || d.last), last12: t(d.last12 || d.last), last24: t(d.last24 || d.last),
       status: "active", signals: [], welfare: {}, comms: [], log: (d.log || []).map(l => ({ t: t(l.t), by: l.by || "", m: l.m || "" })).concat([{ t: Date.now(), by: "system", m: "Brought over from the current console." }]) }); });
   if (oldEv.length){ saveEvents(); out.push(oldEv.length + " open escalations"); }

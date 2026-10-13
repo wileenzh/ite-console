@@ -1,5 +1,5 @@
 // EVENTS — every escalation is one record: its update timers, event notice, who has been told, welfare at each site, and the log.
-import { $, esc, sgt, ago, dur, copyText } from "../core.js";
+import { $, esc, sgt, ago, dur, copyText, download, toSgtInput, fromSgtInput } from "../core.js";
 import { EVENTS, SOP_REF, REN, IMMEDIATE, openEvents, timers, cad, applyCadence, setCheck, setRen, resetTimer, setWelfare, closeEvent, reopenEvent, eventLog, saveEvents, siteBy, contactFor, signalBy, saveReport, audit, PRI } from "../model.js";
 import { UI, saveUI, go } from "./state.js";
 import { priChip, when, dialog, closeDialog, toast, field, confirmBox } from "./kit.js";
@@ -15,11 +15,14 @@ export function timerText(ev){ const t = timers(ev);
   return next < 0 ? `<span class="late">${which} overdue ${esc(dur(-next))}</span>` : `${which} due in ${t.state === "duesoon" ? `<span class="soon">${esc(dur(next))}</span>` : esc(dur(next))}`; }
 
 export function render(p){ const ev = UI.eventSel && EVENTS.find(e => e.id === UI.eventSel); if (ev) return p.innerHTML = detail(ev);
-  const open = openEvents(), closed = EVENTS.filter(e => e.status === "closed").sort((a, b) => b.closed.at - a.closed.at).slice(0, 50), c = count();
+  const q = (UI.eventQ || "").trim().toLowerCase(), f = UI.eventF || "open", c = count(), match = e => !q || (e.title + " " + e.country + " " + catLabel(e.cat) + " " + e.sites.join(" ")).toLowerCase().includes(q);
+  const open = openEvents().filter(match), closed = EVENTS.filter(e => e.status === "closed" && match(e)).sort((a, b) => b.closed.at - a.closed.at).slice(0, 100);
+  const list = f === "overdue" ? open.filter(e => timers(e).state === "overdue") : f === "closed" ? closed : f === "all" ? open.concat(closed) : open;
   p.innerHTML = `<div class="ph"><h1>Events</h1><button class="btn small primary" data-enew>New escalation</button>
-      <div class="sum">${open.length ? `${open.length} open${c.over ? `, <span class="late">${c.over} with an update overdue</span>` : ""}${c.soon ? `, <span class="soon">${c.soon} due within the hour</span>` : ""}. Most urgent first.` : "No open escalations."}</div></div>
-    <div class="scroll">${open.map(rowHtml).join("") || `<div class="empty"><b>No open escalations.</b>Escalate from the Inbox, or start one with “New escalation”.</div>`}
-      <div class="region"><button class="linkbtn" data-eclosed>${UI.eventShowClosed ? "Hide" : "Show"} closed (${closed.length})</button></div>${UI.eventShowClosed ? closed.map(rowHtml).join("") : ""}</div>`; }
+      <div class="sum">${c.n ? `${c.n} open${c.over ? `, <span class="late">${c.over} with an update overdue</span>` : ""}${c.soon ? `, <span class="soon">${c.soon} due within the hour</span>` : ""}. Most urgent first.` : "No open escalations."}</div></div>
+    <div class="filters"><div class="seg" role="group" aria-label="Show">${[["open", "Open"], ["overdue", "Overdue"], ["closed", "Closed"], ["all", "All"]].map(([k, l]) => `<button data-ef="${k}" aria-pressed="${f === k}">${l}</button>`).join("")}</div>
+      <input class="search" type="search" placeholder="Search events" value="${esc(UI.eventQ || "")}" data-eq style="width:200px"><button class="linkbtn" data-eexport>Export</button><button class="linkbtn" data-eimport>Import</button></div>
+    <div class="scroll">${list.map(rowHtml).join("") || `<div class="empty"><b>${f === "open" && !q ? "No open escalations." : "No events match."}</b>${f === "open" && !q ? "Escalate from the Inbox, or start one with “New escalation”." : ""}</div>`}</div>`; }
 function rowHtml(ev){ const t = timers(ev), w = Object.values(ev.welfare || {}), tier = t.state === "overdue" ? 3 : t.state === "duesoon" ? 2 : ev.status === "closed" ? 0 : PRI[ev.sev].tier;
   return `<button class="row" data-esel="${esc(ev.id)}"><span class="bar t${tier}"></span><span><span class="tt">${priChip(ev.sev)}${esc(ev.title)}</span>
     <div class="mt">${esc(catLabel(ev.cat))}${ev.country ? " · " + esc(ev.country) : ""} · event notice ${esc(REN[ev.ren].toLowerCase())} · opened ${when(ev.created)}</div></span>
@@ -33,7 +36,7 @@ function procedure(ev, ck, closed){ const checks = ev.checks || {}, all = [["clo
     ${all.filter(([, , l]) => l.length).map(([k, h, l]) => `<details class="proc"${k === "close" ? " open" : ""}><summary>${esc(h)} <span class="help">${l.filter((x, i) => checks[k + i]).length}/${l.length}</span></summary>
       ${l.map((x, i) => { const c = checks[k + i]; return `<label class="chk"><input type="checkbox" data-eck="${k + i}" data-ecl="${esc(x)}"${c ? " checked" : ""}${closed ? " disabled" : ""}> <span>${esc(x)}${c ? ` <span class="help">— ${esc(c.by)} ${esc(ago(c.at))}</span>` : ""}</span></label>`; }).join("")}</details>`).join("")}</div>`; }
 function detail(ev){ const t = timers(ev), c = cad(ev), ck = checklistFor(ev.cat), closed = ev.status === "closed", sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
-  const tm = (label, d, st, total, which) => `<div class="timer ${st}"><div class="l">${label}</div><div class="v">${d < 0 ? "overdue " + dur(-d) : dur(d)}</div><div class="help">${d < 0 ? "was due" : "due"} ${esc(sgt(Date.now() + d))} SGT</div><div class="gauge"><i style="width:${gauge(d, total)}%"></i></div><button class="btn small" data-etimer="${which}">${label.split(" ")[0] === "PSOC" ? "Manager update sent" : "Intel / SLT update sent"}</button></div>`;
+  const tm = (label, d, st, total, which) => `<div class="timer ${st}"><div class="l">${label}</div><div class="v">${d < 0 ? "overdue " + dur(-d) : dur(d)}</div><div class="help">${d < 0 ? "was due" : "due"} ${esc(sgt(Date.now() + d))} SGT</div><div class="gauge"><i style="width:${gauge(d, total)}%"></i></div><button class="btn small" data-etimer="${which}">${label.split(" ")[0] === "PSOC" ? "Manager update sent" : "Intel / SLT update sent"}</button> <button class="linkbtn" data-etimeat="${which}">sent earlier?</button></div>`;
   const welfare = ev.sites.map(code => { const s = siteBy(code) || { code }, c = contactFor(s) || {}, w = ev.welfare[code] || {};
     return `<tr${w.status === "impacted" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(code)}">${esc(code)}</button><div class="help">${esc(s.city || "")}</div></td><td>${c.socPhone ? `<a href="tel:${esc(String(c.socPhone).replace(/[^\d+]/g, ""))}">${esc(c.socPhone)}</a>` : `<span class="help">no number</span>`}${c.siteSecurityMgr ? `<div class="help">${esc(c.siteSecurityMgr)}</div>` : ""}</td>
       <td><select class="wsel" data-ewel="${esc(code)}"${closed ? " disabled" : ""}>${[["", "Not checked"], ["safe", "Safe, no impact"], ["impacted", "Impacted"], ["noanswer", "No answer"]].map(([v, l]) => `<option value="${v}"${(w.status || "") === v ? " selected" : ""}>${l}</option>`).join("")}</select>${w.at ? `<div class="help">${esc(w.by)} ${esc(ago(w.at))}${w.note ? " — " + esc(w.note) : ""}</div>` : ""}</td></tr>`; }).join("");
@@ -61,11 +64,18 @@ export function mapSpec(){ const ev = UI.eventSel && EVENTS.find(e => e.id === U
   const sigs = ev ? (ev.signals || []).map(signalBy).filter(Boolean) : [];
   return { points: pts, signals: sigs, selected: sigs[0] ? sigs[0].key : null, hitSites: list.flatMap(e => e.sites), fitKey: ev ? "e:" + ev.id : "", quietSites: false }; }
 
-export function bind(p, rerender){ p.onclick = async e => { const t = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch],[data-ecad]"); if (!t) return; const d = t.dataset;
+export function bind(p, rerender){ p.onclick = async e => { const t = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch],[data-ecad],[data-ef],[data-eexport],[data-eimport],[data-etimeat]"); if (!t) return; const d = t.dataset;
     if (d.esel){ UI.eventSel = d.esel; saveUI(); rerender(); p.scrollTop = 0; return; } if (d.eback !== undefined){ UI.eventSel = null; saveUI(); rerender(); return; }
+    if (d.ef){ UI.eventF = d.ef; saveUI(); rerender(); return; }
+    if (d.eexport !== undefined){ download(`ite-events-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ kind: "ite-events", at: Date.now(), by: STATE_who(), events: EVENTS }, null, 1), "application/json"); audit("Events exported", EVENTS.length + " events"); return; }
+    if (d.eimport !== undefined){ const i = document.createElement("input"); i.type = "file"; i.accept = ".json"; i.onchange = async () => { try{ const j = JSON.parse(await i.files[0].text()), evs = (j.events || []).filter(e => e && e.id && e.title && Array.isArray(e.log));
+        if (!evs.length) throw new Error("no events in this file"); let n = 0; evs.forEach(e => { const ex = EVENTS.findIndex(x => x.id === e.id); if (ex < 0){ EVENTS.push(e); n++; } else if ((e.updatedAt || 0) > (EVENTS[ex].updatedAt || 0)){ EVENTS[ex] = e; n++; } });
+        saveEvents(); audit("Events imported", i.files[0].name, n + " new or newer"); toast("Events imported", `${n} new or newer of ${evs.length} in the file.`, 0); rerender(); }catch(err){ toast("Could not import", err.message, 3); } }; i.click(); return; }
     if (d.enew !== undefined){ escalateForm({}, { title: "New escalation" }); return; } if (d.eclosed !== undefined){ UI.eventShowClosed = !UI.eventShowClosed; saveUI(); rerender(); return; }
     if (d.site){ go("sites", { siteSel: d.site }); return; } if (d.ewatch){ go("watch", { watchSel: d.ewatch, watchCity: null }); return; }
     const ev = EVENTS.find(x => x.id === UI.eventSel); if (!ev) return;
+    if (d.etimeat){ dialog("When was it sent?", field("Sent at (SGT)", `<input id="taT" type="datetime-local" value="${toSgtInput(Date.now())}">`, true) + `<p class="help">The next update is counted from this time.</p>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="taGo">Record</button>`);
+      $("#taGo").onclick = () => { const at = fromSgtInput($("#taT").value); if (!at || at > Date.now()){ toast("Use a time in the past", "", 2); return; } resetTimer(ev, d.etimeat, at); closeDialog(); rerender(); }; return; }
     if (d.etimer){ resetTimer(ev, d.etimer === "both" ? null : d.etimer); toast(d.etimer === "12" ? "Manager update recorded" : d.etimer === "24" ? "Intel / SLT update recorded" : "Update recorded", "Timer reset.", 0); rerender(); return; }
     if (d.eren){ setRen(ev, d.eren); rerender(); return; }
     if (d.ecad !== undefined){ const c = cad(ev); dialog("Update cadence", `<div class="form">${field("PSOC Manager update every (hours)", `<input id="cdM" type="number" min="1" max="72" value="${c.m}">`)}${field("Intel / SLT update every (hours)", `<input id="cdI" type="number" min="1" max="168" value="${c.i}">`)}</div><p class="help">${ttpFor(ev.cat) ? `The ${esc(ttpName())} sets this category's cadence; changing it here applies to this event only.` : "Applies to this event only."}</p>`,
@@ -85,6 +95,7 @@ export function bind(p, rerender){ p.onclick = async e => { const t = e.target.c
     const code = t.dataset.ewel; if (t.value !== "impacted"){ setWelfare(ev, code, t.value); rerender(); return; }
     dialog("Impact at " + code, field("What is the impact?", `<textarea id="wiNote" rows="3" placeholder="People, power, access, damage — and who reported it"></textarea>`, true), `<button class="btn" data-close>Cancel</button><button class="btn primary" id="wiGo">Record impact</button>`, { onClose: rerender });
     $("#wiGo").onclick = () => { setWelfare(ev, code, "impacted", $("#wiNote").value.trim()); closeDialog(); }; };
+  p.oninput = e => { if (!e.target.matches("[data-eq]")) return; UI.eventQ = e.target.value; saveUI(); clearTimeout(p._t); p._t = setTimeout(() => { const pos = e.target.selectionStart; rerender(); const i = p.querySelector("[data-eq]"); if (i){ i.focus(); i.setSelectionRange(pos, pos); } }, 200); };
   p.onsubmit = e => { if (!e.target.matches("[data-enote]")) return; e.preventDefault(); const i = e.target.querySelector("input"), v = i.value.trim(); if (!v) return; const ev = EVENTS.find(x => x.id === UI.eventSel); if (ev){ eventLog(ev, v, "note"); rerender(); } }; }
 import { who as STATE_who } from "../model.js";
 function editEvent(ev, rerender){ escalateForm({ title: ev.title, cat: ev.cat, sev: ev.sev, country: ev.country, sites: ev.sites, lat: ev.lat, lon: ev.lon }, { title: "Edit escalation" });

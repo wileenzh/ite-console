@@ -1,14 +1,14 @@
 // Unrest and news (GDELT, US Embassy demonstration alerts) and government travel advisories.
 import { fetchText, viaRelay, relayJSON, xmlDoc, tx, stripHtml, load, save, sleep } from "../core.js";
 import { CFG } from "../config.js";
-import { CITIES, SITES, siteCountries, watchSites } from "../model.js";
+import { CITIES, SITES, siteCountries, watchSites, sitesNear } from "../model.js";
 import { register } from "./index.js";
 import COUNTRIES from "../data/countries.json";
 
 export const CC_NAME = COUNTRIES;
 const NAME_CC = (() => { const m = {}; Object.entries(COUNTRIES).forEach(([cc, n]) => { m[n.toLowerCase()] = cc; });
   Object.assign(m, { "south korea": "KR", "korea, south": "KR", "north korea": "KP", "taiwan": "TW", "hong kong": "HK", "macau": "MO", "vietnam": "VN", "laos": "LA", "burma": "MM", "myanmar": "MM", "russia": "RU", "iran": "IR", "syria": "SY", "turkey": "TR", "türkiye": "TR",
-    "united states": "US", "united kingdom": "GB", "east timor": "TL", "timor-leste": "TL", "brunei": "BN", "the philippines": "PH", "philippines": "PH" }); return m; })();
+    "united states": "US", "united kingdom": "GB", "east timor": "TL", "timor-leste": "TL", "brunei": "BN", "the philippines": "PH", "philippines": "PH", "korea": "KR", "republic of korea": "KR", "hong kong sar": "HK", "hong kong sar, china": "HK" }); return m; })();
 export function ccFor(name){ const n = String(name || "").toLowerCase().replace(/\s+(travel advisory|travel advice)$/, "").replace(/^the /, "").trim();
   for (const t of [n, n.replace(/\s*\(.*\)\s*/g, "").trim(), (/\(([^)]+)\)/.exec(n) || [])[1], n.split(",")[0].trim()]) if (t && NAME_CC[t]) return NAME_CC[t]; return null; }
 const siteCC = () => new Set(SITES.map(s => ccFor(s.country)).filter(Boolean));
@@ -88,3 +88,34 @@ register({ id: "travel", name: "Travel advisories", provider: "US State Departme
     // countries with sites already at level 3 or 4 are listed (no Inbox item unless the level rises)
     [...mine].filter(cc => !sigs.some(x => x.cc === cc)).forEach(cc => { const hi = Math.max(0, ...Object.values(gov).map(m => (m[cc] || {}).lvl || 0)); if (hi >= 3) sigs.push({ id: `travel:level:${cc}`, src: "travel", kind: "travel", rule: "travel", noInbox: true, cat: "interstate_conflict", title: `${CC_NAME[cc] || cc}: highest advisory level ${hi} (${TLVL[hi]})`, tier: 1, cc, t: TRAVEL.at, text: Object.entries(gov).map(([g, m]) => m[cc] ? `${name[g]} ${m[cc].lvl}` : "").filter(Boolean).join(", "), cities: [], sites: [] }); });
     return sigs; } });
+
+/* ---------- ACLED: researched protest and riot events with crowd size (the TTP's crowd-size reference) ----------
+   Needs a myACLED account. The password is used once to get a token and is not kept; the token refreshes for
+   14 days. ACLED publishes weekly, so these are recent verified events, not live alerts. */
+const ACLED_TOKEN = "https://acleddata.com/oauth/token", ACLED_READ = "https://acleddata.com/api/acled/read";
+const ACLED_NAME = { Korea: "South Korea", "South Korea": "South Korea", "Hong Kong SAR": "China", "Hong Kong": "China", Macau: "China" };
+export const acledAuth = () => load("acledAuth", null);
+async function acledTokenPost(body){ const r = await fetch(ACLED_TOKEN, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
+  const j = await r.json().catch(() => ({})); if (!r.ok || !j.access_token) throw new Error(r.status === 400 || r.status === 401 ? "ACLED did not accept the email or password" : (j.error_description || j.message || "HTTP " + r.status));
+  const a = { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in || 86400) * 1000 - 60e3, refreshExp: Date.now() + 14 * 86400e3, user: body.username || (acledAuth() || {}).user };
+  save("acledAuth", a); return a; }
+export async function acledConnect(email, password){ try{ return await acledTokenPost({ username: email, password, grant_type: "password", client_id: "acled", scope: "authenticated" }); }
+  catch(e){ if (e.name === "TypeError") throw new Error("this browser blocked the call to ACLED; it needs the PSOC server"); throw e; } }
+export const acledDisconnect = () => save("acledAuth", null);
+async function acledToken(){ let a = acledAuth(); if (!a) throw new Error("connect ACLED in Settings › Keys");
+  if (Date.now() < a.exp) return a.access; if (Date.now() > a.refreshExp) throw new Error("the ACLED sign-in has expired; connect again in Settings › Keys");
+  a = await acledTokenPost({ refresh_token: a.refresh, grant_type: "refresh_token", client_id: "acled" }); return a.access; }
+register({ id: "acled", name: "ACLED protests and riots", provider: "Armed Conflict Location & Event Data (ACLED)", what: "Verified protest and riot events in site countries over the last 14 days, with location, crowd size and fatalities", group: "Unrest & news", every: 6 * 3600e3, key: "Account",
+  enabled: () => !!acledAuth(), offWhy: () => "connect a myACLED account in Settings › Keys",
+  async run(){ const tok = await acledToken(), d = n => new Date(Date.now() - n * 86400e3).toISOString().slice(0, 10);
+    const countries = [...new Set(siteCountries().map(c => ACLED_NAME[c] || c))].filter(c => ccFor(c));
+    const q = `_format=json&limit=1000&event_date=${d(14)}|${d(0)}&event_date_where=BETWEEN&event_type=Protests:OR:event_type=Riots&${countries.map(c => "country=" + encodeURIComponent(c)).join(":OR:")}&fields=event_id_cnty|event_date|event_type|sub_event_type|country|admin1|location|latitude|longitude|notes|fatalities|tags|source`;
+    let r; try{ r = await fetch(`${ACLED_READ}?${q}`, { headers: { Authorization: "Bearer " + tok } }); }catch(e){ throw new Error("this browser blocked the call to ACLED; it needs the PSOC server"); }
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.message || "HTTP " + r.status);
+    return (j.data || []).map(e => { const lat = +e.latitude, lon = +e.longitude, near = sitesNear(lat, lon, 25), close = near.filter(x => x.km <= 5), crowd = (/crowd size=([^;]+)/i.exec(e.tags || "") || [])[1] || "";
+      const violent = e.event_type === "Riots" || +e.fatalities > 0 || /violent|mob|excessive force/i.test(e.sub_event_type), large = /large|thousand|\d{4,}/i.test(crowd);
+      const tier = close.length && violent ? 3 : close.length || (near.length && (violent || large)) ? 2 : near.length ? 1 : 0;
+      return { id: "acled:" + e.event_id_cnty, src: "acled", kind: "unrest", rule: "unrest", cat: "protest", title: `${e.country}: ${e.sub_event_type} in ${e.location}${crowd ? ` (crowd ${crowd.trim()})` : ""}`, tier, lat, lon, cc: ccFor(e.country) || "",
+        t: Date.parse(e.event_date + "T12:00:00Z"), url: "https://acleddata.com/", area: [e.location, e.admin1].filter(Boolean).join(", "),
+        text: `${e.notes || ""}${+e.fatalities ? ` Fatalities: ${e.fatalities}.` : ""} Source: ${e.source || "ACLED"}. ACLED event ${e.event_id_cnty}, ${e.event_date}.`, sites: near.map(x => ({ code: x.code, km: x.km })), citySites: false,
+        extra: { crowd, eventType: e.event_type, sub: e.sub_event_type } }; }); } });

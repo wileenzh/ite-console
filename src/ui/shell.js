@@ -57,9 +57,12 @@ export function render(){ if (rendering) return; rendering = true; try{
   $("#work").classList.toggle("full", !hasMap); rail(); top();
   if (!typing){ const st = pane.querySelector(".scroll"), sc = st ? st.scrollTop : 0, pst = pane.scrollTop; mod.render(pane); const st2 = pane.querySelector(".scroll"); if (st2) st2.scrollTop = sc; pane.scrollTop = pst; mod.bind(pane, render); }
   if (UI.ws !== "watch") mountTV(null);
-  if (hasMap && mapReady()) draw(Object.assign({ onPick: key => { go("watch", { watchSel: key, watchCity: null }); }, onSite: code => go("sites", { siteSel: code }), ovKey: UI.ws + ":" + (UI.ws === "watch" ? UI.watchMode : "") }, mod.mapSpec ? mod.mapSpec() : {})); }
+  drawMap(); }
   catch(e){ console.error(e); $("#pane").innerHTML = `<div class="empty"><b>This view hit an error.</b>${esc(e.message)}<br>The rest of the console still works.</div>`; }
   finally{ rendering = false; } }
+function drawMap(){ const [, mod, hasMap] = WS[UI.ws] || WS.watch;
+  if (hasMap && mapReady()) draw(Object.assign({ onPick: key => { go("watch", { watchSel: key, watchCity: null }); }, onSite: code => go("sites", { siteSel: code }), ovKey: UI.ws + ":" + (UI.ws === "watch" ? UI.watchMode : "") }, mod.mapSpec ? mod.mapSpec() : {})); }
+on("map", drawMap);
 let raf = 0; const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
 on("data", soon); on("sites", soon); on("ttp", soon); on("feeds", () => { top(); if (UI.ws === "settings") soon(); });
 on("route", () => { render(); invalidate(); $("#pane").scrollTop = 0; });
@@ -81,8 +84,9 @@ function showAlarm(){ const s = queue[0], el = $("#alarm"); if (!s){ el.hidden =
 const told = new Set(load("told", [])); function desktop(title, body, tag){ if (!CFG.notify.desktop || typeof Notification === "undefined" || Notification.permission !== "granted" || told.has(tag)) return; told.add(tag); save("told", [...told].slice(-500));
   try{ const n = new Notification("ITE — " + title, { body: body || "", tag, requireInteraction: /^eq:/.test(tag) }); n.onclick = () => { window.focus(); n.close(); }; }catch(e){} }
 let fresh = [], freshT = null;                       // new items arrive in bursts (a source run); tell the officer once per burst
-on("inbox:new", i => { if (i.pri !== "P1" && i.pri !== "P2") return; fresh.push(i); clearTimeout(freshT); freshT = setTimeout(() => { const b = fresh; fresh = [];
-  const top1 = b.slice().sort((x, y) => x.pri.localeCompare(y.pri))[0], tier = PRI[top1.pri].tier;
+function chime(){ if (!CFG.notify.chime) return; try{ audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(.12, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .5); o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + .5); }catch(e){} }
+on("inbox:new", i => { if (i.pri !== "P1" && !(i.pri === "P2" && CFG.notify.level !== "P1")) return; fresh.push(i); clearTimeout(freshT); freshT = setTimeout(() => { const b = fresh; fresh = [];
+  const top1 = b.slice().sort((x, y) => x.pri.localeCompare(y.pri))[0], tier = PRI[top1.pri].tier; chime();
   if (b.length === 1){ desktop(`${top1.pri}: ${top1.title}`, "Needs a decision in the Inbox.", "in:" + top1.id); if (!document.hidden && UI.ws !== "inbox") toast(`${top1.pri} — needs a decision`, top1.title, tier, () => go("inbox", { inboxSel: top1.id })); return; }
   desktop(`${b.length} new items need a decision`, `First: ${top1.pri} ${top1.title}`, "inb:" + top1.id);
   if (!document.hidden && UI.ws !== "inbox") toast(`${b.length} new items need a decision`, `First: ${top1.pri} ${top1.title}`, tier, () => go("inbox", { inboxSel: top1.id })); }, 1500); });

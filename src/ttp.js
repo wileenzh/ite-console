@@ -1,14 +1,15 @@
-// The REN TTP (triggers, thresholds and procedures). The public console ships placeholder procedures only;
-// your organisation's TTP comes in from a PULSE file, is read in this browser and stays in it.
+// The REN TTP (triggers, thresholds and procedures). TTP v2.2 from the PULSE Master Tracker is built in;
+// a newer version can be read from a PULSE file and replaces it in this browser.
 import { load, save, esc, emit } from "./core.js";
 import { CFG } from "./config.js";
 import SOP from "./data/sop.json";
+import BUILTIN from "./data/ttp.json";
 
 // TTP category keys → the console's category keys
 const KEYMAP = { power_disruption: "power_disruptions", soil_stability: "soil_ground_stability", transportation: "transportation_hazard", volcanic: "volcanic_hazard",
   water_supply: "water_supply_quality", wildfire: "wildfires", supply_chain: "supply_chain_disruption" };
 const PLACEHOLDER = JSON.parse(JSON.stringify(SOP));
-export let TTP = load("ttp", null);          // { meta, cats: { consoleKey: {...} }, at, file }
+export let TTP = null;                       // { meta, cats: { consoleKey: {...} }, at, file, builtin }
 
 const md = s => esc(String(s || "")).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 const ul = a => a && a.length && !(a.length === 1 && /^nil$/i.test(a[0])) ? `<ul>${a.map(x => `<li>${md(x)}</li>`).join("")}</ul>` : `<p class="help">None in the TTP.</p>`;
@@ -30,7 +31,8 @@ function clean(raw){ const cats = {};
       ren: { crit: strs(t.ren && t.ren.crit), cad: strs(t.ren && t.ren.cad), reason: String((t.ren && t.ren.reason) || "") }, close: strs(t.close), cons: strs(t.cons), psoc: strs(t.psoc), note: String(t.note || "") }; });
   const m = raw.meta || {}; return { meta: { version: String(m.version || ""), date: String(m.date || ""), owner: String(m.owner || ""), recipients: String(m.recipients || "") }, cats }; }
 
-// Put the TTP (or the placeholders) into the category list every screen reads.
+TTP = load("ttp", null) || Object.assign(clean(BUILTIN), { at: null, file: "built in", builtin: true });
+// Put the TTP into the category list every screen reads (categories it doesn't cover keep their placeholder).
 function apply(){ Object.keys(SOP).forEach(k => { if (!PLACEHOLDER[k]) delete SOP[k]; else SOP[k] = Object.assign({}, PLACEHOLDER[k]); });
   if (TTP) Object.entries(TTP.cats).forEach(([k, t]) => { SOP[k] = { label: t.label, html: ttpHtml(t), ttp: true }; }); }
 apply();
@@ -43,7 +45,7 @@ export function cadenceFor(cat){ const t = ttpFor(cat);
   const m = hours(t.mgr.cad), i = hours(t.intel.cad); return { m: m || 12, i: i || 24, src: ttpName() }; }
 export function setTTP(raw, file){ const c = clean(raw); if (!Object.keys(c.cats).length) throw new Error("the TTP in this file is empty");
   TTP = Object.assign(c, { at: Date.now(), file: file || "" }); save("ttp", TTP); apply(); emit("ttp"); return Object.keys(c.cats).length; }
-export function clearTTP(){ TTP = null; save("ttp", null); apply(); emit("ttp"); }
+export function clearTTP(){ TTP = Object.assign(clean(BUILTIN), { at: null, file: "built in", builtin: true }); save("ttp", null); apply(); emit("ttp"); }
 export const checklistFor = cat => { const t = ttpFor(cat); if (!t) return null;
   return { close: t.close.map(plain), psoc: t.psoc.map(plain), cons: t.cons.map(plain), ren: t.ren.crit.map(plain) }; };
 

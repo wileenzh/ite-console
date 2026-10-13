@@ -12,13 +12,15 @@ export const classBand = c => { c = String(c || "").toUpperCase(); return c === 
 export function initMap(){ if (map || typeof L === "undefined"){ if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>This network blocks cdnjs.cloudflare.com. Everything else works.</div>`; return; }
   map = L.map("map", { zoomControl: true, worldCopyJump: true, attributionControl: true, preferCanvas: false }).setView([15, 115], 4);
   setBase(); siteLayer = L.layerGroup().addTo(map); shakeLayer = L.layerGroup().addTo(map); layers = L.layerGroup().addTo(map);
-  $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}<span class="sep"></span><span><i class="sitedot ab"></i>A / B</span><span><i class="sitedot c"></i>C, C-PE</span><span><i class="sitedot e"></i>Edge</span><span><i class="sitedot o"></i>Office</span><span id="shakeNote"></span></div>
+  $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}<span class="sep"></span>${[["ab", "A / B"], ["c", "C, C-PE"], ["e", "Edge"], ["o", "Office"]].map(([k, l]) => `<button class="lgcls" data-lgcls="${k}" aria-pressed="${!HIDE.has(k)}" title="Show or hide these sites on the map"><i class="sitedot ${k}"></i>${l}</button>`).join("")}<span id="shakeNote"></span></div>
     <select class="basesel" aria-label="Basemap">${Object.entries(BASE_NAMES).map(([k, l]) => `<option value="${k}"${load("basemap", "auto") === k ? " selected" : ""}>${l}</option>`).join("")}</select>`);
-  $("#mapcell .basesel").onchange = e => { save("basemap", e.target.value); setBase(); }; }
+  $("#mapcell .basesel").onchange = e => { save("basemap", e.target.value); setBase(); };
+  $("#mapcell .maplegend").onclick = e => { const b = e.target.closest("[data-lgcls]"); if (!b) return; const k = b.dataset.lgcls; HIDE.has(k) ? HIDE.delete(k) : HIDE.add(k); save("hideCls", [...HIDE]); b.setAttribute("aria-pressed", !HIDE.has(k)); if (draw.last) draw(draw.last); }; }
 export function setBase(){ if (!map) return; if (base) map.removeLayer(base); base = null; const day = document.documentElement.dataset.theme === "day", b = load("basemap", "auto");
   if (b === "none") return; base = L.tileLayer(BASES[b === "auto" ? (day ? "day" : "night") : b] || BASES.night, { maxZoom: 18, attribution: b === "imagery" ? "Imagery © Esri, Maxar, Earthstar Geographics" : "Tiles © Esri" }).addTo(map); }
 
 /* USGS ShakeMap: the official shaking contours, fetched when an earthquake is selected (modelled rings are the fallback) */
+const HIDE = new Set(load("hideCls", []));     // site classes switched off from the legend
 const SHAKE = {}, MMI_COL = ["#ffffff", "#ffffff", "#bfccff", "#a0e6ff", "#80ffff", "#7aff93", "#ffff00", "#ffc800", "#ff9100", "#ff0000", "#c80000"];
 let shakeFor = null;
 function shakeNote(t){ const n = $("#shakeNote"); if (n) n.textContent = t || ""; }
@@ -38,7 +40,7 @@ export function invalidate(){ if (map) setTimeout(() => map.invalidateSize(), 30
 export function draw(o){ if (!map) return; draw.last = o; layers.clearLayers(); siteLayer.clearLayers(); const hit = new Set(o.hitSites || []), bounds = [];
   const selQ = (o.signals || []).find(s => s.key === o.selected && s.kind === "quake"); if (selQ) shakeMap(selQ); else if (shakeFor){ shakeFor = null; shakeLayer.clearLayers(); shakeNote(""); }
   SITES.forEach(s => { if (!isFinite(s.lat)) return; const h = hit.has(s.code); if (!h && o.quietSites) return;
-    if (o.siteFilter && !o.siteFilter(s) && !h) return;
+    if (!h && (HIDE.has(classBand(s.cls)) || (o.siteFilter && !o.siteFilter(s)))) return;
     L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<div class="sitedot ${classBand(s.cls)}${isLive(s) || isOffice(s) ? "" : " notlive"}${h ? " hit" : ""}"></div>`, iconSize: [h ? 10 : 8, h ? 10 : 8] }), keyboard: false, zIndexOffset: h ? 400 : 0 })
       .bindTooltip(`<b>${esc(s.code)}</b> ${esc(s.city || "")}<br>${esc(s.cls)} · ${esc(s.status)}`, { direction: "top" }).on("click", () => o.onSite && o.onSite(s.code)).addTo(siteLayer); if (h) bounds.push([s.lat, s.lon]); });
   (o.signals || []).forEach(s => { const on = s.key === o.selected;
@@ -50,6 +52,8 @@ export function draw(o){ if (!map) return; draw.last = o; layers.clearLayers(); 
     L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<div class="mk t${s.tier}${on ? " sel" : ""}" style="width:${sz}px;height:${sz}px"></div>`, iconSize: [sz, sz] }), zIndexOffset: 1000 + s.tier * 100 + (on ? 2000 : 0), riseOnHover: true })
       .bindTooltip(`<b>${esc(s.title)}</b><br>${esc(TIER[s.tier].label)} · ${esc(sgt(s.t))}`, { direction: "top" }).on("click", () => o.onPick && o.onPick(s.key)).addTo(layers);
     if (on) bounds.push([s.lat, s.lon]); });
+  (o.rings || []).forEach(r => { L.circle([r.lat, r.lon], { radius: r.km * 1000, color: cv("--t3"), weight: 2, fillColor: cv("--t3"), fillOpacity: .18, dashArray: "2 4" }).bindTooltip(esc(r.label || "")).addTo(layers);
+    L.circleMarker([r.lat, r.lon], { radius: 6, color: "#fff", weight: 2, fillColor: cv("--t3"), fillOpacity: 1 }).addTo(layers); });
   (o.points || []).forEach(p => { L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html: `<div class="mk t${p.tier}${p.on ? " sel" : ""}" style="width:14px;height:14px"></div>`, iconSize: [14, 14] }) }).bindTooltip(esc(p.label), { direction: "top" }).on("click", () => p.go && p.go()).addTo(layers); if (p.on) bounds.push([p.lat, p.lon]); });
   if (o.fitKey && o.fitKey !== lastFit){ lastFit = o.fitKey; if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds).pad(.3), { maxZoom: 9, animate: true }); else if (bounds.length) map.setView(bounds[0], Math.max(map.getZoom(), 7), { animate: true }); }
   if (!o.fitKey){ const k = "ov:" + (o.ovKey || ""); if (lastFit !== k){ lastFit = k;      // back to an overview: frame everything listed, or the whole region

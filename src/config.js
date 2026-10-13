@@ -19,7 +19,7 @@ export const DEFAULTS = {
   cadence: "ttp",          // update timers: "ttp" follows the imported REN TTP per category; "fixed" is 12 h / 24 h
   relay: "", server: "",
   psoc: { desk: "", mobile: "", email: "", leaders: "", intelChannel: "" },
-  notify: { desktop: false, sound: false },
+  notify: { desktop: false, sound: false, level: "P2", chime: false },   // desktop alerts for P1 only or P1 and P2; a short chime for new items
 };
 
 function merge(a, b){ const o = Array.isArray(a) ? (Array.isArray(b) ? b.slice() : a.slice()) : Object.assign({}, a);

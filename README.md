@@ -31,10 +31,10 @@ A clean rebuild organised around the officer's workflow, running alongside the c
 - **Inbox** — only what needs a decision, the one due soonest first. Escalate, notify, monitor or dismiss, one key each.
 - **Events** — each escalation in one place: the 12-hour and 24-hour update timers, the event notice, sites and welfare checks, the messages to send, the log and the close-out.
 - **Reports** — the shift handover and the SITREP, written from the live picture, plus everything saved.
-- **Sites** — the estate, each site's contacts, and what is affecting it now. Load your site file or a PULSE file here; it is read in your browser only.
+- **Sites** — the estate, each site's contacts, and what is affecting it now. The estate is fictional by design (PULSE-style codes such as TOK39, classes and contacts at made-up positions); every other feed is real.
 
-Also from PULSE, done once instead of eight times: the REN TTP inside every escalation (update cadence, close criteria and PSOC actions as a checklist), USGS ShakeMap contours, per-site typhoon timing, Copy brief on every report, a 7-day detection history, a linked site file that re-syncs itself with data checks, address search against the estate, the 7-day city outlook, live TV, the PSOC Copilot, a built-in guide (press ?) and export of everything to Excel. Your REN TTP, site list and contacts come in through Sites › Import PULSE file and stay in your browser; none of it is in this repository.
+Also from PULSE, done once instead of eight times: the REN TTP v2.2, built in and used inside every escalation (update cadence, close criteria and PSOC actions as a checklist), USGS ShakeMap contours, per-site typhoon timing, Copy brief on every report, a 7-day detection history, address search against the estate, a Summary view, typhoon forecast playback, the 7-day city outlook, live TV, the PSOC Copilot, a built-in guide (press ?) and export of everything to Excel. Protest events also come from ACLED with a myACLED account. findaprotest.info is not used: it has no API and its terms forbid automated collection and monitoring.
 
-On first start it brings over the current console's settings, keys, sites, site contacts and open escalations from the same browser; the current console is not changed.
+On first start it brings over the current console's settings, keys and open escalations from the same browser (not its sites); the current console is not changed.
 
 Source code is in `src/` and is built into the single page `next/index.html`: `npm install`, then `npm run build` (or `npm run watch`).
