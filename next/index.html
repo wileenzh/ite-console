@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ITE — PSOC console</title>
-<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 14:34 UTC.">
+<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 16:35 UTC.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -62,6 +62,7 @@ a{color:var(--signal)}
 /* ---------- top bar: the one next thing to do, then health and clocks ---------- */
 .next{display:flex;align-items:center;gap:10px;min-width:0;flex:1;border:0;background:none;padding:6px 10px;border-radius:var(--r2);text-align:left;cursor:pointer}
 .next:hover{background:var(--raise)}
+.feeddown{flex-shrink:0;background:var(--t3);color:#fff;border:0;border-radius:var(--r2);padding:6px 10px;font-size:12.5px;cursor:pointer;max-width:46%;text-align:left}.feeddown b{font-weight:600}
 .next .lead{font:600 12px var(--cond);color:var(--muted);white-space:nowrap}
 .next .what{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .next .when{white-space:nowrap;font-weight:600}
@@ -111,6 +112,16 @@ a{color:var(--signal)}
 .sec{margin-top:18px}
 .sec > h3{font:600 13px var(--cond);color:var(--muted);margin:0 0 6px;display:flex;align-items:center;gap:8px}
 .sec > h3 .r{margin-left:auto}
+details.proc,details.crit{border-top:1px solid var(--rule);padding:6px 0}details.proc summary,details.crit summary{cursor:pointer;font-weight:500;padding:2px 0}
+details.proc .chk{display:flex;gap:8px;align-items:flex-start;padding:4px 0 4px 4px;line-height:1.4}details.proc .chk input{margin-top:3px}
+details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:var(--signal);font-size:13px}details.crit ul,.warnbox ul,.ttp-body ul{margin:4px 0 6px;padding-left:18px}details.crit li,.warnbox li{margin:3px 0}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media (max-width:700px){.cols2{grid-template-columns:1fr}}
+.tv{padding:0 16px 16px}.tvframe{position:relative;background:#000;border-radius:var(--r2);overflow:hidden;aspect-ratio:16/9}.tvframe video{width:100%;height:100%;display:block}
+.tvmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#e3eaf0;background:rgba(0,0,0,.7);font-size:13.5px;line-height:1.5}.tvmsg a,.tvmsg .linkbtn{color:#8cc4f0}
+.cpquick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.cplog{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.msg{padding:9px 12px;border-radius:var(--r2);line-height:1.5;max-width:92%}.msg.user{align-self:flex-end;background:var(--raise)}.msg.assistant{background:var(--panel);border:1px solid var(--rule)}.msg.err{border-color:var(--t3)}.msg .linkbtn{display:block;margin-top:4px;font-size:12px}
+.warnbox{border-left:3px solid var(--t2);background:color-mix(in srgb,var(--t2) 10%,transparent);padding:8px 12px;margin:8px 0;border-radius:0 var(--r2) var(--r2) 0}
+.ttp-h{font:600 13px var(--cond);color:var(--text);margin:16px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}.ttp-sub{font:600 12px var(--cond);color:var(--muted);margin:6px 0 2px}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
 .tbl th{text-align:left;font:600 12px var(--cond);color:var(--muted);border-bottom:1px solid var(--rule2);padding:4px 6px}
 .tbl td{border-bottom:1px solid var(--rule);padding:5px 6px;vertical-align:top}
@@ -188,7 +199,11 @@ a{color:var(--signal)}
 /* map markers */
 .mk{border-radius:50%;border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(255,255,255,.25)}
 .mk.t0{background:var(--t0)}.mk.t1{background:var(--t1)}.mk.t2{background:var(--t2)}.mk.t3{background:var(--t3)}.mk.sel{box-shadow:0 0 0 3px var(--signal)}
-.sitedot{width:7px;height:7px;border-radius:50%;background:var(--muted);border:1px solid var(--bg)}.sitedot.off{border-radius:1px;background:var(--faint)}.sitedot.hit{background:var(--text);width:9px;height:9px}
+.sitedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);border:1px solid var(--bg);box-sizing:border-box}
+.sitedot.ab{background:#9DB8D4}.sitedot.c{background:#B49BD6}.sitedot.e{background:#7FB6A6;border-radius:1px;transform:rotate(45deg)}.sitedot.o{background:#D7C89A;border-radius:1px}
+.sitedot.notlive{background:transparent;border:1.5px dashed var(--muted)}.sitedot.hit{outline:2px solid var(--text);outline-offset:1px}
+.maplegend .sep{width:1px;background:var(--rule2);align-self:stretch}.maplegend .sitedot{margin-right:4px;vertical-align:-1px}
+.basesel{position:absolute;right:10px;top:10px;z-index:500;background:var(--panel);color:var(--text);border:1px solid var(--rule2);border-radius:var(--r);padding:3px 6px;font-size:12px}
 .leaflet-container{font:inherit;background:var(--bg)}
 .leaflet-tooltip{background:var(--panel);color:var(--text);border:1px solid var(--rule2);box-shadow:none;font-size:12.5px}
 .leaflet-tooltip-top:before{border-top-color:var(--rule2)}
@@ -211,7 +226,7 @@ a{color:var(--signal)}
   .top .next{order:3;flex-basis:100%;flex-wrap:wrap;gap:2px 8px;padding:4px 0}.top .tools{margin-right:auto}
   .next .what{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex-basis:100%;order:3}
   .toasts{bottom:70px;left:12px;right:12px;width:auto}.toast{max-width:none}
-  .keyhint{display:none}
+  .keyhint{display:none}.rail [data-guide]{display:none}.maplegend .sep,.maplegend .sep ~ span{display:none}
   .city,.cityhead{grid-template-columns:4px 90px repeat(3,1fr)}.city .c.x4,.city .c.x5,.cityhead .x4,.cityhead .x5{display:none}
 }
 @media (hover:none){ .keyhint,.decide kbd{display:none} }
@@ -450,6 +465,8 @@ a{color:var(--signal)}
     },
     unrest: { countries: ["philippines", "indonesia", "burma", "thailand", "hongkong", "bangladesh", "pakistan"] },
     wxModels: "national",
+    cadence: "ttp",
+    // update timers: "ttp" follows the imported REN TTP per category; "fixed" is 12 h / 24 h
     relay: "",
     server: "",
     psoc: { desk: "", mobile: "", email: "", leaders: "", intelChannel: "" },
@@ -521,6 +538,127 @@ a{color:var(--signal)}
 
   // src/data/sop.json
   var sop_default = { air_quality: { label: "Air Quality", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Air Quality</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, protest: { label: "Civil Unrest / Protest", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Civil Unrest / Protest</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, coastal_flooding: { label: "Coastal Flooding", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Coastal Flooding</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, crime: { label: "Crime", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Crime</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, extreme_heat: { label: "Extreme Heat", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Extreme Heat</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, flood: { label: "Flood", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Flood</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, industrial_hazards: { label: "Industrial Hazards", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Industrial Hazards</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, insider_threat: { label: "Insider Threat", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Insider Threat</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, interstate_conflict: { label: "Interstate Conflict / War", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Interstate Conflict / War</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, weather: { label: "Severe Weather (Typhoon/Tropical Storm)", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Severe Weather (Typhoon/Tropical Storm)</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, operational_security: { label: "Operational Security", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Operational Security</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, power_disruptions: { label: "Power Disruptions", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Power Disruptions</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, earthquake: { label: "Seismic Hazard (Earthquake)", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Seismic Hazard (Earthquake)</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, soil_ground_stability: { label: "Soil / Ground Stability", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Soil / Ground Stability</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, terrorism: { label: "Terrorism", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Terrorism</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, transportation_hazard: { label: "Transportation Hazard", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Transportation Hazard</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, volcanic_hazard: { label: "Volcanic Hazard", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Volcanic Hazard</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, water_supply_quality: { label: "Water Supply / Quality", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Water Supply / Quality</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, wildfires: { label: "Wildfires", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Wildfires</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, supply_chain_disruption: { label: "Supply Chain Disruption", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Supply Chain Disruption</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` }, pandemic: { label: "Pandemic / Infectious Disease", html: `<div class="sop-subhead"><strong>Sample procedure (demo)</strong></div><div class="sop-bullet">Placeholder escalation procedure for <strong>Pandemic / Infectious Disease</strong>. Replace with your organisation's SOP.</div><div class="sop-subhead"><strong>Monitor</strong></div><div class="sop-bullet">A first-tier advisory or early indicator affects an area with company sites. Track it and re-assess each shift.</div><div class="sop-subhead"><strong>Manager trigger</strong></div><div class="sop-bullet">A second-tier warning covers a site, or credible reporting indicates possible impact. Notify the duty manager and assess whether a notification is needed.</div><div class="sop-subhead"><strong>Senior escalation</strong></div><div class="sop-bullet">Confirmed or likely impact to people, sites or operations. Escalate to senior leadership and issue a notification.</div><div class="sop-subhead"><strong>Update cadence</strong></div><div class="sop-bullet">Manager update every 12 h, senior update every 24 h, until the event is closed.</div>` } };
+
+  // src/ttp.js
+  var KEYMAP = {
+    power_disruption: "power_disruptions",
+    soil_stability: "soil_ground_stability",
+    transportation: "transportation_hazard",
+    volcanic: "volcanic_hazard",
+    water_supply: "water_supply_quality",
+    wildfire: "wildfires",
+    supply_chain: "supply_chain_disruption"
+  };
+  var PLACEHOLDER = JSON.parse(JSON.stringify(sop_default));
+  var TTP = load("ttp", null);
+  var md = (s) => esc(String(s || "")).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  var ul = (a) => a && a.length && !(a.length === 1 && /^nil$/i.test(a[0])) ? `<ul>${a.map((x) => `<li>${md(x)}</li>`).join("")}</ul>` : `<p class="help">None in the TTP.</p>`;
+  var plain = (s) => String(s || "").replace(/\*\*/g, "");
+  var hours = (list) => {
+    const m = (list || []).map((x) => /every\s+\*{0,2}(\d+)\s*hours?/i.exec(x)).find(Boolean);
+    return m ? +m[1] : null;
+  };
+  function ttpHtml(t) {
+    if (!t) return "";
+    const sec = (title, body) => `<h4 class="ttp-h">${esc(title)}</h4>${body}`, part2 = (x) => `${ul(x.trig)}<div class="ttp-sub">Follow-up</div>${ul(x.cad)}<div class="ttp-sub">End — final update when all are met</div>${ul(x.end)}`;
+    return `<p class="prose">${md(t.desc)}</p>${sec("Monitor", ul(t.monitor))}${sec("PSOC Operations / Regional Manager trigger", part2(t.mgr))}${sec("APAC Escalation Chat trigger", ul(t.esc))}
+    ${sec("Intelligence Channel / SLT trigger", part2(t.intel))}${sec("Event notice (REN) — issue when any is met", `${TTP.meta.recipients ? `<p class="help">Recipients: ${esc(TTP.meta.recipients)}</p>` : ""}${ul(t.ren.crit)}${t.ren.cad && t.ren.cad.length ? `<div class="ttp-sub">Follow-up</div>${ul(t.ren.cad)}` : ""}${t.ren.reason ? `<div class="ttp-sub">Why</div><p class="prose">${md(t.ren.reason)}</p>` : ""}`)}
+    ${sec("Close monitoring when all are achieved", ul(t.close))}${t.cons && t.cons.length ? sec("Security, EHS and resiliency considerations", ul(t.cons)) : ""}${t.psoc && t.psoc.length ? sec("PSOC will", ul(t.psoc)) : ""}${t.note ? `<p class="help">${md(t.note)}</p>` : ""}`;
+  }
+  var strs = (a) => Array.isArray(a) ? a.map((x) => String(x)).slice(0, 60) : [];
+  var part = (x) => ({ trig: strs(x && x.trig), cad: strs(x && x.cad), end: strs(x && x.end) });
+  function clean(raw) {
+    const cats = {};
+    (raw.order || Object.keys(raw.ttp || {})).forEach((k) => {
+      const t = (raw.ttp || {})[k];
+      if (!t || typeof t !== "object") return;
+      cats[KEYMAP[k] || k] = {
+        label: String(t.label || k),
+        desc: String(t.desc || ""),
+        monitor: strs(t.monitor),
+        mgr: part(t.mgr),
+        esc: strs(t.esc),
+        intel: part(t.intel),
+        ren: { crit: strs(t.ren && t.ren.crit), cad: strs(t.ren && t.ren.cad), reason: String(t.ren && t.ren.reason || "") },
+        close: strs(t.close),
+        cons: strs(t.cons),
+        psoc: strs(t.psoc),
+        note: String(t.note || "")
+      };
+    });
+    const m = raw.meta || {};
+    return { meta: { version: String(m.version || ""), date: String(m.date || ""), owner: String(m.owner || ""), recipients: String(m.recipients || "") }, cats };
+  }
+  function apply() {
+    Object.keys(sop_default).forEach((k) => {
+      if (!PLACEHOLDER[k]) delete sop_default[k];
+      else sop_default[k] = Object.assign({}, PLACEHOLDER[k]);
+    });
+    if (TTP) Object.entries(TTP.cats).forEach(([k, t]) => {
+      sop_default[k] = { label: t.label, html: ttpHtml(t), ttp: true };
+    });
+  }
+  apply();
+  var ttpFor = (cat) => TTP && TTP.cats[cat] || null;
+  var ttpName = () => TTP ? `REN TTP${TTP.meta.version ? " v" + TTP.meta.version : ""}` : "";
+  function cadenceFor(cat) {
+    const t = ttpFor(cat);
+    if (!t || CFG.cadence === "fixed") return { m: 12, i: 24, src: "fixed" };
+    const m = hours(t.mgr.cad), i = hours(t.intel.cad);
+    return { m: m || 12, i: i || 24, src: ttpName() };
+  }
+  function setTTP(raw, file) {
+    const c = clean(raw);
+    if (!Object.keys(c.cats).length) throw new Error("the TTP in this file is empty");
+    TTP = Object.assign(c, { at: Date.now(), file: file || "" });
+    save("ttp", TTP);
+    apply();
+    emit("ttp");
+    return Object.keys(c.cats).length;
+  }
+  function clearTTP() {
+    TTP = null;
+    save("ttp", null);
+    apply();
+    emit("ttp");
+  }
+  var checklistFor = (cat) => {
+    const t = ttpFor(cat);
+    if (!t) return null;
+    return { close: t.close.map(plain), psoc: t.psoc.map(plain), cons: t.cons.map(plain), ren: t.ren.crit.map(plain) };
+  };
+  function extractTTP(trackerHtml) {
+    return new Promise((res, rej) => {
+      const i = trackerHtml.indexOf('id="psoc-ttp-v'), a = i < 0 ? -1 : trackerHtml.indexOf("var TTP_META", i);
+      if (a < 0) return res(null);
+      const code = trackerHtml.slice(a, trackerHtml.indexOf("<\/script>", a));
+      const f = document.createElement("iframe");
+      f.setAttribute("sandbox", "allow-scripts");
+      f.style.display = "none";
+      const done = (v, e) => {
+        window.removeEventListener("message", on2);
+        clearTimeout(t);
+        f.remove();
+        e ? rej(e) : res(v);
+      };
+      const on2 = (e) => {
+        if (e.source !== f.contentWindow) return;
+        const d = e.data || {};
+        if (d.ttp) try {
+          done(JSON.parse(d.ttp));
+        } catch (x) {
+          done(null, new Error("unreadable TTP"));
+        }
+        else done(null, new Error(d.err || "TTP not found"));
+      };
+      const t = setTimeout(() => done(null, new Error("reading the TTP timed out")), 8e3);
+      window.addEventListener("message", on2);
+      f.srcdoc = `<script>onmessage=function(e){var s=e.data,b=0,r=null;while((b=s.indexOf("})();",b+1))>0){try{r=new Function(s.slice(0,b+5)+";return {meta:TTP_META,order:TTP_ORDER,ttp:TTP};")();break;}catch(x){}}
+    parent.postMessage(r?{ttp:JSON.stringify(r)}:{err:"TTP not found"},"*");};<\/script>`;
+      f.onload = () => f.contentWindow.postMessage(code, "*");
+      document.body.appendChild(f);
+    });
+  }
 
   // src/model.js
   var CITIES = cities_default;
@@ -763,9 +901,38 @@ a{color:var(--signal)}
       parts.hazards = { tier: Math.max(0, ...hz.map((s) => s.tier)), value: hz.length + "", text: hz.length ? hz[0].title : "none in force", list: hz };
       STATE.scores[c.name] = { tier: Math.max(0, ...Object.values(parts).map((p) => p.tier)), parts };
     });
+    remember();
     applyRules();
     emit("data");
   }
+  var HISTORY = load("history", []);
+  var HKEEP = 7 * 864e5;
+  function remember() {
+    const now = Date.now(), by = new Map(HISTORY.map((h) => [h.key, h]));
+    let changed = false;
+    STATE.list.forEach((s) => {
+      if (s.kind === "conditions" || !s.sites.length && !s.cities.length && !s.alarm || s.tier < 1 && s.kind !== "quake") return;
+      const h = by.get(s.key);
+      if (h) {
+        h.last = now;
+        if (s.tier > h.tier) {
+          h.tier = s.tier;
+          h.title = s.title;
+          changed = true;
+        }
+        return;
+      }
+      const n = { key: s.key, title: s.title, kind: s.kind, src: s.src, tier: s.tier, first: now, t: s.t || now, last: now, sites: s.sites.length, cities: s.cities.slice(0, 4), area: (s.area || "").slice(0, 120), url: s.url || "" };
+      HISTORY.unshift(n);
+      by.set(s.key, n);
+      changed = true;
+    });
+    if (changed || Math.random() < 0.05) {
+      HISTORY = HISTORY.filter((h) => now - h.last < HKEEP).slice(0, 3e3);
+      save("history", HISTORY);
+    }
+  }
+  var isLiveKey = (key) => STATE.list.some((s) => s.key === key);
   var INBOX = load("inbox", []);
   var saveInbox = () => {
     INBOX = INBOX.filter((i) => i.status === "open" || Date.now() - (i.decidedAt || i.createdAt) < 14 * 864e5).slice(0, 1500);
@@ -856,6 +1023,8 @@ a{color:var(--signal)}
       status: "active",
       signals: o.signals || [],
       from: o.from || null,
+      cad: cadenceFor(o.cat || "weather"),
+      checks: {},
       welfare: {},
       comms: [],
       log: [{ t: now, by: who(), m: "Escalation opened" + (o.from ? " from the Inbox" : "") + "." }]
@@ -866,13 +1035,22 @@ a{color:var(--signal)}
     emit("data");
     return ev;
   }
+  var cad = (ev) => ev.cad || { m: 12, i: 24, src: "fixed" };
+  function applyCadence(ev, why) {
+    if (ev.status === "closed" || ev.cad && ev.cad.src === "manual") return false;
+    const c = cadenceFor(ev.cat), o = cad(ev);
+    if (o.m === c.m && o.i === c.i && o.src === c.src) return false;
+    ev.cad = c;
+    ev.log.push({ t: Date.now(), by: "system", m: `Update cadence ${c.src === "fixed" ? "set to the standard" : "set from the " + c.src}: Manager every ${c.m} h, Intel / SLT every ${c.i} h${why ? " (" + why + ")" : ""}.` });
+    return true;
+  }
   function timers(ev, now = Date.now()) {
     if (ev.status === "closed") return { state: "closed", rank: 9 };
     if (IMMEDIATE.has(ev.cat)) return { state: "immediate", rank: 3 };
     if (ev.timer === "awaiting") return { state: "awaiting", rank: 2 };
-    const d12 = ev.last12 + 12 * 36e5 - now, d24 = ev.last24 + 24 * 36e5 - now, st = (d) => d < 0 ? "overdue" : d < 36e5 ? "duesoon" : "ontrack";
-    const s12 = st(d12), s24 = st(d24), state = [s12, s24].includes("overdue") ? "overdue" : [s12, s24].includes("duesoon") ? "duesoon" : "ontrack";
-    return { state, rank: { overdue: 0, duesoon: 1, ontrack: 4 }[state], d12, d24, s12, s24 };
+    const c = cad(ev), d12 = ev.last12 + c.m * 36e5 - now, d24 = ev.last24 + c.i * 36e5 - now, st = (d) => d < 0 ? "overdue" : d < Math.min(36e5, c.m * 36e5 / 4) ? "duesoon" : "ontrack";
+    const s12 = st(d12), s24 = st(d24), state2 = [s12, s24].includes("overdue") ? "overdue" : [s12, s24].includes("duesoon") ? "duesoon" : "ontrack";
+    return { state: state2, rank: { overdue: 0, duesoon: 1, ontrack: 4 }[state2], d12, d24, s12, s24 };
   }
   var openEvents = () => EVENTS.filter((e) => e.status !== "closed").sort((a, b) => timers(a).rank - timers(b).rank || a.sev.localeCompare(b.sev) || a.created - b.created);
   function eventLog(ev, m, kind) {
@@ -895,9 +1073,16 @@ a{color:var(--signal)}
     if (which !== "24") ev.last12 = now;
     if (which !== "12") ev.last24 = now;
     if (ev.timer === "awaiting") ev.timer = "running";
+    const c = cad(ev);
     ev.notified = false;
-    eventLog(ev, which === "12" ? "PSOC Manager update sent — 12 h timer reset." : which === "24" ? "Intel / SLT update sent — 24 h timer reset." : "Update sent — both timers reset.", "update");
+    eventLog(ev, which === "12" ? `PSOC Manager update sent — ${c.m} h timer reset.` : which === "24" ? `Intel / SLT update sent — ${c.i} h timer reset.` : "Update sent — both timers reset.", "update");
     audit("Escalation update", ev.title, which);
+  }
+  function setCheck(ev, key, on2, label) {
+    ev.checks = ev.checks || {};
+    if (on2) ev.checks[key] = { at: Date.now(), by: who() };
+    else delete ev.checks[key];
+    eventLog(ev, `${on2 ? "Done" : "Un-ticked"}: ${label}`, "check");
   }
   function setWelfare(ev, code, status, note) {
     ev.welfare[code] = { status, note: note || "", at: Date.now(), by: who() };
@@ -932,7 +1117,9 @@ a{color:var(--signal)}
     emit("data");
   }
   function feedResult(id, patch) {
-    STATE.feeds[id] = Object.assign(STATE.feeds[id] || {}, patch);
+    const f = STATE.feeds[id] = Object.assign(STATE.feeds[id] || {}, patch);
+    if (patch.ok === false) f.failSince = f.failSince || patch.at || Date.now();
+    else if (patch.ok) f.failSince = null;
     emit("feeds");
   }
   function migrateData(loadRaw2) {
@@ -1032,6 +1219,7 @@ a{color:var(--signal)}
   // src/sources/quakes.js
   var estimateMMI = (mag, surfaceKm, depthKm) => Math.max(0, Math.min(12, mag - 2.5 * Math.log10(Math.max(Math.sqrt(surfaceKm ** 2 + depthKm ** 2), 1)) + 1.5));
   var roman = (v) => v >= 11 ? "XI+" : ["I", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"][Math.max(0, Math.floor(v))];
+  var mmiWord = (v) => v < 2 ? "not felt" : v < 4 ? "weak" : v < 5 ? "light" : v < 6 ? "moderate" : v < 7 ? "strong" : v < 8 ? "very strong" : v < 9 ? "severe" : v < 11 ? "violent" : "extreme";
   var magLabel = (m) => m < 4 ? "Minor" : m < 5 ? "Light" : m < 6 ? "Moderate" : m < 7 ? "Strong" : m < 8 ? "Major" : m < 9 ? "Great" : "Extreme";
   var feedUrl = (t) => "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/" + (t >= 4.5 ? "4.5_day" : t >= 2.5 ? "2.5_day" : t >= 1 ? "1.0_day" : "all_day") + ".geojson";
   var EMSC = [];
@@ -1127,7 +1315,7 @@ a{color:var(--signal)}
   });
   function archive(sigs) {
     const cut = Date.now() - 60 * 864e5, by = new Map(QARCH.map((q) => [q.id, q]));
-    let ch = false;
+    let ch2 = false;
     sigs.forEach((s) => {
       const st = QSTATE[s.id] || {}, rec = {
         id: s.id,
@@ -1149,10 +1337,10 @@ a{color:var(--signal)}
       const ex = by.get(s.id);
       if (!ex || JSON.stringify(ex) !== JSON.stringify(rec)) {
         by.set(s.id, rec);
-        ch = true;
+        ch2 = true;
       }
     });
-    if (ch || QARCH.some((q) => q.t < cut)) {
+    if (ch2 || QARCH.some((q) => q.t < cut)) {
       QARCH = [...by.values()].filter((q) => q.t >= cut).sort((a, b) => b.t - a.t).slice(0, 2e3);
       save("quakeArchive", QARCH);
     }
@@ -1161,9 +1349,9 @@ a{color:var(--signal)}
   var headerPlace = (p) => String(p || "").replace(/^\s*\d+(?:\.\d+)?\s*km\s+[NSEW]{1,3}\s+of\s+/i, "").replace(/^\s*(?:near the coast of|off the coast of|offshore(?: of)?|near)\s+/i, "").trim() || p;
   var joinOx = (a) => a.length < 2 ? a[0] || "" : a.length === 2 ? a.join(" and ") : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
   function leadershipUpdate(sig, compassWord, bearing2) {
-    const e = sig.extra, n = sig.near, hhmm = new Date(sig.t).toISOString().slice(11, 16).replace(":", "");
+    const e = sig.extra, n = sig.near, hhmm2 = new Date(sig.t).toISOString().slice(11, 16).replace(":", "");
     const paras = [
-      `At ${hhmm} hours (UTC), PSOC has identified a magnitude ${e.mag.toFixed(1)} earthquake approximately ${expandPlace(e.place)}, at a depth of ${Math.round(e.depth)} km.`,
+      `At ${hhmm2} hours (UTC), PSOC has identified a magnitude ${e.mag.toFixed(1)} earthquake approximately ${expandPlace(e.place)}, at a depth of ${Math.round(e.depth)} km.`,
       `${e.tsunami ? "A tsunami warning has been issued." : "No tsunami warning has been issued."} ${e.alert ? `The PAGER alert level was assessed as ${e.alert[0].toUpperCase() + e.alert.slice(1)} by the U.S. Geological Survey (USGS).` : "No PAGER alert level has been published by the U.S. Geological Survey (USGS) at this time."}`,
       n ? `The closest company site, located in ${n.s.city || n.s.code}, is approximately ${Math.round(n.km)} km ${compassWord(bearing2(sig.lat, sig.lon, n.s.lat, n.s.lon))} of the epicenter. At this time, no impacts to company personnel, assets, or operations have been identified.` : "",
       `Event: M${e.mag.toFixed(1)} Earthquake - ${expandPlace(e.place)} (${sig.url})`,
@@ -1556,7 +1744,7 @@ a{color:var(--signal)}
       const out = [], errs = [], prefs = JMA_PREFS.filter((p) => CFG.agency.jmaPrefs.includes(p[0]));
       await Promise.all(prefs.map(async ([code, pref, plat, plon]) => {
         try {
-          const data2 = await relayJSON(`https://www.jma.go.jp/bosai/warning/data/r8/${code}.json`), found = {};
+          const data2 = await relayJSON(`https://www.jma.go.jp/bosai/warning/data/r8/${code}.json`), found2 = {};
           let issued = null;
           asArr(data2).forEach((b) => {
             if (!b) return;
@@ -1570,15 +1758,15 @@ a{color:var(--signal)}
                 if (!ac) return;
                 (it.kinds || it.warnings || []).forEach((kd) => {
                   if (!kd.code || !kd.status || JMA_OFF.includes(kd.status)) return;
-                  (found[ac] = found[ac] || /* @__PURE__ */ new Set()).add(kd.code);
+                  (found2[ac] = found2[ac] || /* @__PURE__ */ new Set()).add(kd.code);
                 });
               });
             });
           });
-          const six = Object.keys(found).filter((c) => String(c).length === 6), use = six.length ? six : Object.keys(found);
+          const six = Object.keys(found2).filter((c) => String(c).length === 6), use = six.length ? six : Object.keys(found2);
           use.forEach((sub) => {
             const sn = JMA_SUB[sub], outlying = sn && !sn[3], name = sn ? sn[0] : pref, city = sn ? sn[3] || null : JMA_CITY[code] || null;
-            [...found[sub]].forEach((wc) => {
+            [...found2[sub]].forEach((wc) => {
               const [label, lvl] = JMA_CODE[wc] || ["Advisory code " + wc, 2];
               out.push(warning({
                 src: "jma",
@@ -2345,18 +2533,21 @@ a{color:var(--signal)}
     }
     const out = [];
     watchSites().forEach((s) => {
-      let best = 1e9, at = null, direct = null, poss = null;
+      let best = 1e9, at = null, direct = null, poss = null, until = null;
       tl.forEach((q) => {
         const d = km(s.lat, s.lon, q.lat, q.lon);
         if (d < best) {
           best = d;
           at = q.t;
         }
-        if (q.R > 0 && d <= q.R && direct == null) direct = q.t;
+        if (q.R > 0 && d <= q.R) {
+          if (direct == null) direct = q.t;
+          until = q.t;
+        }
         if (q.R + q.P > 0 && d <= q.R + q.P && poss == null) poss = q.t;
       });
       const level = direct != null ? "direct" : poss != null ? "possible" : best <= CFG.ranges.cycloneWatchKm ? "watch" : null;
-      if (level) out.push({ code: s.code, km: best, level, at: direct ?? poss ?? at });
+      if (level) out.push({ code: s.code, km: best, level, at: direct ?? poss ?? at, closestAt: at, until: direct != null ? until : null, open: direct != null && until === tl[tl.length - 1].t });
     });
     const r = { direct: 0, possible: 1, watch: 2 };
     return out.sort((a, b) => r[a.level] - r[b.level] || a.km - b.km);
@@ -2395,8 +2586,8 @@ a{color:var(--signal)}
           lon: s.now.lon,
           t: s.issue || s.now.time || Date.now(),
           url: s.src === "JMA" ? "https://www.jma.go.jp/bosai/map.html#contents=typhoon&lang=en" : s.gdacs.report,
-          text: `${s.now.kt != null ? Math.round(s.now.kt) + " kt (" + Math.round(s.now.kt * 1.852) + " km/h)" : "wind unknown"}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}${s.now.course ? ", moving " + s.now.course + (s.now.speed ? " at " + s.now.speed + " km/h" : "") : ""}${s.now.stormKm ? `, storm-force winds up to ${s.now.stormKm} km` : ""}. Source: ${s.src === "JMA" ? "JMA official forecast" + (s.gdacs ? " with GDACS " + s.gdacs.level + " alert" : "") : "GDACS (JTWC/NOAA advisories)"}.${first ? " First affects a site " + new Date(first).toISOString().slice(0, 16).replace("T", " ") + " UTC." : ""}`,
-          sites: ex.map((x) => ({ code: x.code, km: x.km, level: x.level, at: x.at })),
+          text: `${s.now.kt != null ? Math.round(s.now.kt) + " kt (" + Math.round(s.now.kt * 1.852) + " km/h)" : "wind unknown"}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}${s.now.course ? ", moving " + s.now.course + (s.now.speed ? " at " + s.now.speed + " km/h" : "") : ""}${s.now.stormKm ? `, storm-force winds up to ${s.now.stormKm} km` : ""}. Source: ${s.src === "JMA" ? "JMA official forecast" + (s.gdacs ? " with GDACS " + s.gdacs.level + " alert" : "") : "GDACS (JTWC/NOAA advisories)"}.${first ? " Damaging winds first reach a site around " + sgt(first) + " SGT." : ""}`,
+          sites: ex.map((x) => ({ code: x.code, km: x.km, level: x.level, at: x.at, closestAt: x.closestAt, until: x.until, open: x.open })),
           citySites: false,
           extra: { storm: s, cone: s.gdacs && s.gdacs.track ? s.gdacs.track.cone : [], obs: s.gdacs && s.gdacs.track ? s.gdacs.track.obs : [] }
         };
@@ -2787,6 +2978,32 @@ a{color:var(--signal)}
 
   // src/sources/conditions.js
   var MODEL_NAME = { jma_seamless: "JMA", kma_seamless: "KMA", cma_grapes_global: "CMA", bom_access_global: "BoM", ecmwf_ifs025: "ECMWF", AUTO: "auto" };
+  var PM25 = [[0, 9, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]];
+  var PM10 = [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500]];
+  function idxToConc(i, T) {
+    if (i == null) return null;
+    const r = T.find(([, , lo, hi]) => i >= lo && i <= hi) || T[T.length - 1], [cl, ch2, il, ih] = r;
+    return Math.round(((ch2 - cl) / (ih - il) * (i - il) + cl) * 10) / 10;
+  }
+  var OUT = {};
+  var outlookCached = (name) => OUT[name] && OUT[name].d;
+  async function outlook(c) {
+    const k = c.name;
+    if (OUT[k] && Date.now() - OUT[k].at < 15 * 6e4) return OUT[k].d;
+    const q = `latitude=${c.lat}&longitude=${c.lon}&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max&forecast_days=7&timezone=auto`;
+    let d = null;
+    if (CFG.wxModels !== "auto") try {
+      d = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}&models=${c.model}`);
+      if (!d.daily || d.daily.temperature_2m_max.every((v) => v == null)) d = null;
+    } catch (e) {
+    }
+    if (!d) {
+      d = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}`);
+      d.auto = true;
+    }
+    OUT[k] = { at: Date.now(), d };
+    return d;
+  }
   var coords = (list) => `latitude=${list.map((c) => c.lat).join(",")}&longitude=${list.map((c) => c.lon).join(",")}`;
   register({
     id: "weather",
@@ -2866,7 +3083,17 @@ a{color:var(--signal)}
           const r = await getJSON(`https://api.waqi.info/feed/geo:${c.lat};${c.lon}/?token=${encodeURIComponent(CFG.keys.waqi)}`, 15e3);
           if (r && r.status === "ok" && isFinite(+r.data.aqi)) {
             good++;
-            STATE.city.air[c.name] = { aqi: +r.data.aqi, station: r.data.city && r.data.city.name, t: r.data.time && r.data.time.iso ? Date.parse(r.data.time.iso) : null };
+            const iq = r.data.iaqi || {}, sub = (k) => iq[k] && isFinite(+iq[k].v) ? +iq[k].v : null;
+            STATE.city.air[c.name] = {
+              aqi: +r.data.aqi,
+              station: r.data.city && r.data.city.name,
+              url: r.data.city && r.data.city.url,
+              t: r.data.time && r.data.time.iso ? Date.parse(r.data.time.iso) : null,
+              pm25: idxToConc(sub("pm25"), PM25),
+              pm10: idxToConc(sub("pm10"), PM10),
+              pm25i: sub("pm25"),
+              pm10i: sub("pm10")
+            };
           } else delete STATE.city.air[c.name];
         } catch (e) {
           delete STATE.city.air[c.name];
@@ -2932,8 +3159,15 @@ a{color:var(--signal)}
   var base = null;
   var layers = null;
   var siteLayer = null;
+  var shakeLayer = null;
   var lastFit = "";
-  var BASES = { night: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", day: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}" };
+  var ESRI = (n) => `https://server.arcgisonline.com/ArcGIS/rest/services/${n}/MapServer/tile/{z}/{y}/{x}`;
+  var BASES = { night: ESRI("Canvas/World_Dark_Gray_Base"), day: ESRI("Canvas/World_Light_Gray_Base"), streets: ESRI("World_Street_Map"), imagery: ESRI("World_Imagery") };
+  var BASE_NAMES = { auto: "Plain (follows theme)", streets: "Streets", imagery: "Satellite", none: "No basemap" };
+  var classBand = (c) => {
+    c = String(c || "").toUpperCase();
+    return c === "OFFICE" ? "o" : /^CLASS [AB]$|^[AB]$/.test(c) ? "ab" : /C-?PE|^CLASS C$|^C$/.test(c) ? "c" : "e";
+  };
   function initMap() {
     if (map || typeof L === "undefined") {
       if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>This network blocks cdnjs.cloudflare.com. Everything else works.</div>`;
@@ -2942,14 +3176,57 @@ a{color:var(--signal)}
     map = L.map("map", { zoomControl: true, worldCopyJump: true, attributionControl: true, preferCanvas: false }).setView([15, 115], 4);
     setBase();
     siteLayer = L.layerGroup().addTo(map);
+    shakeLayer = L.layerGroup().addTo(map);
     layers = L.layerGroup().addTo(map);
-    $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}</div>`);
+    $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}<span class="sep"></span><span><i class="sitedot ab"></i>A / B</span><span><i class="sitedot c"></i>C, C-PE</span><span><i class="sitedot e"></i>Edge</span><span><i class="sitedot o"></i>Office</span><span id="shakeNote"></span></div>
+    <select class="basesel" aria-label="Basemap">${Object.entries(BASE_NAMES).map(([k, l]) => `<option value="${k}"${load("basemap", "auto") === k ? " selected" : ""}>${l}</option>`).join("")}</select>`);
+    $("#mapcell .basesel").onchange = (e) => {
+      save("basemap", e.target.value);
+      setBase();
+    };
   }
   function setBase() {
     if (!map) return;
     if (base) map.removeLayer(base);
-    const day = document.documentElement.dataset.theme === "day";
-    base = L.tileLayer(BASES[day ? "day" : "night"], { maxZoom: 16, attribution: "Tiles © Esri" }).addTo(map);
+    base = null;
+    const day = document.documentElement.dataset.theme === "day", b = load("basemap", "auto");
+    if (b === "none") return;
+    base = L.tileLayer(BASES[b === "auto" ? day ? "day" : "night" : b] || BASES.night, { maxZoom: 18, attribution: b === "imagery" ? "Imagery © Esri, Maxar, Earthstar Geographics" : "Tiles © Esri" }).addTo(map);
+  }
+  var SHAKE = {};
+  var MMI_COL = ["#ffffff", "#ffffff", "#bfccff", "#a0e6ff", "#80ffff", "#7aff93", "#ffff00", "#ffc800", "#ff9100", "#ff0000", "#c80000"];
+  var shakeFor = null;
+  function shakeNote(t) {
+    const n = $("#shakeNote");
+    if (n) n.textContent = t || "";
+  }
+  async function shakeMap(s) {
+    if (shakeFor === s.key) return;
+    shakeFor = s.key;
+    shakeLayer.clearLayers();
+    shakeNote("");
+    if (!SHAKE[s.key] && s.extra.detail) {
+      SHAKE[s.key] = "loading";
+      shakeNote("Loading ShakeMap…");
+      try {
+        const d = await getJSON(s.extra.detail, 15e3), sm = ((d.properties || {}).products || {}).shakemap, c = sm && sm[0] && sm[0].contents && sm[0].contents["download/cont_mmi.json"];
+        SHAKE[s.key] = c ? await getJSON(c.url, 2e4) : "none";
+      } catch (e) {
+        SHAKE[s.key] = "none";
+      }
+    }
+    const g = SHAKE[s.key];
+    if (shakeFor !== s.key) return;
+    if (!g || g === "none" || g === "loading") {
+      shakeNote(g === "loading" ? "" : "No USGS ShakeMap yet — rings are modelled");
+      return;
+    }
+    L.geoJSON(g, { interactive: true, style: (f) => {
+      const v = +f.properties.value;
+      return { color: f.properties.color || MMI_COL[Math.max(0, Math.min(10, Math.round(v)))], weight: v % 1 ? 1 : 2.4, opacity: 0.95 };
+    } }).eachLayer((l) => l.bindTooltip(`USGS ShakeMap MMI ${l.feature.properties.value}`)).addTo(shakeLayer);
+    shakeNote("Lines: USGS ShakeMap MMI contours");
+    if (draw.last) draw(draw.last);
   }
   var mapReady = () => !!map;
   var leafletMap = () => map;
@@ -2958,14 +3235,23 @@ a{color:var(--signal)}
   }
   function draw(o) {
     if (!map) return;
+    draw.last = o;
     layers.clearLayers();
     siteLayer.clearLayers();
     const hit = new Set(o.hitSites || []), bounds = [];
+    const selQ = (o.signals || []).find((s) => s.key === o.selected && s.kind === "quake");
+    if (selQ) shakeMap(selQ);
+    else if (shakeFor) {
+      shakeFor = null;
+      shakeLayer.clearLayers();
+      shakeNote("");
+    }
     SITES.forEach((s) => {
       if (!isFinite(s.lat)) return;
       const h = hit.has(s.code);
       if (!h && o.quietSites) return;
-      L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<div class="sitedot${isOffice(s) ? " off" : ""}${h ? " hit" : ""}"></div>`, iconSize: [h ? 9 : 7, h ? 9 : 7] }), keyboard: false, zIndexOffset: h ? 400 : 0 }).bindTooltip(`<b>${esc(s.code)}</b> ${esc(s.city || "")}<br>${esc(s.cls)} · ${esc(s.status)}`, { direction: "top" }).on("click", () => o.onSite && o.onSite(s.code)).addTo(siteLayer);
+      if (o.siteFilter && !o.siteFilter(s) && !h) return;
+      L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<div class="sitedot ${classBand(s.cls)}${isLive(s) || isOffice(s) ? "" : " notlive"}${h ? " hit" : ""}"></div>`, iconSize: [h ? 10 : 8, h ? 10 : 8] }), keyboard: false, zIndexOffset: h ? 400 : 0 }).bindTooltip(`<b>${esc(s.code)}</b> ${esc(s.city || "")}<br>${esc(s.cls)} · ${esc(s.status)}`, { direction: "top" }).on("click", () => o.onSite && o.onSite(s.code)).addTo(siteLayer);
       if (h) bounds.push([s.lat, s.lon]);
     });
     (o.signals || []).forEach((s) => {
@@ -2976,7 +3262,7 @@ a{color:var(--signal)}
       }
       if (s.kind === "cyclone" && s.extra && s.extra.storm && (on2 || o.tracks)) drawStorm(s, on2);
       if (s.kind === "volcano" && on2 && s.extra && s.extra.rings) s.extra.rings.forEach((r, i) => L.circle([s.lat, s.lon], { radius: r * 1e3, color: i ? cv("--t1") : cv("--t3"), weight: 1.2, dashArray: i ? "4 5" : null, fillOpacity: i ? 0.03 : 0.08, interactive: false }).addTo(layers));
-      if (s.kind === "quake" && on2 && s.extra) [3, 4, 5].forEach((mmi) => {
+      if (s.kind === "quake" && on2 && s.extra && !(SHAKE[s.key] && typeof SHAKE[s.key] === "object")) [3, 4, 5].forEach((mmi) => {
         const r = quakeRadius(s.extra.mag, s.extra.depth, mmi);
         if (r > 1) L.circle([s.lat, s.lon], { radius: r * 1e3, color: cv(`--t${mmi - 2}`), weight: 1, fillOpacity: 0.04, interactive: false }).bindTooltip(`Estimated MMI ${["III", "IV", "V"][mmi - 3]} and above`).addTo(layers);
       });
@@ -3023,6 +3309,9 @@ a{color:var(--signal)}
       if (p.stormKm) L.circle([p.lat, p.lon], { radius: p.stormKm * 1e3, color: cv("--t3"), weight: 1.2, fillColor: cv("--t3"), fillOpacity: i ? 0.05 : 0.12 }).bindTooltip(`Storm-force winds up to ${p.stormKm} km${p.time ? " · " + sgt(p.time) : ""}`).addTo(layers);
       if (i) L.circleMarker([p.lat, p.lon], { radius: 3, color: cv("--signal"), weight: 2, fillOpacity: 1 }).bindTooltip(`${p.time ? sgt(p.time) : "+" + p.h + " h"}${p.kt != null ? " · " + Math.round(p.kt) + " kt" : ""}${p.hpa ? " · " + p.hpa + " hPa" : ""}`).addTo(layers);
     });
+  }
+  function flyTo(lat, lon, z) {
+    if (map && isFinite(lat)) map.setView([lat, lon], z || Math.max(map.getZoom(), 9), { animate: true });
   }
   function pickPoint() {
     return new Promise((res) => {
@@ -3077,9 +3366,9 @@ a{color:var(--signal)}
       closeDialog();
     }
   }, true);
-  function confirmBox(title, msg, okLabel = "Confirm") {
+  function confirmBox(title, msg2, okLabel = "Confirm") {
     return new Promise((res) => {
-      dialog(title, `<p class="prose">${msg}</p>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="cfOk">${esc(okLabel)}</button>`, { onClose: () => res(false) });
+      dialog(title, `<p class="prose">${msg2}</p>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="cfOk">${esc(okLabel)}</button>`, { onClose: () => res(false) });
       $("#cfOk").onclick = () => {
         onClose = null;
         closeDialog();
@@ -3089,8 +3378,8 @@ a{color:var(--signal)}
   }
   function toast(title, body = "", tier = null, go2 = null, ms = null) {
     ms = ms || (tier >= 2 ? 8e3 : 3500);
-    const box = $("#toasts");
-    while (box.children.length >= 3) box.firstElementChild.remove();
+    const box2 = $("#toasts");
+    while (box2.children.length >= 3) box2.firstElementChild.remove();
     const t = document.createElement("div");
     t.className = "toast";
     if (tier != null) t.style.setProperty("--c", `var(--t${tier})`);
@@ -3099,7 +3388,7 @@ a{color:var(--signal)}
       t.remove();
       if (go2) go2();
     };
-    box.appendChild(t);
+    box2.appendChild(t);
     setTimeout(() => t.remove(), ms);
   }
   var tierWord = (t) => `<span class="tierword t${t}">${esc(TIER[t].label)}</span>`;
@@ -3119,6 +3408,145 @@ a{color:var(--signal)}
     render: () => render,
     visible: () => visible
   });
+
+  // src/ui/brief.js
+  var RISK = { direct: "In the path", possible: "May be affected", watch: "Worth watching" };
+  var hhmm = (t) => t ? sgt(t) + " SGT" : "—";
+  function briefFor(s) {
+    const e = s.extra || {}, L2 = [];
+    L2.push(`${s.title}`, `${KINDS[s.kind].label} · ${TIER[s.tier].label} · reported ${sgt(s.t)} SGT${s.end ? ", until " + sgt(s.end) + " SGT" : ""}`);
+    if (s.area || s.cities.length) L2.push(`Where: ${s.area || s.cities.join(", ")}`);
+    if (s.kind === "quake") L2.push(`M${e.mag.toFixed(1)} (${magLabel(e.mag)}), depth ${Math.round(e.depth)} km.${e.topSite ? ` Strongest estimated shaking at a site: MMI ${roman(e.topMMI)} at ${e.topSite}, ${Math.round(e.topKm)} km.` : ""} ${e.tsunami ? "USGS tsunami flag set." : "No tsunami flag."}${e.alert ? " PAGER " + e.alert + "." : ""}`);
+    if (s.kind === "cyclone" && e.storm) {
+      const n = e.storm.now, c = tcClass(n.kt);
+      L2.push(`${c[1]}${n.kt != null ? `, ${Math.round(n.kt)} kt (${Math.round(n.kt * 1.852)} km/h)` : ""}${n.hpa ? `, ${n.hpa} hPa` : ""}${n.course ? `, moving ${n.course}${n.speed ? " at " + n.speed + " km/h" : ""}` : ""}.`);
+    }
+    if (s.text && s.kind !== "quake") L2.push(s.text);
+    if (s.sites.length) {
+      L2.push("", `Sites (${s.sites.length}):`);
+      s.sites.slice(0, 25).forEach((x) => {
+        const st = siteBy(x.code) || {}, place2 = [st.city, st.cls].filter(Boolean).join(", ");
+        L2.push(`  • ${x.code}${place2 ? " (" + place2 + ")" : ""}${x.km ? ` — ${Math.round(x.km)} km` : ""}${x.mmi ? `, est. MMI ${roman(x.mmi)}` : ""}${x.level ? `, ${RISK[x.level] || x.level}${x.level !== "watch" && x.at ? `, damaging winds from ${hhmm(x.at)}${x.open ? " to the end of the forecast" : x.until && x.until !== x.at ? " to " + hhmm(x.until) : ""}` : ""}${x.closestAt ? `, closest ${hhmm(x.closestAt)}` : ""}` : ""}`);
+      });
+      if (s.sites.length > 25) L2.push(`  and ${s.sites.length - 25} more`);
+    } else if (s.near) L2.push(`Nearest site: ${s.near.code}, ${Math.round(s.near.km)} km.`);
+    if (s.url) L2.push("", `Source: ${s.url}`);
+    return L2.join("\n");
+  }
+
+  // src/ui/tv.js
+  var HLS_JS = "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js";
+  var CHANNELS = {
+    cna: { n: "CNA", u: ["https://d2e1asnsl7br7b.cloudfront.net/7782e205e72f43aeb4a48ec97f66ebbe/index.m3u8", "https://mediacorp-videosbclive.akamaized.net/dd724cfb0e8e4cdc921bbc4ac94614bf/ap-southeast-1/6057994443001/profile_1/chunklist.m3u8"], page: "https://www.youtube.com/watch?v=XWq5kBlakcQ" },
+    nhk: { n: "NHK WORLD", u: ["https://nhkwlive-ojp.akamaized.net/hls/live/2003459/nhkwlive-ojp-en/index.m3u8"], page: "https://www3.nhk.or.jp/nhkworld/en/live/" },
+    dw: { n: "DW News", u: ["https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8"], page: "https://www.dw.com/en/live-tv/channel-english" },
+    aje: { n: "Al Jazeera English", u: ["https://live-hls-apps-aje-fa.getaj.net/AJE/index.m3u8", "https://live-hls-apps-aje-v3-fa.getaj.net/AJE/index.m3u8", "https://live-hls-web-aje-fa.thehlive.com/AJE/index.m3u8"], page: "https://www.aljazeera.com/live" }
+  };
+  var box = null;
+  var video = null;
+  var hls = null;
+  var ch = load("tvChannel", "cna");
+  var urlI = 0;
+  var state = "";
+  function ui() {
+    if (box) return box;
+    box = document.createElement("div");
+    box.className = "tv";
+    box.innerHTML = `<div class="filters tvch" role="group" aria-label="Channel">${Object.entries(CHANNELS).map(([k, c]) => `<button class="fchip" data-tvch="${k}">${esc(c.n)}</button>`).join("")}</div>
+    <div class="tvframe"><video playsinline muted controls autoplay></video><div class="tvmsg" hidden></div></div><p class="help tvnote"></p>`;
+    video = box.querySelector("video");
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tvch],[data-tvnext]");
+      if (!b) return;
+      if (b.dataset.tvch) {
+        ch = b.dataset.tvch;
+        save("tvChannel", ch);
+        urlI = 0;
+        play();
+      } else {
+        urlI++;
+        play();
+      }
+    });
+    video.addEventListener("playing", () => msg(""));
+    return box;
+  }
+  function msg(t) {
+    const m = box.querySelector(".tvmsg");
+    m.hidden = !t;
+    m.innerHTML = t ? `<div>${t}</div>` : "";
+  }
+  function stopStream() {
+    if (hls) {
+      try {
+        hls.destroy();
+      } catch (e) {
+      }
+      hls = null;
+    }
+    video.removeAttribute("src");
+    try {
+      video.load();
+    } catch (e) {
+    }
+  }
+  async function play() {
+    const c = CHANNELS[ch] || CHANNELS.cna;
+    stopStream();
+    state = ch;
+    box.querySelectorAll("[data-tvch]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tvch === ch));
+    box.querySelector(".tvnote").innerHTML = `Starts muted; use the speaker control to listen. It pauses when you leave Live TV. If it won't play on this network, <a href="${esc(c.page)}" target="_blank" rel="noopener">watch ${esc(c.n)} on its own site</a>.`;
+    if (urlI >= c.u.length) {
+      msg(`<b>${esc(c.n)} did not play here.</b> Office networks often block live video. <a href="${esc(c.page)}" target="_blank" rel="noopener">Open it on the broadcaster's site</a> or <button class="linkbtn" data-tvnext>try again</button>.`);
+      urlI = -1;
+      return;
+    }
+    const url = c.u[Math.max(0, urlI)];
+    msg(`Connecting to ${esc(c.n)}…`);
+    const fail = () => {
+      if (state !== ch) return;
+      urlI++;
+      play();
+    };
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = url;
+      video.onerror = fail;
+      video.play().catch(() => {
+      });
+      return;
+    }
+    try {
+      await loadScript(HLS_JS);
+    } catch (e) {
+      msg(`The video player could not load (cdnjs blocked). <a href="${esc(c.page)}" target="_blank" rel="noopener">Watch on the broadcaster's site</a>.`);
+      return;
+    }
+    if (!window.Hls || !window.Hls.isSupported()) {
+      msg("This browser can't play live streams.");
+      return;
+    }
+    hls = new window.Hls({ lowLatencyMode: false, manifestLoadingTimeOut: 12e3 });
+    hls.on(window.Hls.Events.ERROR, (e, d) => {
+      if (d && d.fatal) fail();
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    video.play().catch(() => {
+    });
+  }
+  function mountTV(host) {
+    if (!host) {
+      if (box && box.isConnected === false && (hls || video.src)) stopStream(), state = "";
+      return;
+    }
+    const first = !box;
+    host.appendChild(ui());
+    if (first || !state) {
+      urlI = 0;
+      play();
+    } else if (video.paused && !box.querySelector(".tvmsg:not([hidden])")) video.play().catch(() => {
+    });
+  }
 
   // src/ui/drafts.js
   var catLabel = (c) => (SOP_REF[c] || {}).label || c;
@@ -3161,7 +3589,7 @@ Sites in the affected area: ${codes.length ? siteLine(codes, ev.lat, ev.lon) : "
 
 Event notice: ${REN[ev.ren].toLowerCase()}. Severity ${ev.sev}.
 
-Monitoring is ongoing. Next update by ${sgt(ev.last12 + 12 * 36e5)} SGT.`
+Monitoring is ongoing. Next update by ${sgt(ev.last12 + cad(ev).m * 36e5)} SGT.`
     });
     out.push({ id: "intel", label: "Intelligence Channel post", to: CFG.psoc.intelChannel, text: `${where} | ${catLabel(ev.cat)} | ${ev.sev}
 ${ev.title}
@@ -3192,6 +3620,10 @@ PSOC`
   function mailto(d) {
     return `mailto:${encodeURIComponent(d.to || "")}?subject=${encodeURIComponent(d.subject || d.text.split("\n")[0])}&body=${encodeURIComponent(d.text)}`;
   }
+  function asHtml(text) {
+    const e = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return text.split(/\n{2,}/).map((p) => `<p>${e(p).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")}</p>`).join("");
+  }
 
   // src/ui/forms.js
   var countryOfSites = (codes) => {
@@ -3219,7 +3651,8 @@ PSOC`
       $("#efCount").textContent = `— ${chosen.size} selected`;
     };
     const sop = () => {
-      $("#efSop").innerHTML = `SOP: <button class="linkbtn" type="button" id="efSopBtn">${esc((SOP_REF[$("#efCat").value] || {}).label || "")} procedure</button>`;
+      const k = $("#efCat").value, c = cadenceFor(k), t = SOP_REF[k] || {};
+      $("#efSop").innerHTML = `${k === "protest" ? "Updates as it develops; no countdown. " : t.ttp ? `Updates: PSOC Manager every ${c.m} h, Intel / SLT every ${c.i} h (${esc(ttpName())}). ` : ""}<button class="linkbtn" type="button" id="efSopBtn">${esc(t.label || "")} procedure</button>`;
       $("#efSopBtn").onclick = () => sopDialog($("#efCat").value);
     };
     drawSites();
@@ -3268,7 +3701,8 @@ PSOC`
   }
   function sopDialog(cat) {
     const s = SOP_REF[cat] || {};
-    dialog((s.label || cat) + " — SOP", `<div class="prose">${s.html || "No procedure recorded for this category."}</div><p class="help">These are the procedures loaded into this console. Replace them with your organisation's SOP under Settings.</p>`, `<button class="btn" data-close>Close</button>`, { wide: true });
+    dialog((s.label || cat) + (s.ttp ? " — " + ttpName() : " — procedure"), `<div class="ttp-body">${s.html || "No procedure recorded for this category."}</div>
+    <p class="help">${s.ttp ? `From ${esc(TTP.file || "the PULSE file")}${TTP.meta.date ? ", dated " + esc(TTP.meta.date) : ""}. Kept in this browser only.` : "This is a placeholder. Import a PULSE file under Sites to load your REN TTP; it stays in this browser."}</p>`, `<button class="btn" data-close>Close</button>`, { wide: true });
   }
   function notifyComposer(sig, opts = {}) {
     const ds = opts.drafts || draftsForSignal(sig);
@@ -3285,7 +3719,7 @@ PSOC`
       if (!t) return;
       const i = +(t.dataset.dcopy ?? t.dataset.dmail ?? t.dataset.dsent), d = Object.assign({}, ds[i], { text: text(i) });
       if (t.dataset.dcopy != null) {
-        const ok = await copyText(d.text);
+        const ok = await copyText(d.text, asHtml(d.text));
         t.textContent = ok ? "Copied" : "Copy failed";
         audit("Copied message", d.label, sig ? sig.title : "");
       }
@@ -3314,24 +3748,44 @@ PSOC`
     const k = KINDS[s.kind].label, n = srcName(s.src);
     return n.toLowerCase().includes(k.toLowerCase().replace(/e?s$/, "")) ? n : k + " · " + n;
   };
+  var nearKm = (s) => s.sites.length ? Math.min(...s.sites.map((x) => x.km || 0)) : s.near ? s.near.km : 1e9;
+  var strength = (s) => s.kind === "quake" ? (s.extra.topMMI || 0) * 10 + s.extra.mag : s.tier * 10;
+  var SORTS = { tier: ["Most serious first", null], new: ["Newest first", (a, b) => (b.t || 0) - (a.t || 0)], near: ["Nearest to a site first", (a, b) => nearKm(a) - nearKm(b)], strong: ["Strongest shaking at a site first", (a, b) => strength(b) - strength(a)] };
   function visible() {
-    const q = UI.q.trim().toLowerCase();
-    return STATE.list.filter((s) => (UI.watchAll || touches(s)) && (!UI.watchKinds.length || UI.watchKinds.includes(s.kind)) && (!q || (s.title + " " + (s.area || "") + " " + s.cities.join(" ")).toLowerCase().includes(q)));
+    const q = UI.q.trim().toLowerCase(), sort = (SORTS[UI.watchSort] || SORTS.tier)[1];
+    const out = STATE.list.filter((s) => (UI.watchAll || touches(s)) && (!UI.watchKinds.length || UI.watchKinds.includes(s.kind)) && (!q || (s.title + " " + (s.area || "") + " " + s.cities.join(" ")).toLowerCase().includes(q)));
+    return sort ? out.slice().sort(sort) : out;
   }
   function count() {
     const h = Date.now() - 36e5;
     return STATE.list.filter((s) => touches(s) && s.tier >= 1 && (s.t || 0) > h).length;
   }
   function render(p) {
+    draw2(p);
+    mountTV(p.querySelector("#tvbox"));
+  }
+  function draw2(p) {
     const sel = UI.watchSel && signalBy(UI.watchSel);
     if (UI.watchCity) return p.innerHTML = cityDetail(UI.watchCity);
     if (sel) return p.innerHTML = detail(sel);
     const base2 = STATE.list.filter((s) => UI.watchAll || touches(s)), kinds = Object.keys(KINDS).filter((k) => base2.some((s) => s.kind === k)), list = visible();
-    p.innerHTML = `<div class="ph"><h1>Watch</h1><div class="seg" role="group" aria-label="View"><button data-wmode="feed" aria-pressed="${UI.watchMode !== "cities"}">Feed</button><button data-wmode="cities" aria-pressed="${UI.watchMode === "cities"}">Cities</button></div>
-      <div class="sum">${UI.watchMode === "cities" ? `Conditions in ${CITIES.length} cities: weather now, next 48 hours, air, river, and hazards in force.` : `${list.length} ${UI.watchAll ? "reports" : "reports touching our sites"} from ${Object.values(STATE.feeds).filter((f) => f.ok).length} working sources. Anything that needs a decision is already in the Inbox.`}</div></div>
-    ${UI.watchMode === "cities" ? citiesHtml() : `<div class="filters">${kinds.map((k) => `<button class="fchip" data-wkind="${k}" aria-pressed="${UI.watchKinds.includes(k)}">${esc(KINDS[k].label)}<b>${base2.filter((s) => s.kind === k).length}</b></button>`).join("")}</div>
-    <div class="filters"><input class="search" type="search" placeholder="Search the feed" value="${esc(UI.q)}" data-wq><label class="chk" style="font-size:12.5px;color:var(--muted)"><input type="checkbox" data-wall${UI.watchAll ? " checked" : ""}> Include reports that don't touch our sites</label></div>
+    const mode = MODES[UI.watchMode] ? UI.watchMode : "feed";
+    p.innerHTML = `<div class="ph"><h1>Watch</h1><div class="seg" role="group" aria-label="View">${Object.entries(MODES).map(([k, l]) => `<button data-wmode="${k}" aria-pressed="${mode === k}">${l}</button>`).join("")}</div>
+      <div class="sum">${mode === "cities" ? `Conditions in ${CITIES.length} cities: weather now, next 48 hours, air, river, and hazards in force.` : mode === "history" ? `Everything that touched our sites in the last 7 days, kept after it ends so a missed alert isn't a lost one.` : mode === "tv" ? "" : `${list.length} ${UI.watchAll ? "reports" : "reports touching our sites"} from ${Object.values(STATE.feeds).filter((f) => f.ok).length} working sources. Anything that needs a decision is already in the Inbox.`}</div></div>
+    ${mode === "cities" ? citiesHtml() : mode === "history" ? historyHtml() : mode === "tv" ? tvHtml() : `<div class="filters">${kinds.map((k) => `<button class="fchip" data-wkind="${k}" aria-pressed="${UI.watchKinds.includes(k)}">${esc(KINDS[k].label)}<b>${base2.filter((s) => s.kind === k).length}</b></button>`).join("")}</div>
+    <div class="filters"><input class="search" type="search" placeholder="Search the feed" value="${esc(UI.q)}" data-wq><select class="search" data-wsort aria-label="Sort" style="width:auto">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}"${(UI.watchSort || "tier") === k ? " selected" : ""}>${l}</option>`).join("")}</select><label class="chk" style="font-size:12.5px;color:var(--muted)"><input type="checkbox" data-wall${UI.watchAll ? " checked" : ""}> Include reports that don't touch our sites</label></div>
     <div class="scroll">${list.slice(0, 300).map(rowHtml).join("") || `<div class="empty"><b>Nothing is touching our sites right now.</b>${STATE.list.length ? `${STATE.list.length} reports elsewhere — tick “Include reports that don't touch our sites” to see them.` : "Sources are loading."}</div>`}</div>`}`;
+  }
+  var MODES = { feed: "Feed", cities: "Cities", history: "History", tv: "Live TV" };
+  function historyHtml() {
+    const q = UI.q.trim().toLowerCase(), list = HISTORY.filter((h) => (!UI.watchKinds.length || UI.watchKinds.includes(h.kind)) && (!q || (h.title + " " + h.area + " " + h.cities.join(" ")).toLowerCase().includes(q)));
+    return `<div class="filters"><input class="search" type="search" placeholder="Search the history" value="${esc(UI.q)}" data-wq></div>
+    <div class="scroll">${list.slice(0, 400).map((h) => {
+      const live = isLiveKey(h.key);
+      return `<button class="row" data-whist="${esc(h.key)}"><span class="bar t${h.tier}"></span><span><span class="tt">${esc(h.title)}</span>
+        <div class="mt">${esc((KINDS[h.kind] || { label: h.kind }).label)} · first seen ${esc(sgt(h.first))} SGT${h.cities.length ? " · " + esc(h.cities.join(", ")) : h.area ? " · " + esc(trunc(h.area, 40)) : ""}</div></span>
+        <span class="rt">${live ? "<b>in force</b>" : `ended ${esc(ago(h.last))}`}${h.sites ? `${h.sites} site${h.sites === 1 ? "" : "s"}` : ""}</span></button>`;
+    }).join("") || `<div class="empty"><b>Nothing recorded yet.</b>Reports that touch our sites are kept here for 7 days.</div>`}</div>`;
   }
   function rowHtml(s) {
     const item = INBOX.find((i) => i.key === "sig:" + s.key);
@@ -3346,7 +3800,7 @@ PSOC`
     if (s.cities.length) facts.push(["Cities", esc(s.cities.join(", "))]);
     if (s.kind === "quake") {
       facts.push(["Magnitude", `M${e.mag.toFixed(1)} (${magLabel(e.mag)}), depth ${Math.round(e.depth)} km`]);
-      if (e.topSite) facts.push(["Strongest at a site", `MMI ${roman(e.topMMI)} at ${esc(e.topSite)}, ${Math.round(e.topKm)} km`]);
+      if (e.topSite) facts.push(["Strongest at a site", `MMI ${roman(e.topMMI)} (${mmiWord(e.topMMI)}) at ${esc(e.topSite)}, ${Math.round(e.topKm)} km — estimated`]);
       facts.push(["Tsunami", e.tsunami ? "<b>flag set by USGS</b>" : "no flag"]);
       if (e.alert) facts.push(["PAGER", esc(e.alert)]);
       if (e.emsc) facts.push(["EMSC", `M${e.emsc.mag.toFixed(1)}`]);
@@ -3366,11 +3820,23 @@ PSOC`
     <dl class="facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>
     ${s.text ? `<p class="prose">${esc(s.text)}</p>` : ""}${e.instruction ? `<p class="prose"><b>Agency advice:</b> ${esc(e.instruction)}</p>` : ""}
     <div class="actions">${item && item.status === "open" ? `<button class="btn primary" data-goinbox="${esc(item.id)}">Decide in the Inbox</button>` : `<button class="btn primary" data-wesc>Escalate</button>`}
-      <button class="btn" data-wnotify>Notify</button>${!item ? `<button class="btn" data-wadd>Add to Inbox</button>` : ""}${s.url ? `<a class="btn" style="text-decoration:none" href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">Open the source</a>` : ""}</div>
+      <button class="btn" data-wnotify>Notify</button><button class="btn" data-wbrief>Copy brief</button>${!item ? `<button class="btn" data-wadd>Add to Inbox</button>` : ""}${s.url ? `<a class="btn" style="text-decoration:none" href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">Open the source</a>` : ""}</div>
     ${item && item.status !== "open" ? `<p class="help">Inbox: ${esc(item.decision)} by ${esc(item.by || "")} ${esc(ago(item.decidedAt))}${item.reason ? " — " + esc(item.reason) : ""}.</p>` : ""}
     ${qs ? `<div class="sec"><h3>Welfare at sites</h3><p class="help">Tick sites where personnel felt shaking or reported damage; the welfare update wording follows.</p>
       <table class="tbl"><tr><th>Site</th><th>Shaking felt</th><th>Damage</th></tr>${s.sites.slice(0, 20).map((x) => `<tr><td>${esc(x.code)}</td><td><input type="checkbox" data-qshake="${esc(x.code)}"${(qs.shaking || []).includes(x.code) ? " checked" : ""}></td><td><input type="checkbox" data-qdmg="${esc(x.code)}"${(qs.damage || []).includes(x.code) ? " checked" : ""}></td></tr>`).join("")}</table></div>` : ""}
-    <div class="sec"><h3>Sites ${s.sites.length ? `(${s.sites.length})` : ""}</h3>${siteRows ? `<table class="tbl"><tr><th>Site</th><th>City</th><th>Distance</th><th></th></tr>${siteRows}</table>` : `<p class="help">No tracked site in range.${s.near ? ` Nearest: ${esc(s.near.code)}, ${Math.round(s.near.km)} km.` : ""}</p>`}</div></div>`;
+    ${s.kind === "cyclone" ? stormTiming(s) : ""}
+    <div class="sec"><h3>Sites ${s.sites.length ? `(${s.sites.length})` : ""}</h3>${s.kind === "cyclone" && s.sites.length ? `<p class="help">Timing for each site is above.</p>` : siteRows ? `<table class="tbl"><tr><th>Site</th><th>City</th><th>Distance</th><th></th></tr>${siteRows}</table>` : `<p class="help">No tracked site in range.${s.near ? ` Nearest: ${esc(s.near.code)}, ${Math.round(s.near.km)} km.` : ""}</p>`}</div></div>`;
+  }
+  var RISK2 = { direct: ["In the path", 3], possible: ["May be affected", 2], watch: ["Worth watching", 1] };
+  function stormTiming(s) {
+    const t = (x) => x ? esc(sgt(x)) : "—", rows = s.sites.slice(0, 60);
+    if (!rows.length) return "";
+    const first = rows.filter((x) => x.level !== "watch" && x.at).sort((a, b) => a.at - b.at)[0];
+    return `<div class="sec"><h3>What to expect at our sites</h3>${first ? `<p class="prose">Damaging winds first reach <b>${esc(first.code)}</b> around <b>${t(first.at)} SGT</b>. Times follow the official forecast track hour by hour and move as each new advisory is issued.</p>` : `<p class="help">No site is forecast inside the damaging-wind area; sites listed are within watch range.</p>`}
+    <table class="tbl"><tr><th>Site</th><th>Risk</th><th>Damaging winds (SGT)</th><th>Closest</th><th>Closest at (SGT)</th></tr>${rows.map((x) => {
+      const st = siteBy(x.code) || {}, r = RISK2[x.level] || [x.level, 0];
+      return `<tr${x.level === "direct" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button><div class="help">${esc(st.city || "")}</div></td><td><span class="tierword t${r[1]}">${esc(r[0])}</span></td><td>${x.level === "watch" ? "—" : t(x.at) + (x.open ? " to the end of the forecast" : x.until && x.until !== x.at ? " to " + t(x.until) : "")}</td><td>${Math.round(x.km)} km</td><td>${t(x.closestAt)}</td></tr>`;
+    }).join("")}</table></div>`;
   }
   function citiesHtml() {
     const cell = (p, cls) => p ? `<span class="c t${p.tier} ${cls}" title="${esc(p.text)}">${esc(p.value)}</span>` : `<span class="c ${cls}">—</span>`;
@@ -3380,13 +3846,37 @@ PSOC`
       return `<button class="city" data-wcity="${esc(c.name)}"><span class="bar t${sc.tier}"></span><span class="n">${esc(c.name)}</span>${cell(P.weather, "")}${cell(P.forecast, "")}${cell(P.air, "")}${cell(P.river, "x4")}${P.hazards && P.hazards.list.length ? `<span class="c t${P.hazards.tier} x5">${P.hazards.list.length} in force</span>` : `<span class="c x5">none</span>`}</button>`;
     }).join("")}`).join("")}</div>`;
   }
+  var SEASON = {
+    dust: { cities: ["Tokyo", "Osaka", "Seoul", "Busan"], months: [2, 3, 4], text: "Spring Asian dust (kosa / hwangsa), March to May, often mixed with PM2.5 from across the region. It is PM10-led, so read PM10 alongside the AQI." },
+    smoke: { cities: ["Sydney", "Melbourne", "Canberra", "Perth", "Auckland"], months: [11, 0, 1], text: "Bushfire smoke and inland dust, December to February." }
+  };
+  var localTime = (tz) => {
+    try {
+      return (/* @__PURE__ */ new Date()).toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" }) + " " + (new Intl.DateTimeFormat("en-GB", { timeZone: tz, timeZoneName: "short" }).formatToParts(/* @__PURE__ */ new Date()).find((x) => x.type === "timeZoneName") || {}).value;
+    } catch (e) {
+      return "";
+    }
+  };
   function cityDetail(name) {
     const c = CITIES.find((x) => x.name === name), sc = STATE.scores[name] || { tier: 0, parts: {} }, P = sc.parts, w = STATE.city.wx[name], a = airFor(name), sigs = STATE.list.filter((s) => s.cities.includes(name) && s.kind !== "conditions");
     const row = (l, p, extra) => `<tr><td>${esc(l)}</td><td>${p ? tierWord(p.tier) : "—"}</td><td>${p ? esc(p.value) : "no data"}</td><td>${p ? esc(p.text) : ""}${extra || ""}</td></tr>`;
-    return `<div class="detail"><button class="back" data-wcityback>Back to cities</button><h2>${esc(name)}</h2><p class="help">${tierWord(sc.tier)} · ${esc(c ? c.region : "")}</p>
-    <table class="tbl"><tr><th>Condition</th><th>Level</th><th>Now</th><th>Why</th></tr>${row("Weather now", P.weather, w ? ` · model ${esc(MODEL_NAME[w.model] || w.model)}` : "")}${row("Next 48 hours", P.forecast)}${row("Air quality", P.air)}${row("River flow", P.river)}</table>
+    const sites = METRO[name] || [], byCls = sites.reduce((o, x) => (o[x.cls] = (o[x.cls] || 0) + 1, o), {}), m = (/* @__PURE__ */ new Date()).getMonth();
+    const seas = Object.values(SEASON).filter((x) => x.cities.includes(name)).map((x) => `<p class="help">${x.months.includes(m) ? "<b>In season now:</b> " : "Seasonal: "}${esc(x.text)}</p>`).join("");
+    const airX = a ? `${a.model ? " · modelled, no station at this point" : ` · station ${a.url ? `<a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">${esc(a.station || "WAQI")}</a>` : esc(a.station || "")}`}${a.pm25 != null ? ` · PM2.5 ${Math.round(a.pm25)} µg/m³` : ""}${a.pm10 != null ? ` · PM10 ${Math.round(a.pm10)} µg/m³` : ""}${a.fmax != null ? ` · forecast peak AQI ${a.fmax}` : ""}` : "";
+    return `<div class="detail"><button class="back" data-wcityback>Back to cities</button><h2>${esc(name)}</h2><p class="help">${tierWord(sc.tier)} · ${esc(c ? c.region : "")}${c && c.tz ? ` · local time ${esc(localTime(c.tz))}` : ""}</p>
+    <table class="tbl"><tr><th>Condition</th><th>Level</th><th>Now</th><th>Why</th></tr>${row("Weather now", P.weather, w ? ` · model ${esc(MODEL_NAME[w.model] || w.model)}` : "")}${row("Next 48 hours", P.forecast)}${row("Air quality", P.air, airX)}${row("River flow", P.river)}</table>
+    ${seas}<p class="help">Model readings are for triage. Warnings and heat-stress indices come from the national agency, which is the figure of record for an event notice.</p>
+    <div class="sec"><h3>Next 7 days${outlookCached(name) ? "" : `<span class="r"><button class="linkbtn" data-woutlook="${esc(name)}">Show</button></span>`}</h3><div id="outlook">${outlookCached(name) ? outlookHtml(outlookCached(name)) : ""}</div></div>
     <div class="sec"><h3>Hazards in force (${sigs.length})</h3>${sigs.map(rowHtml).join("") || `<p class="help">None.</p>`}</div>
-    <div class="sec"><h3>Sites in ${esc(name)} (${(METRO[name] || []).length})</h3><p class="help">${(METRO[name] || []).map((x) => `<button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button>`).join(", ") || "None."}</p></div></div>`;
+    <div class="sec"><h3>Sites in ${esc(name)} (${sites.length})</h3>${Object.keys(byCls).length ? `<p class="help">${Object.entries(byCls).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${esc(k.replace("CLASS ", "Class "))} ${v}`).join(" · ")}</p>` : ""}<p class="help">${sites.map((x) => `<button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button>`).join(", ") || "None."}</p></div></div>`;
+  }
+  function outlookHtml(d) {
+    const D0 = d.daily || {}, D = new Proxy(D0, { get: (o, k) => o[k] || [] }), F = CFG.fc, W = CFG.wx, t = (v, warn, bad) => v >= bad ? 3 : v >= warn ? 2 : 0, r = (v) => v == null ? "—" : Math.round(v);
+    return `<table class="tbl"><tr><th>Day</th><th>Weather</th><th>High / low</th><th>Rain</th><th>Chance</th><th>Gusts</th></tr>${D.time.map((day, i) => {
+      const hi = D.temperature_2m_max[i], rain = D.precipitation_sum[i], g = D.wind_gusts_10m_max[i];
+      return `<tr><td>${esc((/* @__PURE__ */ new Date(day + "T00:00:00")).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</td><td>${D.weather_code[i] != null ? esc(wmo(D.weather_code[i])) : "—"}</td><td><span class="tierword t${t(hi, W.hotWarn, W.hotBad)}">${r(hi)}°</span> / ${r(D.temperature_2m_min[i])}°</td><td><span class="tierword t${t(rain, F.rainWarn, F.rainBad)}">${rain != null ? rain.toFixed(1) : "—"} mm</span></td><td>${D.precipitation_probability_max[i] ?? "—"} %</td><td><span class="tierword t${t(g, F.gustWarn, F.gustBad)}">${g != null ? Math.round(g) : "—"} km/h</span></td></tr>`;
+    }).join("")}</table>
+    <p class="help">Open-Meteo, ${d.auto ? "best available model" : "national model"}. Coloured by the same thresholds as the city board.</p>`;
   }
   function mapSpec() {
     const s = UI.watchSel && signalBy(UI.watchSel);
@@ -3404,7 +3894,7 @@ PSOC`
   }
   function bind(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site]");
+      const t = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site],[data-wbrief],[data-whist],[data-tv],[data-woutlook]");
       if (!t) return;
       const d = t.dataset;
       if (d.wsel) {
@@ -3456,10 +3946,44 @@ PSOC`
         go("sites", { siteSel: d.site });
         return;
       }
+      if (d.woutlook) {
+        const c = CITIES.find((x) => x.name === d.woutlook), box2 = p.querySelector("#outlook");
+        t.textContent = "Loading…";
+        try {
+          const o = await outlook(c);
+          if (box2) box2.innerHTML = outlookHtml(o);
+          t.remove();
+        } catch (err) {
+          if (box2) box2.innerHTML = `<p class="help">The outlook could not load (${esc(err.message)}).</p>`;
+          t.textContent = "Try again";
+        }
+        return;
+      }
+      if (d.whist) {
+        if (isLiveKey(d.whist)) {
+          UI.watchSel = d.whist;
+          UI.watchMode = "feed";
+          saveUI();
+          rerender();
+          return;
+        }
+        const h = HISTORY.find((x) => x.key === d.whist);
+        if (!h) return;
+        dialog(
+          h.title,
+          `<dl class="facts"><dt>Type</dt><dd>${esc((KINDS[h.kind] || { label: h.kind }).label)}</dd><dt>Source</dt><dd>${esc(srcName(h.src))}</dd><dt>Highest level</dt><dd>${tierWord(h.tier)}</dd><dt>First seen</dt><dd>${esc(sgt(h.first))} SGT</dd><dt>Last seen</dt><dd>${esc(sgt(h.last))} SGT</dd>${h.area || h.cities.length ? `<dt>Where</dt><dd>${esc(h.area || h.cities.join(", "))}</dd>` : ""}<dt>Sites</dt><dd>${h.sites}</dd></dl><p class="help">The source no longer reports this.</p>`,
+          `${h.url ? `<a class="btn" style="text-decoration:none" href="${esc(safeUrl(h.url))}" target="_blank" rel="noopener">Open the source</a>` : ""}<button class="btn" data-close>Close</button>`
+        );
+        return;
+      }
       const s = signalBy(UI.watchSel);
       if (!s) return;
       if (d.wesc !== void 0) escalateForm({ signal: s, sev: s.tier >= 3 ? "P1" : s.tier === 2 ? "P2" : "P3" });
       if (d.wnotify !== void 0) notifyComposer(s, { title: "Notify — " + s.title });
+      if (d.wbrief !== void 0) {
+        const ok = await copyText(briefFor(s));
+        t.textContent = ok ? "Copied" : "Copy failed";
+      }
       if (d.wadd !== void 0) {
         const i = addManualItem({ title: s.title, tier: s.tier, pri: s.tier >= 3 ? "P1" : s.tier === 2 ? "P2" : "P3", kind: s.kind });
         i.key = "sig:" + s.key;
@@ -3491,6 +4015,11 @@ PSOC`
         saveUI();
         rerender();
       }
+      if (t.matches("[data-wsort]")) {
+        UI.watchSort = t.value;
+        saveUI();
+        rerender();
+      }
       const s = signalBy(UI.watchSel);
       if (s && (t.dataset.qshake || t.dataset.qdmg)) {
         const st = QSTATE[s.id] = QSTATE[s.id] || {}, k = t.dataset.qshake ? "shaking" : "damage", c = t.dataset.qshake || t.dataset.qdmg;
@@ -3498,6 +4027,9 @@ PSOC`
         saveQ();
       }
     };
+  }
+  function tvHtml() {
+    return `<div class="tvbox" id="tvbox"></div>`;
   }
 
   // src/ui/inbox.js
@@ -3710,22 +4242,35 @@ PSOC`
   function gauge(left, total) {
     return Math.max(0, Math.min(100, left / total * 100)).toFixed(0);
   }
+  function procedure(ev, ck, closed) {
+    const checks = ev.checks || {}, all = [["close", "Close when all are achieved", ck.close], ["psoc", "PSOC will", ck.psoc], ["cons", "Security, EHS and resiliency considerations", ck.cons]];
+    const n = all.reduce((a, [, , l]) => a + l.length, 0), done = Object.keys(checks).length;
+    return `<div class="sec"><h3>Procedure<span class="r">${done} of ${n} done · <button class="linkbtn" data-esop>full ${esc(ttpName())}</button></span></h3>
+    ${all.filter(([, , l]) => l.length).map(([k, h, l]) => `<details class="proc"${k === "close" ? " open" : ""}><summary>${esc(h)} <span class="help">${l.filter((x, i) => checks[k + i]).length}/${l.length}</span></summary>
+      ${l.map((x, i) => {
+      const c = checks[k + i];
+      return `<label class="chk"><input type="checkbox" data-eck="${k + i}" data-ecl="${esc(x)}"${c ? " checked" : ""}${closed ? " disabled" : ""}> <span>${esc(x)}${c ? ` <span class="help">— ${esc(c.by)} ${esc(ago(c.at))}</span>` : ""}</span></label>`;
+    }).join("")}</details>`).join("")}</div>`;
+  }
   function detail2(ev) {
-    const t = timers(ev), closed = ev.status === "closed", sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
+    const t = timers(ev), c = cad(ev), ck = checklistFor(ev.cat), closed = ev.status === "closed", sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
     const tm = (label, d, st, total, which) => `<div class="timer ${st}"><div class="l">${label}</div><div class="v">${d < 0 ? "overdue " + dur(-d) : dur(d)}</div><div class="help">${d < 0 ? "was due" : "due"} ${esc(sgt(Date.now() + d))} SGT</div><div class="gauge"><i style="width:${gauge(d, total)}%"></i></div><button class="btn small" data-etimer="${which}">${label.split(" ")[0] === "PSOC" ? "Manager update sent" : "Intel / SLT update sent"}</button></div>`;
     const welfare = ev.sites.map((code) => {
-      const s = siteBy(code) || { code }, c = contactFor(s) || {}, w = ev.welfare[code] || {};
-      return `<tr${w.status === "impacted" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(code)}">${esc(code)}</button><div class="help">${esc(s.city || "")}</div></td><td>${c.socPhone ? `<a href="tel:${esc(String(c.socPhone).replace(/[^\d+]/g, ""))}">${esc(c.socPhone)}</a>` : `<span class="help">no number</span>`}${c.siteSecurityMgr ? `<div class="help">${esc(c.siteSecurityMgr)}</div>` : ""}</td>
+      const s = siteBy(code) || { code }, c2 = contactFor(s) || {}, w = ev.welfare[code] || {};
+      return `<tr${w.status === "impacted" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(code)}">${esc(code)}</button><div class="help">${esc(s.city || "")}</div></td><td>${c2.socPhone ? `<a href="tel:${esc(String(c2.socPhone).replace(/[^\d+]/g, ""))}">${esc(c2.socPhone)}</a>` : `<span class="help">no number</span>`}${c2.siteSecurityMgr ? `<div class="help">${esc(c2.siteSecurityMgr)}</div>` : ""}</td>
       <td><select class="wsel" data-ewel="${esc(code)}"${closed ? " disabled" : ""}>${[["", "Not checked"], ["safe", "Safe, no impact"], ["impacted", "Impacted"], ["noanswer", "No answer"]].map(([v, l]) => `<option value="${v}"${(w.status || "") === v ? " selected" : ""}>${l}</option>`).join("")}</select>${w.at ? `<div class="help">${esc(w.by)} ${esc(ago(w.at))}${w.note ? " — " + esc(w.note) : ""}</div>` : ""}</td></tr>`;
     }).join("");
     const wv = Object.values(ev.welfare || {}), comms = (ev.comms || []).slice().reverse();
     return `<div class="detail"><button class="back" data-eback>All events</button>
     <h2>${priChip(ev.sev)}${esc(ev.title)}</h2><p class="help">${esc(catLabel2(ev.cat))}${ev.country ? " · " + esc(ev.country) : ""} · opened ${esc(sgt(ev.created))} SGT · <button class="linkbtn" data-esop>SOP</button> · <button class="linkbtn" data-eedit>Edit</button>${sig ? ` · <button class="linkbtn" data-ewatch="${esc(sig.key)}">Source report</button>` : ""}</p>
     ${closed ? `<p class="prose"><b>Closed</b> by ${esc(ev.closed.by)} ${esc(sgt(ev.closed.at))} SGT. ${esc(ev.closed.summary || "")}</p>` : `
-    <div class="sec"><h3>Updates</h3>${t.state === "immediate" ? `<p class="help">Civil unrest is updated as it develops; there is no countdown.</p><button class="btn small" data-etimer="both">Update sent</button>` : t.state === "awaiting" ? `<p class="help">The 12-hour and 24-hour update timers start when the event notice is issued, so nothing counts down while you draft.</p>` : `<div class="timers">${tm("PSOC Manager update, every 12 h", t.d12, t.s12, 12 * 36e5, "12")}${tm("Intel / SLT update, every 24 h", t.d24, t.s24, 24 * 36e5, "24")}</div>`}
-      <div class="ren">Event notice <div class="seg">${Object.entries(REN).map(([k, l]) => `<button data-eren="${k}" aria-pressed="${ev.ren === k}">${esc(l)}</button>`).join("")}</div></div></div>`}
+    <div class="sec"><h3>Updates</h3>${t.state === "immediate" ? `<p class="help">Civil unrest is updated as it develops; there is no countdown.</p><button class="btn small" data-etimer="both">Update sent</button>` : t.state === "awaiting" ? `<p class="help">The 12-hour and 24-hour update timers start when the event notice is issued, so nothing counts down while you draft.</p>` : `<div class="timers">${tm(`PSOC Manager update, every ${c.m} h`, t.d12, t.s12, c.m * 36e5, "12")}${tm(`Intel / SLT update, every ${c.i} h`, t.d24, t.s24, c.i * 36e5, "24")}</div>`}
+      <p class="help">${c.src === "fixed" ? "Standard cadence." : `Cadence from the ${esc(c.src)}.`} <button class="linkbtn" data-ecad>Change</button></p>
+      <div class="ren">Event notice <div class="seg">${Object.entries(REN).map(([k, l]) => `<button data-eren="${k}" aria-pressed="${ev.ren === k}">${esc(l)}</button>`).join("")}</div></div>
+      ${ck && ck.ren.length && ev.ren === "assess" ? `<details class="crit"><summary>When to issue an event notice (${esc(ttpName())})</summary><ul>${ck.ren.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}</div>`}
+    ${ck ? procedure(ev, ck, closed) : ""}
     <div class="sec"><h3>Notify<span class="r">${comms.length ? `${comms.length} sent` : ""}</span></h3>${!closed ? `<button class="btn small" data-enotify>Write the messages</button>` : ""}
-      ${comms.length ? `<ul class="log" style="margin-top:8px">${comms.map((c) => `<li><time>${esc(sgt(c.at))}</time><span>${esc(c.label)} — ${esc(c.by)}</span></li>`).join("")}</ul>` : `<p class="help">Leadership update, Intelligence Channel post and site stakeholder email, written from this event.</p>`}</div>
+      ${comms.length ? `<ul class="log" style="margin-top:8px">${comms.map((c2) => `<li><time>${esc(sgt(c2.at))}</time><span>${esc(c2.label)} — ${esc(c2.by)}</span></li>`).join("")}</ul>` : `<p class="help">Leadership update, Intelligence Channel post and site stakeholder email, written from this event.</p>`}</div>
     <div class="sec"><h3>Sites and welfare<span class="r">${ev.sites.length ? `${wv.filter((w) => w.status).length} of ${ev.sites.length} checked${wv.some((w) => w.status === "impacted") ? ` · <span class="late">${wv.filter((w) => w.status === "impacted").length} impacted</span>` : ""}` : ""}</span></h3>
       ${ev.sites.length ? `<table class="tbl"><tr><th>Site</th><th>SOC phone</th><th>Welfare</th></tr>${welfare}</table>` : `<p class="help">No sites on this escalation. <button class="linkbtn" data-eedit>Add sites</button></p>`}</div>
     <div class="sec"><h3>Log</h3><ul class="log">${ev.log.slice().reverse().map((l) => `<li><time>${esc(sgt(l.t))}</time><span>${esc(l.m)}${l.by && l.by !== "system" ? ` <span class="help">— ${esc(l.by)}</span>` : ""}</span></li>`).join("")}</ul>
@@ -3740,7 +4285,7 @@ PSOC`
   }
   function bind3(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch]");
+      const t = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch],[data-ecad]");
       if (!t) return;
       const d = t.dataset;
       if (d.esel) {
@@ -3787,6 +4332,29 @@ PSOC`
         rerender();
         return;
       }
+      if (d.ecad !== void 0) {
+        const c = cad(ev);
+        dialog(
+          "Update cadence",
+          `<div class="form">${field("PSOC Manager update every (hours)", `<input id="cdM" type="number" min="1" max="72" value="${c.m}">`)}${field("Intel / SLT update every (hours)", `<input id="cdI" type="number" min="1" max="168" value="${c.i}">`)}</div><p class="help">${ttpFor(ev.cat) ? `The ${esc(ttpName())} sets this category's cadence; changing it here applies to this event only.` : "Applies to this event only."}</p>`,
+          `<button class="btn" data-close>Cancel</button>${ttpFor(ev.cat) ? `<button class="btn" id="cdTtp">Use the TTP cadence</button>` : ""}<button class="btn primary" id="cdGo">Save</button>`
+        );
+        $("#cdGo").onclick = () => {
+          const m = Math.max(1, +$("#cdM").value || 12), i = Math.max(1, +$("#cdI").value || 24);
+          ev.cad = { m, i, src: "manual" };
+          eventLog(ev, `Update cadence set by hand: Manager every ${m} h, Intel / SLT every ${i} h.`);
+          closeDialog();
+          rerender();
+        };
+        if ($("#cdTtp")) $("#cdTtp").onclick = () => {
+          ev.cad = null;
+          applyCadence(ev, "reset to the TTP");
+          saveEvents();
+          closeDialog();
+          rerender();
+        };
+        return;
+      }
       if (d.esop !== void 0) {
         sopDialog(ev.cat);
         return;
@@ -3810,9 +4378,10 @@ PSOC`
         return;
       }
       if (d.eclose !== void 0) {
+        const ck = checklistFor(ev.cat), open2 = ck ? ck.close.filter((x, i) => !(ev.checks || {})["close" + i]) : [];
         dialog(
           "Close the escalation",
-          `<p class="prose">${esc(ev.title)}</p>${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}<p class="help">A close-out report is saved to Reports.</p>`,
+          `<p class="prose">${esc(ev.title)}</p>${open2.length ? `<div class="warnbox"><b>Not yet ticked under “close when all are achieved”:</b><ul>${open2.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}<p class="help">A close-out report is saved to Reports.</p>`,
           `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ecGo">Close it</button>`
         );
         $("#ecGo").onclick = () => {
@@ -3832,6 +4401,14 @@ PSOC`
     };
     p.onchange = (e) => {
       const t = e.target;
+      if (t.dataset.eck) {
+        const ev2 = EVENTS.find((x) => x.id === UI.eventSel);
+        if (ev2) {
+          setCheck(ev2, t.dataset.eck, t.checked, t.dataset.ecl);
+          rerender();
+        }
+        return;
+      }
       if (!t.dataset.ewel) return;
       const ev = EVENTS.find((x) => x.id === UI.eventSel);
       if (!ev) return;
@@ -3872,6 +4449,7 @@ PSOC`
     go2.onclick = () => {
       const lat = parseFloat($("#efLat").value), lon = parseFloat($("#efLon").value);
       Object.assign(ev, { title: $("#efTitle").value.trim() || ev.title, cat: $("#efCat").value, sev: $("#efSev").value, country: $("#efCountry").value, sites: [...$("#efSites").querySelectorAll("input:checked")].map((i) => i.value).concat(ev.sites.filter((c) => !$(`#efSites input[value="${CSS.escape(c)}"]`))), lat: isFinite(lat) ? lat : null, lon: isFinite(lon) ? lon : null });
+      applyCadence(ev, "category");
       eventLog(ev, "Details edited.");
       audit("Escalation edited", ev.title);
       closeDialog();
@@ -3891,6 +4469,7 @@ PSOC`
       `Sites (${ev.sites.length}): ${ev.sites.join(", ") || "none"}`,
       w.length ? "Welfare: " + w.map(([c, x]) => `${c} ${x.status}${x.note ? " (" + x.note + ")" : ""}`).join("; ") : "Welfare: none recorded",
       "",
+      ...checklistFor(ev.cat) ? ["Procedure (" + ttpName() + ")", ...Object.entries({ close: "Close criteria", psoc: "PSOC actions", cons: "Considerations" }).flatMap(([k, h]) => checklistFor(ev.cat)[k].map((x, i) => `- [${(ev.checks || {})[k + i] ? "x" : " "}] ${h}: ${x}`)), ""] : [],
       "Messages sent",
       ...(ev.comms || []).map((c) => `- ${sgt(c.at)} ${c.label} (${c.by})`),
       "",
@@ -4099,7 +4678,8 @@ ${base2}` }] })
     bind: () => bind5,
     mapSpec: () => mapSpec4,
     pickFile: () => pickFile,
-    render: () => render5
+    render: () => render5,
+    siteFilter: () => siteFilter
   });
 
   // src/sites-import.js
@@ -4179,7 +4759,43 @@ ${base2}` }] })
       out.push({ code, name: cls === "OFFICE" ? name : "", city: t(m.city), country: t(m.country), region: t(m.region), cls, status: st || "UNKNOWN", lat, lon });
       r.added++;
     });
-    return { sites: out, report: r };
+    return { sites: out, report: Object.assign(r, checkSites(out, rows)) };
+  }
+  function checkSites(sites, rows) {
+    const by = (k) => sites.reduce((o, x) => (o[x[k]] = (o[x[k]] || 0) + 1, o), {}), fixes = [], outliers = [], groups = {};
+    const coverage = Object.keys(COLS).map((f) => {
+      const n = rows.filter((raw) => {
+        const v = mapRow(raw)[f];
+        return v != null && String(v).trim() !== "";
+      }).length;
+      return [f, n, rows.length];
+    }).filter((x) => x[1] || ["site", "city", "country", "cls", "status"].includes(x[0]));
+    sites.forEach((x) => {
+      if (/^hebei$/i.test(x.city)) {
+        fixes.push(`${x.code}: city "Hebei" (a province) read as Zhangjiakou`);
+        x.city = "Zhangjiakou";
+      }
+      const named = CITIES.find((c) => c.name.toLowerCase() === String(x.city).toLowerCase());
+      if (named && km(x.lat, x.lon, named.lat, named.lon) > 300) {
+        const near = CITIES.filter((c) => km(x.lat, x.lon, c.lat, c.lon) < 150).sort((a, b) => km(x.lat, x.lon, a.lat, a.lon) - km(x.lat, x.lon, b.lat, b.lon))[0];
+        if (near) {
+          fixes.push(`${x.code}: city "${x.city}" corrected to ${near.name} (its coordinates are ${Math.round(km(x.lat, x.lon, near.lat, near.lon))} km from ${near.name})`);
+          x.city = near.name;
+        }
+      }
+    });
+    sites.forEach((x) => {
+      if (x.city) (groups[x.city] = groups[x.city] || []).push(x);
+    });
+    Object.entries(groups).forEach(([c, g]) => {
+      if (g.length < 3) return;
+      const med = (a) => a.slice().sort((p, q) => p - q)[Math.floor(a.length / 2)], la = med(g.map((x) => x.lat)), lo = med(g.map((x) => x.lon));
+      g.forEach((x) => {
+        const d = km(la, lo, x.lat, x.lon);
+        if (d > 150) outliers.push(`${x.code} (${c}, ${Math.round(d)} km from the other ${c} sites)`);
+      });
+    });
+    return { byClass: by("cls"), byStatus: by("status"), coverage, fixes, outliers, rows: rows.length };
   }
   async function readWorkbook(file) {
     await loadScript(XLSX_URL);
@@ -4192,13 +4808,72 @@ ${base2}` }] })
     if (!best || !best.rows.length) throw new Error("no rows found");
     return best;
   }
-  function applySites(sites, source, keepOffices) {
+  var LAST_REPORT = load("siteReport", null);
+  function applySites(sites, source, keepOffices, report) {
     const offices = keepOffices ? SITES.filter((s) => s.cls === "OFFICE" && !sites.some((x) => x.code === s.code)) : [];
-    setSites(sites.concat(offices), { source, at: Date.now(), demo: false });
-    audit("Sites loaded", source, sites.length + " sites");
+    const manual = manualSites().filter((m) => !sites.some((x) => x.code === m.code)), before = new Set(SITES.map((x) => x.code)), next = sites.concat(offices, manual);
+    const added = next.filter((x) => !before.has(x.code)).map((x) => x.code), removed = SITES.filter((x) => !next.some((y) => y.code === x.code)).map((x) => x.code);
+    if (report) {
+      LAST_REPORT = Object.assign({ source, at: Date.now(), added: added.length, removed: removed.length }, report);
+      save("siteReport", LAST_REPORT);
+    }
+    setSites(next, { source, at: Date.now(), demo: false });
+    audit("Sites loaded", source, `${sites.length} sites; ${added.length} added, ${removed.length} removed`);
+    return { added, removed };
+  }
+  var manualSites = () => load("manualSites", []);
+  function addManualSite(x) {
+    const list = manualSites().filter((m) => m.code !== x.code).concat([Object.assign({ manual: true }, x)]);
+    save("manualSites", list);
+    setSites(SITES.filter((s) => s.code !== x.code).concat([Object.assign({ manual: true }, x)]), Object.assign({}, SITES_META, { demo: false }));
+    audit("Site added by hand", x.code);
+  }
+  function removeManualSite(code) {
+    save("manualSites", manualSites().filter((m) => m.code !== code));
+    setSites(SITES.filter((s) => !(s.code === code && s.manual)), SITES_META);
+    audit("Site removed", code);
+  }
+  var DB = () => new Promise((res, rej) => {
+    const r = indexedDB.open("ite2-files", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("h");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  var idb = async (mode, fn) => {
+    const db = await DB();
+    return new Promise((res, rej) => {
+      const tx2 = db.transaction("h", mode), q = fn(tx2.objectStore("h"));
+      tx2.oncomplete = () => res(q && q.result);
+      tx2.onerror = () => rej(tx2.error);
+    });
+  };
+  var canLink = () => typeof window.showOpenFilePicker === "function";
+  async function linkSiteFile() {
+    const [h] = await window.showOpenFilePicker({ types: [{ description: "Site list", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"], "application/vnd.ms-excel": [".xls"], "text/csv": [".csv"] } }] });
+    await idb("readwrite", (st) => st.put(h, "sites"));
+    save("siteLink", { name: h.name, at: Date.now() });
+    return syncSiteFile(true);
+  }
+  async function unlinkSiteFile() {
+    await idb("readwrite", (st) => st.delete("sites"));
+    save("siteLink", null);
+  }
+  async function syncSiteFile(ask2) {
+    const h = await idb("readonly", (st) => st.get("sites"));
+    if (!h) return null;
+    let perm = await h.queryPermission({ mode: "read" });
+    if (perm !== "granted" && ask2) perm = await h.requestPermission({ mode: "read" });
+    if (perm !== "granted") return { needsPermission: true };
+    const f = await h.getFile(), link = load("siteLink", {}) || {};
+    if (!ask2 && link.modified === f.lastModified) return { unchanged: true };
+    const wb = await readWorkbook(f), { sites, report } = rowsToSites(wb.rows);
+    if (!sites.length) throw new Error("no usable rows in " + f.name);
+    const r = applySites(sites, f.name + " (linked)", true, report);
+    save("siteLink", Object.assign(link, { name: f.name, modified: f.lastModified, synced: Date.now() }));
+    return r;
   }
   async function readPulseFile(file) {
-    const txt2 = await file.text(), found = { file: file.name };
+    const txt2 = await file.text(), found2 = { file: file.name };
     const grab = (name) => {
       const m = new RegExp("const " + name + " = (\\{[\\s\\S]*?\\}|\\[[\\s\\S]*?\\]);\\n").exec(txt2);
       if (!m) return null;
@@ -4212,13 +4887,13 @@ ${base2}` }] })
     if (csvTag) {
       await loadScript(XLSX_URL);
       const wb = window.XLSX.read(csvTag[1].trim(), { type: "string" });
-      found.rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      found2.rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
     }
-    found.offices = (grab("PSOC_SITES") || []).filter((x) => x.k === "OFFICE");
-    found.dci = grab("PSOC_DCI");
-    found.officeAddr = grab("PSOC_OFFICES");
-    found.watch = grab("PSOC_WATCH");
-    found.keys = {};
+    found2.offices = (grab("PSOC_SITES") || []).filter((x) => x.k === "OFFICE");
+    found2.dci = grab("PSOC_DCI");
+    found2.officeAddr = grab("PSOC_OFFICES");
+    found2.watch = grab("PSOC_WATCH");
+    found2.keys = {};
     try {
       const dec = (b) => new TextDecoder().decode(Uint8Array.from(atob(b), (c) => c.charCodeAt(0))), mods = {};
       txt2.replace(/^\s*([a-z]+): "([A-Za-z0-9+/=]{1000,})"/gm, (m, k, b) => {
@@ -4227,93 +4902,207 @@ ${base2}` }] })
       });
       if (mods.watch) {
         const w = dec(mods.watch), c = /CWA_KEY\s*=\s*'([^']+)'/.exec(w), k = /KMA_KEY\s*=\s*'([^']+)'/.exec(w);
-        if (c && !/YOUR/.test(c[1])) found.keys.cwa = c[1];
-        if (k && !/YOUR/.test(k[1])) found.keys.kma = k[1];
+        if (c && !/YOUR/.test(c[1])) found2.keys.cwa = c[1];
+        if (k && !/YOUR/.test(k[1])) found2.keys.kma = k[1];
       }
       const aq = mods.airquality || mods.weather;
       if (aq) {
         const a = /waqiToken:\s*"([^"]+)"/.exec(dec(aq));
-        if (a) found.keys.waqi = a[1];
+        if (a) found2.keys.waqi = a[1];
+      }
+      if (mods.tracker) try {
+        found2.ttp = await extractTTP(dec(mods.tracker));
+      } catch (e) {
+        found2.ttpErr = e.message;
       }
     } catch (e) {
     }
-    if (!found.rows && !found.offices.length && !found.dci) throw new Error("no site list, offices or contacts found — is this a PULSE dashboard file?");
-    return found;
+    if (!found2.rows && !found2.offices.length && !found2.dci && !found2.ttp) throw new Error("no site list, offices or contacts found — is this a PULSE dashboard file?");
+    return found2;
   }
-  function applyPulse(found, pick) {
+  function applyPulse(found2, pick) {
     const done = [];
-    if (pick.rows && found.rows) {
-      const { sites } = rowsToSites(found.rows);
+    if (pick.rows && found2.rows) {
+      const { sites, report } = rowsToSites(found2.rows);
       let all = sites;
-      if (pick.offices && found.offices.length) {
-        all = all.concat(found.offices.map((o) => ({ code: o.s, name: o.s.replace(/\s*\([^)]*\)\s*$/, ""), city: (/\(([^)]*)\)\s*$/.exec(o.s) || [])[1] || "", country: o.c, region: "", cls: "OFFICE", status: "OPERATIONAL", lat: o.lat, lon: o.lon })));
-        done.push(found.offices.length + " offices");
+      LAST_REPORT = Object.assign({ source: found2.file, at: Date.now() }, report);
+      save("siteReport", LAST_REPORT);
+      if (pick.offices && found2.offices.length) {
+        all = all.concat(found2.offices.map((o) => ({ code: o.s, name: o.s.replace(/\s*\([^)]*\)\s*$/, ""), city: (/\(([^)]*)\)\s*$/.exec(o.s) || [])[1] || "", country: o.c, region: "", cls: "OFFICE", status: "OPERATIONAL", lat: o.lat, lon: o.lon })));
+        done.push(found2.offices.length + " offices");
       }
-      setSites(all, { source: found.file, at: Date.now(), demo: false });
+      setSites(all.concat(manualSites().filter((m) => !all.some((x) => x.code === m.code))), { source: found2.file, at: Date.now(), demo: false });
       done.unshift(sites.length + " sites");
     }
-    if (pick.dci && found.dci) {
-      setContacts({ sites: found.dci, offices: found.officeAddr || {}, at: Date.now(), file: found.file });
-      done.push(Object.keys(found.dci).length + " site contact records");
+    if (pick.dci && found2.dci) {
+      setContacts({ sites: found2.dci, offices: found2.officeAddr || {}, at: Date.now(), file: found2.file });
+      done.push(Object.keys(found2.dci).length + " site contact records");
     }
-    if (pick.watch && found.watch) {
-      Object.assign(CFG.psoc, { desk: found.watch.desk || "", mobile: found.watch.mobile || "", email: found.watch.email || "" });
+    if (pick.watch && found2.watch) {
+      Object.assign(CFG.psoc, { desk: found2.watch.desk || "", mobile: found2.watch.mobile || "", email: found2.watch.email || "" });
       done.push("PSOC desk contacts");
     }
+    if (pick.ttp && found2.ttp) {
+      const n = setTTP(found2.ttp, found2.file);
+      let moved = 0;
+      EVENTS.forEach((ev) => {
+        if (applyCadence(ev, "REN TTP imported")) moved++;
+      });
+      if (moved) saveEvents();
+      done.push(`${ttpName()} (${n} categories${moved ? `; cadence applied to ${moved} open escalation${moved === 1 ? "" : "s"}` : ""})`);
+    }
     ["cwa", "kma", "waqi"].forEach((k) => {
-      if (pick["key_" + k] && found.keys[k]) {
-        CFG.keys[k] = found.keys[k];
+      if (pick["key_" + k] && found2.keys[k]) {
+        CFG.keys[k] = found2.keys[k];
         done.push(k.toUpperCase() + " key");
       }
     });
     saveCfg();
-    audit("Imported from PULSE file", found.file, done.join(", "));
+    audit("Imported from PULSE file", found2.file, done.join(", "));
     return done;
   }
 
   // src/ui/sites.js
   var FIELDS = [["address", "Address"], ["socPhone", "SOC phone"], ["siteSecurityMgr", "Site security manager"], ["securityDG", "Security distribution group"], ["campusMgr", "Campus manager"], ["adminOfficer", "Admin officer"], ["rsom", "Regional security operations manager"], ["vendorRSM", "Vendor RSM"], ["landlord", "Landlord"], ["timeZone", "Time zone"]];
+  var CLASSES = { all: "All classes", ab: "Class A and B", c: "Class C and C-PE", e: "Edge and other", o: "Offices" };
+  var STATUSES = { live: "Live (operational, deployment, lockdown)", build: "Construction", other: "Retired and other", all: "All statuses" };
+  var statusBand = (s) => isLive(s) || isOffice(s) ? "live" : s.status === "CONSTRUCTION" ? "build" : "other";
   var hazardsAt = (s) => STATE.list.filter((x) => x.kind !== "conditions" && x.sites.some((y) => y.code === s.code)).sort((a, b) => b.tier - a.tier);
   var siteTier = (s) => Math.max(0, ...hazardsAt(s).map((x) => x.tier), (STATE.scores[s.metro] || {}).tier || 0);
+  var rank = (s) => statusBand(s) === "live" ? 0 : statusBand(s) === "build" ? 1 : 2;
+  var siteFilter = (s) => (!UI.siteCls || UI.siteCls === "all" || classBand(s.cls) === UI.siteCls) && ((UI.siteSt || "live") === "all" || statusBand(s) === (UI.siteSt || "live"));
   function filtered() {
     const q = (UI.siteQ || "").trim().toLowerCase();
-    return SITES.filter((s) => !q || [s.code, s.city, s.country, s.cls, s.status, s.name].some((v) => String(v || "").toLowerCase().includes(q))).sort((a, b) => siteTier(b) - siteTier(a) || rank(a) - rank(b) || String(a.code).localeCompare(b.code));
+    return SITES.filter((s) => siteFilter(s) && (!q || [s.code, s.city, s.country, s.cls, s.status, s.name].some((v) => String(v || "").toLowerCase().includes(q)))).sort((a, b) => siteTier(b) - siteTier(a) || rank(a) - rank(b) || String(a.code).localeCompare(b.code));
   }
-  var rank = (s) => isLive(s) || isOffice(s) ? 0 : s.status === "CONSTRUCTION" ? 1 : 2;
+  var found = null;
+  var GEO = [];
+  var geoDone = null;
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("#dialog [data-geopick]");
+    if (!t) return;
+    const r = GEO[+t.dataset.geopick];
+    if (r) {
+      found = r;
+      closeDialog();
+      if (geoDone) geoDone();
+      flyTo(r.lat, r.lon, 10);
+    }
+  });
   function render5(p) {
+    if (found) return p.innerHTML = place(found);
     const s = UI.siteSel && siteBy(UI.siteSel);
     if (s) return p.innerHTML = card(s);
-    const list = filtered(), live = SITES.filter(isLive).length;
-    p.innerHTML = `<div class="ph"><h1>Sites</h1><button class="btn small" data-sload>Load site file</button><button class="btn small" data-spulse>Import PULSE file</button>
-      <div class="sum">${SITES.length} sites, ${live} live, ${SITES.filter(isOffice).length} offices. From ${esc(SITES_META.source)}${SITES_META.at ? ", " + esc(ago(SITES_META.at)) : ""}.${SITES_META.demo ? " <b>These are fictional demo sites</b> — load your site file or a PULSE file to use the real estate." : ""}${CONTACTS.at ? ` Contacts for ${Object.keys(CONTACTS.sites).length} sites.` : ""}</div></div>
-    <div class="filters"><input class="search" type="search" placeholder="Code, city, country or class" value="${esc(UI.siteQ || "")}" data-sq style="width:260px"></div>
+    const list = filtered(), live = SITES.filter(isLive).length, link = load("siteLink", null);
+    p.innerHTML = `<div class="ph"><h1>Sites</h1><button class="btn small" data-sadd>Add a site</button>
+      <div class="sum">${SITES.length} sites, ${live} live, ${SITES.filter(isOffice).length} offices. From ${esc(SITES_META.source)}${SITES_META.at ? ", " + esc(ago(SITES_META.at)) : ""}.${SITES_META.demo ? " <b>These are fictional demo sites</b> — load your site file or a PULSE file to use the real estate." : ""}${CONTACTS.at ? ` Contacts for ${Object.keys(CONTACTS.sites).length} sites.` : ""}
+        ${link ? ` Linked to <b>${esc(link.name)}</b>${link.synced ? `, checked ${esc(ago(link.synced))}` : ""}.` : ""}</div>
+      <div class="actions" style="margin-top:6px"><button class="btn small" data-sload>Load site file</button>${canLink() ? `<button class="btn small" data-slink>${link ? "Sync now" : "Link the site file"}</button>${link ? `<button class="linkbtn" data-sunlink>Unlink</button>` : ""}` : ""}<button class="btn small" data-spulse>Import PULSE file</button>${LAST_REPORT ? `<button class="linkbtn" data-sreport>Site data details</button>` : ""}</div></div>
+    <form class="filters" data-geo><input class="search" type="search" id="geoQ" placeholder="Find an address: nearest sites and threats" style="flex:1;min-width:200px"><button class="btn small">Find</button></form>
+    <div class="filters"><input class="search" type="search" placeholder="Code, city, country or class" value="${esc(UI.siteQ || "")}" data-sq style="width:220px">
+      <select class="search" data-scls style="width:auto">${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}"${(UI.siteCls || "all") === k ? " selected" : ""}>${l}</option>`).join("")}</select>
+      <select class="search" data-sst style="width:auto">${Object.entries(STATUSES).map(([k, l]) => `<option value="${k}"${(UI.siteSt || "live") === k ? " selected" : ""}>${l}</option>`).join("")}</select><span class="help">${list.length} shown</span></div>
     <div class="scroll">${list.slice(0, 400).map((x) => {
       const t = siteTier(x), h = hazardsAt(x);
-      return `<button class="row" data-ssel="${esc(x.code)}"><span class="bar t${t}"></span><span><span class="tt">${esc(x.code)}${x.name && x.name !== x.code ? " — " + esc(x.name) : ""}</span><div class="mt">${esc(x.cls)} · ${esc(x.status.toLowerCase())} · ${esc([x.city, x.country].filter(Boolean).join(", "))}</div></span><span class="rt">${h.length ? `<b>${h.length} hazard${h.length === 1 ? "" : "s"}</b>` : ""}${contactFor(x) ? "contacts" : ""}</span></button>`;
+      return `<button class="row" data-ssel="${esc(x.code)}"><span class="bar t${t}"></span><span><span class="tt"><i class="sitedot ${classBand(x.cls)}${statusBand(x) === "live" ? "" : " notlive"}" style="margin-right:6px"></i>${esc(x.code)}${x.name && x.name !== x.code ? " — " + esc(x.name) : ""}</span><div class="mt">${esc(x.cls)} · ${esc(x.status.toLowerCase())} · ${esc([x.city, x.country].filter(Boolean).join(", "))}${x.manual ? " · added by hand" : ""}</div></span><span class="rt">${h.length ? `<b>${h.length} hazard${h.length === 1 ? "" : "s"}</b>` : ""}${contactFor(x) ? "contacts" : ""}</span></button>`;
     }).join("") || `<div class="empty">No sites match.</div>`}</div>`;
   }
   function card(s) {
     const c = contactFor(s) || {}, hz = hazardsAt(s), evs = EVENTS.filter((e) => e.status !== "closed" && e.sites.includes(s.code)), off2 = isOffice(s) ? Object.entries(CONTACTS.offices || {}).find(([k]) => k === s.code || k === s.name) : null;
-    const tel = (v) => `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ""))}">${esc(v)}</a>`;
-    return `<div class="detail"><button class="back" data-sback>All sites</button><h2>${esc(s.code)}${s.name && s.name !== s.code ? " — " + esc(s.name) : ""}</h2><p class="help">${esc(s.cls)} · ${esc(s.status.toLowerCase())} · ${esc([s.city, s.country].filter(Boolean).join(", "))} · ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}</p>
-    <div class="sec"><h3>Contacts</h3>${off2 ? `<p class="prose">Building: ${esc(off2[1])}</p>` : ""}${FIELDS.some(([k]) => c[k]) ? `<dl class="facts">${FIELDS.filter(([k]) => c[k]).map(([k, l]) => `<dt>${esc(l)}</dt><dd>${k === "socPhone" ? tel(c[k]) : esc(c[k])}</dd>`).join("")}</dl>${CONTACTS.file ? `<p class="help">From ${esc(CONTACTS.file)}, imported ${esc(sgt(CONTACTS.at))} SGT. Fields missing at source are left out.</p>` : ""}` : `<p class="help">No contact record for this site. Import a PULSE file to bring in addresses, SOC phones and security contacts.</p>`}</div>
+    const tel = (v) => `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ""))}">${esc(v)}</a>`, missing = FIELDS.filter(([k]) => !c[k]).map(([, l]) => l);
+    return `<div class="detail"><button class="back" data-sback>All sites</button><h2>${esc(s.code)}${s.name && s.name !== s.code ? " — " + esc(s.name) : ""}</h2><p class="help">${esc(s.cls)} · ${esc(s.status.toLowerCase())} · ${esc([s.city, s.country].filter(Boolean).join(", "))} · ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}${s.manual ? " · added by hand" : ""}</p>
+    <div class="sec"><h3>Contacts</h3>${off2 ? `<p class="prose">Building: ${esc(off2[1])}</p>` : ""}${FIELDS.some(([k]) => c[k]) ? `<dl class="facts">${FIELDS.filter(([k]) => c[k]).map(([k, l]) => `<dt>${esc(l)}</dt><dd>${k === "socPhone" ? tel(c[k]) : esc(c[k])}</dd>`).join("")}</dl>${CONTACTS.file ? `<p class="help">From ${esc(CONTACTS.file)}, imported ${esc(sgt(CONTACTS.at))} SGT.${missing.length && missing.length < FIELDS.length ? " Not in the contact list: " + esc(missing.join(", ").toLowerCase()) + "." : ""}</p>` : ""}` : `<p class="help">No contact record for this site. Import a PULSE file to bring in addresses, SOC phones and security contacts.</p>`}</div>
     <div class="sec"><h3>Affecting this site now (${hz.length})</h3>${hz.map((x) => `<button class="row" data-swatch="${esc(x.key)}"><span class="bar t${x.tier}"></span><span><span class="tt">${esc(x.title)}</span><div class="mt">${tierWord(x.tier)} · ${esc(ago(x.t))}</div></span><span class="rt">${(() => {
       const y = x.sites.find((z) => z.code === s.code);
       return y && y.km ? Math.round(y.km) + " km" : "";
     })()}</span></button>`).join("") || `<p class="help">Nothing in force.</p>`}</div>
     <div class="sec"><h3>Open escalations (${evs.length})</h3>${evs.map((e) => `<button class="row" data-sev="${esc(e.id)}"><span class="bar"></span><span><span class="tt">${priChip(e.sev)}${esc(e.title)}</span></span><span class="rt">${esc((e.welfare[s.code] || {}).status || "welfare not checked")}</span></button>`).join("") || `<p class="help">None.</p>`}</div>
-    <div class="actions"><button class="btn" data-strack>Escalate an event here</button></div></div>`;
+    <div class="actions"><button class="btn" data-strack>Escalate an event here</button><button class="btn" data-scopy="${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}">Copy coordinates</button>${s.manual ? `<button class="btn danger" data-sdel>Remove this site</button>` : ""}</div></div>`;
+  }
+  async function geocode(q) {
+    try {
+      const j2 = await getJSON(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6`, 12e3);
+      const r = (j2.features || []).map((f) => {
+        const p = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+        return { lat, lon, label: [p.name, [p.housenumber, p.street].filter(Boolean).join(" "), p.city || p.county, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") };
+      });
+      if (r.length) return r;
+    } catch (e) {
+    }
+    const j = await getJSON(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(q)}`, 12e3);
+    return (j || []).map((x) => ({ lat: +x.lat, lon: +x.lon, label: x.display_name }));
+  }
+  function place(f) {
+    const near = SITES.filter((s) => isFinite(s.lat)).map((s) => ({ s, d: km(f.lat, f.lon, s.lat, s.lon) })).sort((a, b) => a.d - b.d).slice(0, 8);
+    const threats = STATE.list.filter((x) => x.kind !== "conditions" && x.kind !== "news" && isFinite(x.lat) && km(f.lat, f.lon, x.lat, x.lon) <= 150).sort((a, b) => b.tier - a.tier);
+    return `<div class="detail"><button class="back" data-sgeoback>All sites</button><h2>${esc(f.label.split(",")[0])}</h2><p class="help">${esc(f.label)} · ${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}</p>
+    <div class="actions"><button class="btn" data-scopy="${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}">Copy coordinates</button><button class="btn" data-sadd="here">Add as a site</button><button class="btn" data-sescgeo>Escalate an event here</button></div>
+    <div class="sec"><h3>Nearest sites</h3><table class="tbl"><tr><th>Site</th><th>Class</th><th>Status</th><th>Distance</th></tr>${near.map(({ s, d }) => `<tr><td><button class="linkbtn" data-ssel="${esc(s.code)}">${esc(s.code)}</button><div class="help">${esc(s.city || "")}</div></td><td>${esc(s.cls)}</td><td>${esc(s.status.toLowerCase())}</td><td>${d < 10 ? d.toFixed(1) : Math.round(d)} km</td></tr>`).join("")}</table></div>
+    <div class="sec"><h3>Live threats within 150 km (${threats.length})</h3>${threats.map((x) => `<button class="row" data-swatch="${esc(x.key)}"><span class="bar t${x.tier}"></span><span><span class="tt">${esc(x.title)}</span><div class="mt">${tierWord(x.tier)} · ${Math.round(km(f.lat, f.lon, x.lat, x.lon))} km · ${esc(ago(x.t))}</div></span></button>`).join("") || `<p class="help">None reported.</p>`}</div></div>`;
   }
   function mapSpec4() {
+    if (found) return { points: [{ lat: found.lat, lon: found.lon, tier: 1, label: found.label, on: true }], hitSites: [], fitKey: "geo:" + found.lat + found.lon, siteFilter, signals: STATE.list.filter((x) => x.kind !== "conditions" && isFinite(x.lat) && km(found.lat, found.lon, x.lat, x.lon) <= 150) };
     const s = UI.siteSel && siteBy(UI.siteSel), hz = s ? hazardsAt(s) : [];
-    return { signals: hz, hitSites: s ? [s.code] : filtered().filter((x) => siteTier(x) >= 2).map((x) => x.code), fitKey: s ? "s:" + s.code : "", onSite: (code) => go("sites", { siteSel: code }) };
+    return { signals: hz, siteFilter, hitSites: s ? [s.code] : filtered().filter((x) => siteTier(x) >= 2).map((x) => x.code), fitKey: s ? "s:" + s.code : "", onSite: (code) => go("sites", { siteSel: code }) };
+  }
+  function reportDialog() {
+    const r = LAST_REPORT;
+    if (!r) return;
+    const kv = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("");
+    dialog("Site data details", `<p class="help">${esc(r.source)}, read ${esc(sgt(r.at))} SGT.</p>
+    <dl class="facts"><dt>Rows read</dt><dd>${r.rows ?? "—"}</dd><dt>Placed on the map</dt><dd>${r.added}</dd><dt>Planned, proposed or cancelled</dt><dd>${r.planning} (not added)</dd><dt>No coordinates</dt><dd>${r.noCoords}</dd><dt>Duplicates or blank</dt><dd>${r.skipped}</dd>${r.removed != null ? `<dt>Since the last load</dt><dd>${r.added} in the file; ${r.removed} removed from the console</dd>` : ""}</dl>
+    <div class="sec"><h3>Checks</h3>${(r.fixes || []).map((x) => `<p class="prose"><b>Corrected:</b> ${esc(x)}</p>`).join("")}${(r.outliers || []).length ? `<p class="prose"><b>Far from the other sites in their city — check these:</b> ${esc(r.outliers.join("; "))}</p>` : `<p class="help">No site sits far from the other sites filed under its city.</p>`}</div>
+    <div class="cols2"><div class="sec"><h3>By class</h3><table class="tbl">${kv(r.byClass)}</table></div><div class="sec"><h3>By status</h3><table class="tbl">${kv(r.byStatus)}</table></div></div>
+    <div class="sec"><h3>Field coverage</h3><table class="tbl"><tr><th>Field</th><th>Rows with a value</th></tr>${(r.coverage || []).map(([f, n, t]) => `<tr><td>${esc(f)}</td><td>${n} of ${t} (${t ? Math.round(n / t * 100) : 0} %)</td></tr>`).join("")}</table></div>`, `<button class="btn" data-close>Close</button>`, { wide: true });
+  }
+  function addSiteDialog(pre, rerender) {
+    pre = pre || {};
+    dialog("Add a site", `<div class="form">${field("Site code", `<input id="asC" value="${esc(pre.code || "")}" placeholder="e.g. XSG99" autofocus>`)}${field("Name (optional)", `<input id="asN" value="${esc(pre.name || "")}">`)}
+    ${field("City", `<input id="asCity" value="${esc(pre.city || "")}">`)}${field("Country", `<input id="asCo" list="asCoL" value="${esc(pre.country || "")}"><datalist id="asCoL">${siteCountries().map((c) => `<option>${esc(c)}</option>`).join("")}</datalist>`)}
+    ${field("Class", `<select id="asCl">${["CLASS A", "CLASS B", "CLASS C", "C-PE", "EDGE", "OFFICE"].map((c) => `<option>${c}</option>`).join("")}</select>`)}${field("Status", `<select id="asSt">${["OPERATIONAL", "DEPLOYMENT", "CONSTRUCTION", "PROPOSED"].map((c) => `<option>${c}</option>`).join("")}</select>`)}
+    ${field("Latitude", `<input id="asLa" type="number" step="any" value="${pre.lat ?? ""}">`)}${field("Longitude", `<input id="asLo" type="number" step="any" value="${pre.lon ?? ""}">`)}
+    <div class="fld" style="justify-content:flex-end">${mapReady() ? `<button class="btn small" id="asPick" type="button">Pick on the map</button>` : ""}</div></div>
+    <p class="help">Kept in this browser and re-added after every site file load, until you remove it.</p>`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="asGo">Add site</button>`);
+    if ($("#asPick")) $("#asPick").onclick = async () => {
+      $("#scrim").hidden = true;
+      toast("Click the map where the site is", "", null, null, 4e3);
+      const ll = await pickPoint();
+      $("#scrim").hidden = false;
+      if (ll) {
+        $("#asLa").value = ll.lat.toFixed(5);
+        $("#asLo").value = ll.lng.toFixed(5);
+      }
+    };
+    $("#asGo").onclick = () => {
+      const code = $("#asC").value.trim().toUpperCase(), lat = parseFloat($("#asLa").value), lon = parseFloat($("#asLo").value);
+      if (!code) {
+        $("#asC").focus();
+        return;
+      }
+      if (!isFinite(lat) || !isFinite(lon)) {
+        toast("Add the coordinates", "Type them or pick the spot on the map.", 2);
+        return;
+      }
+      if (SITES.some((s) => s.code === code && !s.manual)) {
+        toast("That code is already in the site file", code, 2);
+        return;
+      }
+      addManualSite({ code, name: $("#asN").value.trim(), city: $("#asCity").value.trim(), country: $("#asCo").value.trim(), region: "", cls: $("#asCl").value, status: $("#asSt").value, lat, lon });
+      closeDialog();
+      found = null;
+      UI.siteSel = code;
+      saveUI();
+      toast("Site added", code, 0);
+      rerender();
+    };
   }
   function bind5(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-ssel],[data-sback],[data-sload],[data-spulse],[data-swatch],[data-sev],[data-strack]");
+      const t = e.target.closest("[data-ssel],[data-sback],[data-sload],[data-spulse],[data-swatch],[data-sev],[data-strack],[data-sadd],[data-sreport],[data-slink],[data-sunlink],[data-scopy],[data-sdel],[data-sgeoback],[data-sescgeo]");
       if (!t) return;
       const d = t.dataset;
       if (d.ssel) {
+        found = null;
         UI.siteSel = d.ssel;
         saveUI();
         rerender();
@@ -4325,8 +5114,13 @@ ${base2}` }] })
         rerender();
         return;
       }
+      if (d.sgeoback !== void 0) {
+        found = null;
+        rerender();
+        return;
+      }
       if (d.swatch) {
-        go("watch", { watchSel: d.swatch, watchCity: null });
+        go("watch", { watchSel: d.swatch, watchCity: null, watchMode: "feed" });
         return;
       }
       if (d.sev) {
@@ -4338,16 +5132,58 @@ ${base2}` }] })
         escalateForm({ sites: [s.code], country: s.country, lat: s.lat, lon: s.lon });
         return;
       }
+      if (d.sescgeo !== void 0 && found) {
+        const near = SITES.filter((s) => (isLive(s) || isOffice(s)) && km(found.lat, found.lon, s.lat, s.lon) <= 25).map((s) => s.code);
+        escalateForm({ title: found.label.split(",")[0], sites: near, lat: found.lat, lon: found.lon });
+        return;
+      }
+      if (d.scopy) {
+        const ok = await copyText(d.scopy);
+        t.textContent = ok ? "Copied" : "Copy failed";
+        return;
+      }
+      if (d.sadd !== void 0) {
+        addSiteDialog(d.sadd === "here" && found ? { lat: +found.lat.toFixed(5), lon: +found.lon.toFixed(5), city: "" } : null, rerender);
+        return;
+      }
+      if (d.sdel !== void 0) {
+        removeManualSite(UI.siteSel);
+        UI.siteSel = null;
+        saveUI();
+        rerender();
+        return;
+      }
+      if (d.sreport !== void 0) {
+        reportDialog();
+        return;
+      }
+      if (d.sunlink !== void 0) {
+        await unlinkSiteFile();
+        toast("Site file unlinked", "The sites already loaded stay.", 0);
+        rerender();
+        return;
+      }
+      if (d.slink !== void 0) {
+        try {
+          const linked = load("siteLink", null), r = linked ? await syncSiteFile(true) : await linkSiteFile();
+          if (r && r.needsPermission) toast("Allow the console to read the file", "Your browser asked for permission; try Sync now again.", 2);
+          else if (r) toast("Site file synced", `${r.added ? r.added.length : 0} added, ${r.removed ? r.removed.length : 0} removed.`, 0);
+          rerender();
+        } catch (err) {
+          if (err && err.name !== "AbortError") toast("Could not read the site file", err.message, 3);
+        }
+        return;
+      }
       if (d.sload !== void 0) return pickFile(".xlsx,.xls,.csv", async (f) => {
         const wb = await readWorkbook(f), { sites, report } = rowsToSites(wb.rows);
         if (!sites.length) throw new Error("no usable rows (each needs a site name and coordinates)");
         dialog(
           "Load " + f.name,
-          `<p class="prose">${sites.length} sites read from sheet “${esc(wb.sheet)}”. ${report.planning} planned, proposed or cancelled rows skipped; ${report.noCoords} without coordinates skipped; ${report.skipped} duplicates or blank.</p><label class="chk"><input type="checkbox" id="slKeep" checked> Keep the offices already loaded</label><p class="help">This replaces the current site list in this browser.</p>`,
+          `<p class="prose">${sites.length} sites read from sheet “${esc(wb.sheet)}”. ${report.planning} planned, proposed or cancelled rows skipped; ${report.noCoords} without coordinates skipped; ${report.skipped} duplicates or blank.${report.fixes.length ? ` ${report.fixes.length} city name${report.fixes.length === 1 ? "" : "s"} corrected from the coordinates.` : ""}${report.outliers.length ? ` <b>${report.outliers.length} site${report.outliers.length === 1 ? " sits" : "s sit"} far from the others in the same city</b> — see Site data details after loading.` : ""}</p><label class="chk"><input type="checkbox" id="slKeep" checked> Keep the offices already loaded</label><p class="help">This replaces the current site list in this browser. Sites added by hand are kept.</p>`,
           `<button class="btn" data-close>Cancel</button><button class="btn primary" id="slGo">Replace the site list</button>`
         );
         $("#slGo").onclick = () => {
-          applySites(sites, f.name, $("#slKeep").checked);
+          applySites(sites, f.name, $("#slKeep").checked, report);
           closeDialog();
           toast("Sites loaded", sites.length + " sites from " + f.name, 0);
           rerender();
@@ -4359,18 +5195,44 @@ ${base2}` }] })
           "Import from " + f.name,
           `<p class="help">Read in this browser only. Nothing is uploaded or written into the console's files.</p>
         ${fd.rows ? `<label class="chk"><input type="checkbox" id="piRows" checked> Site list — ${fd.rows.length} rows (planned, proposed and cancelled are skipped)</label>` : ""}${fd.offices.length ? `<label class="chk"><input type="checkbox" id="piOff" checked> Offices — ${fd.offices.length}</label>` : ""}
-        ${fd.dci ? `<label class="chk"><input type="checkbox" id="piDci" checked> Site contacts — ${Object.keys(fd.dci).length} sites</label>` : ""}${fd.watch ? `<label class="chk"><input type="checkbox" id="piWatch" checked> PSOC watch desk contacts</label>` : ""}
+        ${fd.dci ? `<label class="chk"><input type="checkbox" id="piDci" checked> Site contacts — ${Object.keys(fd.dci).length} sites</label>` : ""}
+        ${fd.ttp ? `<label class="chk"><input type="checkbox" id="piTtp" checked> REN TTP${fd.ttp.meta && fd.ttp.meta.version ? " v" + esc(fd.ttp.meta.version) : ""} — ${Object.keys(fd.ttp.ttp || {}).length} categories: triggers, update cadence, close criteria and PSOC actions</label>` : fd.ttpErr ? `<p class="help">The REN TTP could not be read: ${esc(fd.ttpErr)}.</p>` : ""}${fd.watch ? `<label class="chk"><input type="checkbox" id="piWatch" checked> PSOC watch desk contacts</label>` : ""}
         ${Object.keys(fd.keys).length ? `<h3 style="font:600 13px var(--cond);color:var(--muted);margin:14px 0 4px">Keys in the file — off unless you are allowed to use them here</h3>${Object.entries(fd.keys).map(([k, v]) => `<label class="chk"><input type="checkbox" id="piKey_${k}"> ${k.toUpperCase()} ${esc(mask(v))}</label>`).join("")}` : ""}`,
           `<button class="btn" data-close>Cancel</button><button class="btn primary" id="piGo">Import</button>`
         );
         $("#piGo").onclick = () => {
           const on2 = (id) => !!($("#" + id) && $("#" + id).checked);
-          const done = applyPulse(fd, { rows: on2("piRows"), offices: on2("piOff"), dci: on2("piDci"), watch: on2("piWatch"), key_cwa: on2("piKey_cwa"), key_kma: on2("piKey_kma"), key_waqi: on2("piKey_waqi") });
+          const done = applyPulse(fd, { rows: on2("piRows"), offices: on2("piOff"), dci: on2("piDci"), watch: on2("piWatch"), ttp: on2("piTtp"), key_cwa: on2("piKey_cwa"), key_kma: on2("piKey_kma"), key_waqi: on2("piKey_waqi") });
           closeDialog();
           toast("Imported", done.join(", ") || "nothing selected", 0);
           rerender();
         };
       });
+    };
+    p.onsubmit = async (e) => {
+      if (!e.target.matches("[data-geo]")) return;
+      e.preventDefault();
+      const q = $("#geoQ").value.trim();
+      if (!q) return;
+      const b = e.target.querySelector("button");
+      b.textContent = "Finding…";
+      try {
+        const r = await geocode(q);
+        GEO = r;
+        geoDone = () => {
+          rerender();
+        };
+        if (!r.length) toast("No match", q, 2);
+        else if (r.length === 1) {
+          found = r[0];
+          rerender();
+          flyTo(found.lat, found.lon, 10);
+        } else dialog("Which one?", r.map((x, i) => `<button class="row" data-geopick="${i}" style="width:100%"><span class="bar"></span><span><span class="tt">${esc(x.label)}</span></span></button>`).join(""), `<button class="btn" data-close>Cancel</button>`);
+      } catch (err) {
+        toast("Address search is not reachable", "photon.komoot.io and nominatim.openstreetmap.org may be blocked on this network.", 2);
+      } finally {
+        b.textContent = "Find";
+      }
     };
     p.oninput = (e) => {
       if (e.target.matches("[data-sq]")) {
@@ -4388,6 +5250,18 @@ ${base2}` }] })
         }, 200);
       }
     };
+    p.onchange = (e) => {
+      if (e.target.matches("[data-scls]")) {
+        UI.siteCls = e.target.value;
+        saveUI();
+        rerender();
+      }
+      if (e.target.matches("[data-sst]")) {
+        UI.siteSt = e.target.value;
+        saveUI();
+        rerender();
+      }
+    };
   }
   function pickFile(accept, fn) {
     const i = document.createElement("input");
@@ -4403,6 +5277,14 @@ ${base2}` }] })
     };
     i.click();
   }
+  setInterval(async () => {
+    if (!load("siteLink", null)) return;
+    try {
+      const r = await syncSiteFile(false);
+      if (r && r.added && (r.added.length || r.removed.length)) toast("Site file re-synced", `${r.added.length} added, ${r.removed.length} removed.`, 0);
+    } catch (e) {
+    }
+  }, 15 * 6e4);
 
   // src/ui/settings.js
   var settings_exports = {};
@@ -4413,6 +5295,7 @@ ${base2}` }] })
   var SECTIONS = [
     ["sources", "Sources", "what each one returns, and whether it works"],
     ["rules", "What reaches the Inbox", "the SOP triggers"],
+    ["procedures", "Procedures", "REN TTP and update cadence"],
     ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
     ["keys", "Keys", "WAQI, Taiwan CWA, KMA, Claude"],
     ["areas", "Areas watched", "prefectures, regions, countries, CAP feeds"],
@@ -4425,7 +5308,7 @@ ${base2}` }] })
   var txt = (path, label, ph = "", type = "text") => field(label, `<input type="${type}" data-cfg="${path}" value="${esc(val(path) || "")}" placeholder="${esc(ph)}" autocomplete="off">`);
   function render6(p) {
     const s = UI.setSel || "sources";
-    p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${{ sources, rules, thresholds, keys: keys2, areas, contacts, connection, data }[s]()}</article></div>`;
+    p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${{ sources, rules, procedures, thresholds, keys: keys2, areas, contacts, connection, data }[s]()}</article></div>`;
   }
   function sources() {
     const groups = [...new Set(SOURCES.map((x) => x.group))], ok = SOURCES.filter((x) => feedOf(x.id).ok).length, bad = SOURCES.filter((x) => feedOf(x.id).ok === false);
@@ -4451,6 +5334,16 @@ ${base2}` }] })
     ];
     return `<h2>What reaches the Inbox</h2><p class="help">Everything is listed in Watch. These triggers decide what also lands in the Inbox for a decision. Each item is raised once; it returns only if it gets worse, or after monitoring.</p>
     <div style="display:flex;flex-direction:column;gap:10px;max-width:760px;margin-top:12px">${R.map(([k, l, d]) => `<label class="chk"><input type="checkbox" data-cfg="rules.${k}"${CFG.rules[k] !== false ? " checked" : ""}><span><b>${esc(l)}</b><br><span class="help">${esc(d)}</span></span></label>`).join("")}</div>`;
+  }
+  function procedures() {
+    const cats = Object.entries(SOP_REF);
+    return `<h2>Procedures</h2><p class="help">${TTP ? `${esc(ttpName())}${TTP.meta.date ? " dated " + esc(TTP.meta.date) : ""}, from ${esc(TTP.file || "a PULSE file")}, imported ${esc(ago(TTP.at))}. It is kept in this browser only.` : "No REN TTP loaded: the procedures are placeholders. Import a PULSE file under Sites to load your REN TTP; it stays in this browser."}</p>
+    <div class="form" style="max-width:640px">${field("Update timers", `<select data-cfg="cadence"><option value="ttp"${CFG.cadence !== "fixed" ? " selected" : ""}>Follow the REN TTP for each category</option><option value="fixed"${CFG.cadence === "fixed" ? " selected" : ""}>Fixed: Manager every 12 h, Intel / SLT every 24 h</option></select>`, true)}</div>
+    <table class="tbl" style="margin-top:12px;max-width:760px"><tr><th>Category</th><th>Manager update</th><th>Intel / SLT update</th><th>Source</th></tr>${cats.map(([k, v]) => {
+      const c = cadenceFor(k);
+      return `<tr><td>${esc(v.label)}</td><td>${k === "protest" ? "as it develops" : "every " + c.m + " h"}</td><td>${k === "protest" ? "as it develops" : "every " + c.i + " h"}</td><td class="help">${v.ttp ? esc(c.src === "fixed" ? "fixed" : ttpName()) : "placeholder"}</td></tr>`;
+    }).join("")}</table>
+    ${TTP ? `<div class="actions" style="margin-top:14px"><button class="btn danger" data-sttpclear>Remove the REN TTP from this browser</button></div>` : ""}`;
   }
   function thresholds() {
     return `<h2>Thresholds</h2><h3 class="help" style="margin-top:14px">Earthquakes</h3><div class="form">${num("quake.globalMag", "Alarm anywhere at magnitude", 0.1)}${num("quake.nearMag", "Near-site alarm at magnitude", 0.1)}${num("quake.nearKm", "Near-site distance (km)", 10)}${num("quake.listMag", "List down to magnitude", 0.5)}
@@ -4484,7 +5377,16 @@ ${base2}` }] })
   }
   function data() {
     const A = auditLog().slice(0, 300), theme = document.documentElement.dataset.theme || "night";
-    return `<h2>Data and audit</h2><div class="actions"><button class="btn" data-sbackup>Download a backup</button><button class="btn" data-srestore>Restore from a backup</button><button class="btn" data-saudit>Export the audit trail</button></div>
+    let bytes = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.startsWith("ite2.")) bytes += (k.length + (localStorage.getItem(k) || "").length) * 2;
+      }
+    } catch (e) {
+    }
+    return `<h2>Data and audit</h2><div class="actions"><button class="btn primary" data-sxlsx>Export everything to Excel</button><button class="btn" data-sbackup>Download a backup</button><button class="btn" data-srestore>Restore from a backup</button><button class="btn" data-saudit>Export the audit trail</button></div>
+    <p class="help" style="margin-top:8px">Browser storage used by the console: <b>${(bytes / 1048576).toFixed(2)} MB</b> of about 5 MB this browser allows a page. ${bytes > 4 * 1048576 ? `<span class="late">Nearly full — export to Excel, then clear old reports.</span>` : "Plenty of room."}</p>
     <h3 class="help" style="margin-top:18px">Appearance</h3><div class="seg"><button data-theme="night" aria-pressed="${theme !== "day"}">Night</button><button data-theme="day" aria-pressed="${theme === "day"}">Day</button></div>
     <h3 class="help" style="margin-top:18px">Audit trail — last ${A.length}</h3><table class="tbl"><tr><th>When (SGT)</th><th>Who</th><th>What</th><th>Item</th><th>Detail</th></tr>${A.map((a) => `<tr><td>${esc(sgt(a.t))}</td><td>${esc(a.by)}</td><td>${esc(a.action)}</td><td>${esc(a.what)}</td><td>${esc(a.detail)}</td></tr>`).join("")}</table>`;
   }
@@ -4500,6 +5402,16 @@ ${base2}` }] })
         path.forEach((k) => o = o[k] = o[k] || {});
         o[last] = t.type === "checkbox" ? t.checked : t.type === "number" ? parseFloat(t.value) : t.value.trim();
         after();
+        if (t.dataset.cfg === "cadence") {
+          let n = 0;
+          EVENTS.forEach((ev) => {
+            if (applyCadence(ev, "Settings")) n++;
+          });
+          saveEvents();
+          rerender();
+          if (n) toast("Cadence applied", `${n} open escalation${n === 1 ? "" : "s"} updated.`, 0);
+          return;
+        }
         toast("Saved", "", 0, null, 1500);
         return;
       }
@@ -4525,7 +5437,7 @@ ${base2}` }] })
       }
     };
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme]");
+      const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx]");
       if (!t) return;
       const d = t.dataset;
       if (d.ssec) {
@@ -4612,6 +5524,27 @@ ${base2}` }] })
         download("ite-audit.csv", csv([["time_utc", "who", "action", "item", "detail"]].concat(auditLog().map((a) => [new Date(a.t).toISOString(), a.by, a.action, a.what, a.detail]))), "text/csv");
         return;
       }
+      if (d.sxlsx !== void 0) {
+        t.textContent = "Preparing…";
+        try {
+          await exportExcel();
+          t.textContent = "Export everything to Excel";
+        } catch (err) {
+          toast("Export failed", err.message, 3);
+          t.textContent = "Export everything to Excel";
+        }
+        return;
+      }
+      if (d.sttpclear !== void 0) {
+        if (await confirmBox("Remove the REN TTP?", "The procedures go back to placeholders and update timers to 12 h / 24 h for open escalations that follow it.", "Remove")) {
+          clearTTP();
+          EVENTS.forEach((ev) => applyCadence(ev, "TTP removed"));
+          saveEvents();
+          audit("REN TTP removed");
+          rerender();
+        }
+        return;
+      }
       if (d.theme) {
         document.documentElement.dataset.theme = d.theme;
         save("theme", d.theme);
@@ -4619,6 +5552,149 @@ ${base2}` }] })
         setBase();
       }
     };
+  }
+  async function exportExcel() {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    const X = window.XLSX, wb = X.utils.book_new(), T = (t) => t ? sgt(t) : "";
+    const add = (name, rows) => X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{ note: "none" }]), name);
+    add("Escalations", EVENTS.map((e) => ({ title: e.title, category: (SOP_REF[e.cat] || {}).label || e.cat, severity: e.sev, country: e.country, status: e.status, event_notice: REN[e.ren], opened_sgt: T(e.created), closed_sgt: e.closed ? T(e.closed.at) : "", closed_by: e.closed ? e.closed.by : "", summary: e.closed ? e.closed.summary : "", sites: e.sites.join(", "), welfare: Object.entries(e.welfare || {}).map(([k, v]) => k + " " + v.status).join("; "), messages_sent: (e.comms || []).length })));
+    add("Escalation log", EVENTS.flatMap((e) => e.log.map((l) => ({ escalation: e.title, time_sgt: T(l.t), by: l.by, entry: l.m }))));
+    add("Inbox decisions", INBOX.map((i) => ({ item: i.title, priority: i.pri, raised_sgt: T(i.createdAt), status: i.status, decision: i.decision || "", reason: i.reason || "", by: i.by || "", decided_sgt: T(i.decidedAt) })));
+    add("Reports", REPORTS.map((r) => ({ title: r.title, type: r.type, by: r.by, saved_sgt: T(r.at), text: String(r.text || "").slice(0, 32e3) })));
+    add("Detection history", HISTORY.map((h) => ({ report: h.title, type: h.kind, highest_level: h.tier, first_seen_sgt: T(h.first), last_seen_sgt: T(h.last), sites: h.sites, where: h.area || h.cities.join(", "), source: h.url })));
+    add("Earthquakes", QARCH.map((q) => Object.assign({ time_sgt: T(q.t) }, q, { t: void 0 })));
+    add("Sites", SITES.map((x) => ({ code: x.code, name: x.name, city: x.city, country: x.country, class: x.cls, status: x.status, lat: x.lat, lon: x.lon, added_by_hand: x.manual ? "yes" : "" })));
+    add("Audit", auditLog().map((a) => ({ time_sgt: T(a.t), who: a.by, action: a.action, item: a.what, detail: a.detail })));
+    X.writeFile(wb, `ite-export-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace(":", "")}.xlsx`);
+    audit("Exported everything to Excel");
+  }
+
+  // src/ui/copilot.js
+  var MODEL = "claude-sonnet-5-5";
+  var chat = [];
+  function picture() {
+    const now = Date.now(), L2 = [`Now: ${sgt(now)} SGT. Officer: ${who()}.`];
+    const ev = openEvents();
+    L2.push("", `OPEN ESCALATIONS (${ev.length})`);
+    ev.forEach((e) => {
+      const t = timers(e), c = cad(e), w = Object.entries(e.welfare || {});
+      L2.push(`- [${e.sev}] ${e.title} | ${(SOP_REF[e.cat] || {}).label || e.cat} | ${e.country || "?"} | event notice ${REN[e.ren].toLowerCase()} | ${t.state === "awaiting" ? "timers wait for the notice" : t.state === "immediate" ? "update as it develops" : `Manager update every ${c.m} h due ${t.d12 < 0 ? "OVERDUE by " + dur(-t.d12) : "in " + dur(t.d12)}; Intel/SLT every ${c.i} h due ${t.d24 < 0 ? "OVERDUE by " + dur(-t.d24) : "in " + dur(t.d24)}`} | sites: ${e.sites.slice(0, 15).join(", ") || "none"} | welfare: ${w.map(([k, v]) => k + " " + v.status).join(", ") || "none checked"}`);
+      e.log.slice(-4).forEach((l) => L2.push(`    log ${sgt(l.t)}: ${l.m}`));
+    });
+    const items = openItems();
+    L2.push("", `WAITING FOR A DECISION (${items.length})`);
+    items.slice(0, 25).forEach((i) => L2.push(`- ${i.pri} ${i.title}${dueAt(i) < now ? " (LATE)" : ""}`));
+    const hz = STATE.list.filter((s) => s.tier >= 1 && (s.sites.length || s.cities.length) && s.kind !== "conditions").slice(0, 40);
+    L2.push("", `HAZARDS TOUCHING OUR SITES (${hz.length})`);
+    hz.forEach((s) => L2.push(`- level ${s.tier} ${s.kind}: ${s.title} | ${s.area || s.cities.join(", ")} | ${s.sites.length} sites | reported ${sgt(s.t)}${s.text ? " | " + s.text.slice(0, 220) : ""}`));
+    const d = decided(now - 12 * 36e5);
+    L2.push("", `DECIDED THIS SHIFT (${d.length})`);
+    d.slice(0, 25).forEach((i) => L2.push(`- ${i.decision}: ${i.title}${i.reason ? " (" + i.reason + ")" : ""} by ${i.by}`));
+    const cats = [...new Set(ev.map((e) => e.cat))].filter(ttpFor);
+    if (cats.length) {
+      L2.push("", `${ttpName()} FOR THE OPEN CATEGORIES`);
+      cats.forEach((k) => {
+        const t = ttpFor(k);
+        L2.push(`${t.label}: manager trigger: ${t.mgr.trig.join("; ")} | intel trigger: ${t.intel.trig.join("; ")} | REN when: ${t.ren.crit.join("; ")} | close when: ${t.close.join("; ")}`.replace(/\*\*/g, ""));
+      });
+    }
+    return L2.join("\n");
+  }
+  var SYSTEM = "You are the PSOC Copilot inside ITE, a physical security operations console for Asia-Pacific. Answer from the live picture given; never invent events, sites, times, figures or contacts. If something is not in the picture, say so. Be brief and operational: lead with what needs doing, use SGT times, and name sites by code. Draft messages in plain text ready to paste.";
+  async function ask(text, box2) {
+    const key = CFG.keys.claude;
+    chat.push({ role: "user", content: text });
+    draw3(box2, true);
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: SYSTEM + "\n\nLIVE PICTURE\n" + picture(), messages: chat.slice(-12) })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(r.status === 401 ? "the API key was rejected" : j.error && j.error.message || "HTTP " + r.status);
+      chat.push({ role: "assistant", content: (j.content || []).map((b) => b.text || "").join("").trim() });
+      audit("Asked Copilot", text.slice(0, 120));
+    } catch (e) {
+      chat.push({ role: "assistant", content: "Could not reach Claude: " + e.message + ".", err: true });
+    }
+    draw3(box2, false);
+  }
+  function draw3(box2, busy2) {
+    box2.innerHTML = chat.map((m, i) => `<div class="msg ${m.role}${m.err ? " err" : ""}">${esc(m.content).replace(/\n/g, "<br>")}${m.role === "assistant" && !m.err ? `<button class="linkbtn" data-cpcopy="${i}">Copy</button>` : ""}</div>`).join("") + (busy2 ? `<div class="msg assistant help">Thinking…</div>` : "");
+    box2.scrollTop = box2.scrollHeight;
+  }
+  function openCopilot() {
+    if (!CFG.keys.claude) {
+      dialog(
+        "PSOC Copilot",
+        `<p class="prose">Copilot answers questions about the live picture, summarises what is active and drafts reports. It uses your own Anthropic API key, kept in this browser and sent only to api.anthropic.com.</p>`,
+        `<button class="btn" data-close>Close</button><button class="btn primary" id="cpKey">Add the key in Settings</button>`
+      );
+      $("#cpKey").onclick = () => {
+        go("settings", { setSel: "keys" });
+        document.querySelector("[data-close]").click();
+      };
+      return;
+    }
+    dialog("PSOC Copilot", `<div class="cpquick">${[
+      ["Summarise what is active", "Summarise what is active now for a shift lead: open escalations and their next deadlines, what is waiting for a decision, and anything touching our sites that has no escalation yet."],
+      ["What should I do next?", "Given the live picture, list the next three things I should do, most urgent first, each with why and by when."],
+      ["Draft the SITREP", "Draft today's APAC SITREP from the live picture: executive summary, then each open event (country, category, severity, time identified, description, closest sites, event notice status), then items under observation."]
+    ].map(([l, q]) => `<button class="btn small" data-cpq="${esc(q)}">${esc(l)}</button>`).join("")}</div>
+    <div class="cplog" id="cpLog"></div><form class="note" id="cpForm"><input id="cpIn" placeholder="Ask about the live picture" aria-label="Ask Copilot" autocomplete="off"><button class="btn small primary">Ask</button></form>
+    <p class="help">Answers use the open escalations, the Inbox, hazards touching our sites and this shift's decisions${ttpName() ? " and the " + esc(ttpName()) : ""}. Check before sending anything.</p>`, `<button class="btn" id="cpClear">Clear</button><button class="btn" data-close>Close</button>`, { wide: true });
+    const box2 = $("#cpLog");
+    draw3(box2, false);
+    $("#cpForm").onsubmit = (e) => {
+      e.preventDefault();
+      const v = $("#cpIn").value.trim();
+      if (!v) return;
+      $("#cpIn").value = "";
+      ask(v, box2);
+    };
+    $("#dialog").onclick = async (e) => {
+      const q = e.target.closest("[data-cpq]"), c = e.target.closest("[data-cpcopy]");
+      if (q) ask(q.dataset.cpq, box2);
+      if (c) {
+        const ok = await copyText(chat[+c.dataset.cpcopy].content);
+        c.textContent = ok ? "Copied" : "Copy failed";
+      }
+    };
+    $("#cpClear").onclick = () => {
+      chat = [];
+      draw3(box2, false);
+    };
+  }
+
+  // src/ui/guide.js
+  var G = [
+    ["Start of shift", "Sign in with your name: it is recorded against every decision, escalation and report. Turn the Siren on in the top bar and press Test to check the volume. Turn Desktop alerts on so you are told when the console is behind another window. Read the shift handover your colleague saved under Reports."],
+    ["The top bar", "It shows the one thing to do next: a late decision, then an overdue update, then the next decision, then an update due soon, then an escalation waiting for its event notice. Click it to go there. If the earthquake feed stops responding a red bar appears in front of it: the alarm cannot fire until it recovers."],
+    ["Watch", "One map and one feed for every source. Filter by type with the chips, search, and sort by seriousness, time, distance or shaking. Cities shows weather, the next 48 hours, air, river flow and hazards for each metro; open a city for its 7-day outlook. History keeps everything that touched our sites for 7 days, after it ends. Live TV plays CNA, NHK WORLD, DW and Al Jazeera."],
+    ["Copy brief", "Every report in Watch has Copy brief: a short plain-text summary with the affected sites, ready for Teams or the shift log. For a typhoon it includes when damaging winds reach each site and when the storm is closest."],
+    ["Inbox", "Only what needs a decision, the one due soonest first: P1 within 5 minutes, P2 15, P3 60, P4 4 hours. Escalate (E) opens an escalation; Notify (N) writes the messages without one; Monitor (M) brings it back later if the source still reports it; Dismiss (D) records why. J and K move between items. Add an item for anything reported by phone or chat."],
+    ["Events", "Each escalation: the update timers, the event notice, the messages, sites and welfare, the procedure checklist and the log. Timers wait until the event notice is issued. With the REN TTP loaded, the cadence follows it for each category (for example Manager every 6 hours, Intel / SLT every 24 hours); civil unrest is updated as it develops. Mark each update sent to reset its timer."],
+    ["Procedure checklist", "With the REN TTP loaded, each event lists the close criteria, what PSOC will do, and the security, EHS and resiliency considerations. Tick them as they are done; each tick is logged with your name, and closing the event warns about close criteria not yet ticked. While the notice is under assessment, the event shows when a notice should be issued."],
+    ["Welfare", "In an event, set each site to safe, impacted or no answer. Impacted asks what the impact is. The SOC phone for each site comes from the contact list imported from the PULSE file."],
+    ["Messages", "Write the messages opens the leadership update, the Intelligence Channel post and the site stakeholders email, written from the event. Edit, copy (it pastes with paragraphs and links into Teams and Outlook) or open in your email app, then Mark as sent. Nothing is sent by the console itself."],
+    ["Reports", "The shift handover and the SITREP are written from what the console holds. Edit freely, then copy, save, download or print. Rewrite from live data starts again. With an Anthropic key, Tighten with Claude improves the wording without changing facts. Closing an escalation saves its close-out report here."],
+    ["Copilot", "Ask Copilot questions about the live picture: what is active, what to do next, or to draft the SITREP. It uses your own Anthropic API key from Settings › Keys and only the facts in the console."],
+    ["Sites", "The estate with its contacts and what is affecting each site. Filter by class and status. Find an address shows the nearest sites and live threats within 150 km, and can add it as a site. Add a site by hand for anything not yet in the site file; it is kept through every reload."],
+    ["Loading the real estate", "Load site file reads an Excel or CSV site list once. Link the site file (Chrome and Edge) keeps it linked and re-reads it every 15 minutes, so the console follows the master list. Import PULSE file brings the site list, offices, site contacts, the PSOC desk contacts and the REN TTP; keys in the file stay off unless you tick them. Everything is read in your browser and stays in it. Site data details shows what was read, coverage, and sites whose city or coordinates look wrong."],
+    ["Earthquake alarm", "A full-screen alarm and siren for a quake at or above the global magnitude, or at or above the near-site magnitude within range of a site (Settings › Thresholds). Acknowledge and decide takes you to its Inbox item. The earthquake map shows the official USGS ShakeMap contours once USGS publishes them, and modelled rings until then."],
+    ["Sources and relay", "Settings › Sources lists every source, what it gives and whether it is working. Some agencies block browsers; set a relay or the PSOC server under Settings › Connection and they are fetched through it. Keys for KMA, Taiwan CWA and WAQI go under Settings › Keys."],
+    ["Your data", "Everything stays in this browser. Settings › Data downloads a backup, restores one, exports everything to Excel, and shows how much browser storage is used."],
+    ["Keys", "1 to 6 open the workspaces. In the Inbox: J and K move, E N M D decide. ? opens this guide. Escape closes a dialog."]
+  ];
+  function openGuide() {
+    dialog("Guide", `<input class="search" id="gq" type="search" placeholder="Search the guide" style="width:100%;margin-bottom:10px" autofocus><div id="gl"></div>`, `<button class="btn" data-close>Close</button>`, { wide: true });
+    const draw4 = () => {
+      const q = $("#gq").value.trim().toLowerCase(), hit = G.filter(([h, t]) => !q || (h + " " + t).toLowerCase().includes(q));
+      $("#gl").innerHTML = hit.map(([h, t]) => `<h4 class="ttp-h">${esc(h)}</h4><p class="prose">${esc(t)}</p>`).join("") || `<p class="help">Nothing matches. Try a single word, such as timer, welfare or relay.</p>`;
+    };
+    draw4();
+    $("#gq").oninput = draw4;
   }
 
   // src/ui/shell.js
@@ -4633,6 +5709,7 @@ ${base2}` }] })
     ${stage("events", ev.n, ev.over ? 3 : ev.soon ? 2 : ev.n ? 1 : 0, true, `${ev.n} open escalations${ev.over ? `, ${ev.over} overdue` : ""}`)}
     ${stage("reports", "", 0, true, "Handover, SITREP and saved reports").replace('<span class="node zero"></span>', `<span class="node zero">≡</span>`)}
     <div class="gap"></div>${stage("sites", "", 0, false, "Sites and contacts").replace('<span class="node zero"></span>', `<span class="node zero">◎</span>`)}${stage("settings", "", 0, false, "Settings").replace('<span class="node zero"></span>', `<span class="node zero">⚙</span>`)}
+    <button class="stage" data-guide title="Guide (?)"><span class="node zero">?</span>Guide</button>
     <button class="me" data-me title="Signed in as ${esc(who())}">${esc(who().split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase())}</button>`;
   }
   function nextAction() {
@@ -4656,10 +5733,11 @@ ${base2}` }] })
   function top() {
     NEXT = nextAction();
     const ok = SOURCES.filter((s) => feedOf(s.id).ok).length, bad = SOURCES.filter((s) => feedOf(s.id).ok === false).length;
-    $("#top").innerHTML = `${NEXT ? `<button class="next" data-next><span class="lead">${esc(NEXT.lead)}</span><span class="what">${esc(NEXT.what)}</span><span class="when tierword t${NEXT.tier}">${esc(NEXT.when)}</span></button>` : `<div class="next calm"><span class="lead">All clear</span><span class="what">Nothing is waiting for you. New decisions appear in the Inbox.</span></div>`}
+    const q = feedOf("usgs"), qDown = q.failSince && Date.now() - q.failSince > 6e4;
+    $("#top").innerHTML = `${qDown ? `<button class="feeddown" data-qretry title="${esc(q.err || "")}"><b>Earthquake feed down since ${esc(sgt(q.failSince).split(", ").pop())} SGT</b> — the alarm cannot fire. Retry now</button>` : ""}${NEXT ? `<button class="next" data-next><span class="lead">${esc(NEXT.lead)}</span><span class="what">${esc(NEXT.what)}</span><span class="when tierword t${NEXT.tier}">${esc(NEXT.when)}</span></button>` : `<div class="next calm"><span class="lead">All clear</span><span class="what">Nothing is waiting for you. New decisions appear in the Inbox.</span></div>`}
     <div class="tools"><button class="chipbtn opt${bad ? " warn" : ""}" data-ws="settings" data-sec="sources" title="Data sources">${ok}/${SOURCES.length} sources</button>
-      <button class="chipbtn${CFG.notify.sound ? " on" : ""}" data-sound title="The earthquake alarm siren">Siren ${CFG.notify.sound ? "on" : "off"}</button>
-      <button class="chipbtn opt${CFG.notify.desktop ? " on" : ""}" data-desk title="Desktop notifications when the console is behind another window">Desktop alerts ${CFG.notify.desktop ? "on" : "off"}</button></div>
+      <button class="chipbtn${CFG.notify.sound ? " on" : ""}" data-sound title="The earthquake alarm siren">Siren ${CFG.notify.sound ? "on" : "off"}</button><button class="chipbtn opt" data-testalarm title="Show the alarm and sound the siren once, to check the volume">Test</button>
+      <button class="chipbtn opt" data-ask title="Ask Claude about the live picture">Copilot</button><button class="chipbtn opt${CFG.notify.desktop ? " on" : ""}" data-desk title="Desktop notifications when the console is behind another window">Desktop alerts ${CFG.notify.desktop ? "on" : "off"}</button></div>
     <div class="clocks"><b id="clk">${clock(Date.now())}</b><small>SGT</small><small id="clku">${(/* @__PURE__ */ new Date()).toISOString().slice(11, 16)} UTC</small></div>`;
   }
   var rendering = false;
@@ -4679,6 +5757,7 @@ ${base2}` }] })
         pane.scrollTop = pst;
         mod.bind(pane, render7);
       }
+      if (UI.ws !== "watch") mountTV(null);
       if (hasMap && mapReady()) draw(Object.assign({ onPick: (key) => {
         go("watch", { watchSel: key, watchCity: null });
       }, onSite: (code) => go("sites", { siteSel: code }), ovKey: UI.ws + ":" + (UI.ws === "watch" ? UI.watchMode : "") }, mod.mapSpec ? mod.mapSpec() : {}));
@@ -4696,6 +5775,7 @@ ${base2}` }] })
   };
   on("data", soon);
   on("sites", soon);
+  on("ttp", soon);
   on("feeds", () => {
     top();
     if (UI.ws === "settings") soon();
@@ -4748,9 +5828,9 @@ ${base2}` }] })
       return;
     }
     const e = s.extra;
-    el.innerHTML = `<div><div class="tierword" style="color:#fff;font-size:14px">${s.alarm === "global" ? "Major earthquake" : "Earthquake near our sites"}</div><div class="m">M${e.mag.toFixed(1)}</div><div class="p">${esc(e.place || "")}</div>
+    el.innerHTML = `<div><div class="tierword" style="color:#fff;font-size:14px">${s.test ? "Test alarm — nothing has happened" : s.alarm === "global" ? "Major earthquake" : "Earthquake near our sites"}</div><div class="m">M${e.mag.toFixed(1)}</div><div class="p">${esc(e.place || "")}</div>
     <div class="d">Depth ${Math.round(e.depth)} km · ${esc(sgt(s.t))} SGT${e.topSite ? ` · strongest estimated shaking MMI ${roman(e.topMMI)} at ${esc(e.topSite)}, ${Math.round(e.topKm)} km` : ""}${e.tsunami ? " · <b>tsunami flag</b>" : ""}${queue.length > 1 ? ` · ${queue.length - 1} more waiting` : ""}</div>
-    <button class="btn" id="alAck">Acknowledge and decide</button> <button class="btn ghost" id="alSil">Silence</button></div>`;
+    <button class="btn" id="alAck">${s.test ? "End the test" : "Acknowledge and decide"}</button> <button class="btn ghost" id="alSil">Silence</button></div>`;
     el.hidden = false;
     sirenOff();
     sirenOn();
@@ -4762,6 +5842,11 @@ ${base2}` }] })
     $("#alAck").onclick = () => {
       sirenOff();
       queue.shift();
+      if (s.test) {
+        showAlarm();
+        toast("Test finished", CFG.notify.sound ? "If you didn't hear the siren, check the computer's volume." : "The siren is off. Turn it on from the top bar to hear it.", 0);
+        return;
+      }
       const it = INBOX.find((i) => i.key === "sig:" + s.key && i.status === "open");
       if (it) go("inbox", { inboxSel: it.id });
       else go("watch", { watchSel: s.key, watchCity: null });
@@ -4821,6 +5906,11 @@ ${base2}` }] })
     if (e.ctrlKey || e.metaKey || e.altKey || !$("#gate").hidden || !$("#scrim").hidden || !$("#alarm").hidden) return;
     const a = document.activeElement;
     if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+    if (e.key === "?") {
+      e.preventDefault();
+      openGuide();
+      return;
+    }
     const w = Object.entries(WS).find(([, v]) => v[3] === e.key);
     if (w) {
       e.preventDefault();
@@ -4835,10 +5925,32 @@ ${base2}` }] })
       }
     }
   });
+  function testAlarm() {
+    const s = { key: "test", id: "test", test: true, alarm: "near-site", t: Date.now(), text: "", extra: { mag: 6.8, place: "TEST — this is a test of the earthquake alarm", depth: 10, topSite: null } };
+    queue.push(s);
+    if (queue.length === 1) showAlarm();
+  }
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ws],[data-next],[data-sound],[data-desk],[data-me]");
+    const t = e.target.closest("[data-ws],[data-next],[data-sound],[data-desk],[data-me],[data-qretry],[data-testalarm],[data-ask],[data-guide]");
     if (!t) return;
     const d = t.dataset;
+    if (d.ask !== void 0) {
+      openCopilot();
+      return;
+    }
+    if (d.guide !== void 0) {
+      openGuide();
+      return;
+    }
+    if (d.qretry !== void 0) {
+      t.textContent = "Retrying…";
+      runSource(SOURCES.find((x) => x.id === "usgs")).then(top);
+      return;
+    }
+    if (d.testalarm !== void 0) {
+      testAlarm();
+      return;
+    }
     if (d.ws) {
       go(d.ws, d.sec ? { setSel: d.sec } : null);
       return;

@@ -6,6 +6,7 @@ import { CFG } from "./config.js";
 import CITIES_JSON from "./data/cities.json";
 import DEMO_SITES from "./data/demo-sites.json";
 import SOP from "./data/sop.json";
+import { cadenceFor, ttpName } from "./ttp.js";
 
 export const CITIES = CITIES_JSON;
 export const SOP_REF = SOP;
@@ -101,8 +102,19 @@ export function recompute(){
     const hz = STATE.list.filter(s => s.kind !== "conditions" && s.kind !== "news" && s.kind !== "travel" && s.cities.includes(c.name));
     parts.hazards = { tier: Math.max(0, ...hz.map(s => s.tier)), value: hz.length + "", text: hz.length ? hz[0].title : "none in force", list: hz };
     STATE.scores[c.name] = { tier: Math.max(0, ...Object.values(parts).map(p => p.tier)), parts }; });
-  applyRules(); emit("data");
+  remember(); applyRules(); emit("data");
 }
+
+/* ---------- detection history: everything that touched our sites, kept after it ends ---------- */
+export let HISTORY = load("history", []);
+const HKEEP = 7 * 86400e3;
+function remember(){ const now = Date.now(), by = new Map(HISTORY.map(h => [h.key, h])); let changed = false;
+  STATE.list.forEach(s => { if (s.kind === "conditions" || (!s.sites.length && !s.cities.length && !s.alarm) || (s.tier < 1 && s.kind !== "quake")) return;
+    const h = by.get(s.key); if (h){ h.last = now; if (s.tier > h.tier){ h.tier = s.tier; h.title = s.title; changed = true; } return; }
+    const n = { key: s.key, title: s.title, kind: s.kind, src: s.src, tier: s.tier, first: now, t: s.t || now, last: now, sites: s.sites.length, cities: s.cities.slice(0, 4), area: (s.area || "").slice(0, 120), url: s.url || "" };
+    HISTORY.unshift(n); by.set(s.key, n); changed = true; });
+  if (changed || Math.random() < .05){ HISTORY = HISTORY.filter(h => now - h.last < HKEEP).slice(0, 3000); save("history", HISTORY); } }
+export const isLiveKey = key => STATE.list.some(s => s.key === key);
 
 /* ---------- Inbox: what needs a decision ---------- */
 export let INBOX = load("inbox", []);
@@ -139,20 +151,25 @@ export const IMMEDIATE = new Set(["protest"]);             // civil unrest: upda
 export function createEvent(o){ const now = Date.now();
   const ev = { id: nid("ev"), title: o.title || "Untitled event", cat: o.cat || "weather", sev: o.sev || "P3", country: o.country || "", sites: o.sites || [], lat: o.lat ?? null, lon: o.lon ?? null,
     ren: o.ren || "assess", timer: o.startNow || o.ren === "issued" ? "running" : "awaiting", created: now, last12: now, last24: now, status: "active", signals: o.signals || [], from: o.from || null,
-    welfare: {}, comms: [], log: [{ t: now, by: who(), m: "Escalation opened" + (o.from ? " from the Inbox" : "") + "." }] };
+    cad: cadenceFor(o.cat || "weather"), checks: {}, welfare: {}, comms: [], log: [{ t: now, by: who(), m: "Escalation opened" + (o.from ? " from the Inbox" : "") + "." }] };
   EVENTS.unshift(ev); saveEvents(); audit("Escalation opened", ev.title, ev.sev); emit("data"); return ev; }
+export const cad = ev => ev.cad || { m: 12, i: 24, src: "fixed" };     // hours between Manager updates (m) and Intel / SLT updates (i)
+// a category change or a newly imported TTP re-sets the cadence of open events (unless set by hand)
+export function applyCadence(ev, why){ if (ev.status === "closed" || (ev.cad && ev.cad.src === "manual")) return false; const c = cadenceFor(ev.cat), o = cad(ev);
+  if (o.m === c.m && o.i === c.i && o.src === c.src) return false; ev.cad = c; ev.log.push({ t: Date.now(), by: "system", m: `Update cadence ${c.src === "fixed" ? "set to the standard" : "set from the " + c.src}: Manager every ${c.m} h, Intel / SLT every ${c.i} h${why ? " (" + why + ")" : ""}.` }); return true; }
 export function timers(ev, now = Date.now()){
   if (ev.status === "closed") return { state: "closed", rank: 9 };
   if (IMMEDIATE.has(ev.cat)) return { state: "immediate", rank: 3 };
   if (ev.timer === "awaiting") return { state: "awaiting", rank: 2 };
-  const d12 = ev.last12 + 12 * 3600e3 - now, d24 = ev.last24 + 24 * 3600e3 - now, st = d => d < 0 ? "overdue" : d < 3600e3 ? "duesoon" : "ontrack";
+  const c = cad(ev), d12 = ev.last12 + c.m * 3600e3 - now, d24 = ev.last24 + c.i * 3600e3 - now, st = d => d < 0 ? "overdue" : d < Math.min(3600e3, c.m * 3600e3 / 4) ? "duesoon" : "ontrack";
   const s12 = st(d12), s24 = st(d24), state = [s12, s24].includes("overdue") ? "overdue" : [s12, s24].includes("duesoon") ? "duesoon" : "ontrack";
   return { state, rank: { overdue: 0, duesoon: 1, ontrack: 4 }[state], d12, d24, s12, s24 }; }
 export const openEvents = () => EVENTS.filter(e => e.status !== "closed").sort((a, b) => timers(a).rank - timers(b).rank || a.sev.localeCompare(b.sev) || a.created - b.created);
 export function eventLog(ev, m, kind){ ev.log.push({ t: Date.now(), by: who(), m, kind }); ev.updatedAt = Date.now(); saveEvents(); emit("data"); }
 export function setRen(ev, ren){ ev.ren = ren; if (ren === "issued" && ev.timer === "awaiting"){ ev.timer = "running"; ev.last12 = ev.last24 = Date.now(); } eventLog(ev, "Event notice: " + REN[ren].toLowerCase() + (ren === "issued" ? ". Update timers started." : ".")); audit("Event notice " + ren, ev.title); }
 export function resetTimer(ev, which){ const now = Date.now(); if (which !== "24") ev.last12 = now; if (which !== "12") ev.last24 = now; if (ev.timer === "awaiting") ev.timer = "running";
-  ev.notified = false; eventLog(ev, which === "12" ? "PSOC Manager update sent — 12 h timer reset." : which === "24" ? "Intel / SLT update sent — 24 h timer reset." : "Update sent — both timers reset.", "update"); audit("Escalation update", ev.title, which); }
+  const c = cad(ev); ev.notified = false; eventLog(ev, which === "12" ? `PSOC Manager update sent — ${c.m} h timer reset.` : which === "24" ? `Intel / SLT update sent — ${c.i} h timer reset.` : "Update sent — both timers reset.", "update"); audit("Escalation update", ev.title, which); }
+export function setCheck(ev, key, on, label){ ev.checks = ev.checks || {}; if (on) ev.checks[key] = { at: Date.now(), by: who() }; else delete ev.checks[key]; eventLog(ev, `${on ? "Done" : "Un-ticked"}: ${label}`, "check"); }
 export function setWelfare(ev, code, status, note){ ev.welfare[code] = { status, note: note || "", at: Date.now(), by: who() }; eventLog(ev, `Welfare ${code}: ${status}${note ? " — " + note : ""}`, "welfare"); }
 export function closeEvent(ev, summary){ ev.status = "closed"; ev.closed = { at: Date.now(), by: who(), summary }; eventLog(ev, "Closed. " + (summary || "")); audit("Escalation closed", ev.title, summary); }
 export function reopenEvent(ev){ ev.status = "active"; delete ev.closed; ev.last12 = ev.last24 = Date.now(); eventLog(ev, "Reopened."); audit("Escalation reopened", ev.title); }
@@ -163,7 +180,8 @@ export function saveReport(o){ const r = Object.assign({ id: nid("r"), at: Date.
 export function deleteReport(id){ REPORTS = REPORTS.filter(r => r.id !== id); save("reports", REPORTS); emit("data"); }
 
 /* ---------- feeds health ---------- */
-export function feedResult(id, patch){ STATE.feeds[id] = Object.assign(STATE.feeds[id] || {}, patch); emit("feeds"); }
+export function feedResult(id, patch){ const f = STATE.feeds[id] = Object.assign(STATE.feeds[id] || {}, patch);
+  if (patch.ok === false) f.failSince = f.failSince || patch.at || Date.now(); else if (patch.ok) f.failSince = null; emit("feeds"); }
 
 /* ---------- first start: the current console's sites and open escalations ---------- */
 export function migrateData(loadRaw){

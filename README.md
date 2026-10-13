@@ -33,6 +33,8 @@ A clean rebuild organised around the officer's workflow, running alongside the c
 - **Reports** — the shift handover and the SITREP, written from the live picture, plus everything saved.
 - **Sites** — the estate, each site's contacts, and what is affecting it now. Load your site file or a PULSE file here; it is read in your browser only.
 
+Also from PULSE, done once instead of eight times: the REN TTP inside every escalation (update cadence, close criteria and PSOC actions as a checklist), USGS ShakeMap contours, per-site typhoon timing, Copy brief on every report, a 7-day detection history, a linked site file that re-syncs itself with data checks, address search against the estate, the 7-day city outlook, live TV, the PSOC Copilot, a built-in guide (press ?) and export of everything to Excel. Your REN TTP, site list and contacts come in through Sites › Import PULSE file and stay in your browser; none of it is in this repository.
+
 On first start it brings over the current console's settings, keys, sites, site contacts and open escalations from the same browser; the current console is not changed.
 
 Source code is in `src/` and is built into the single page `next/index.html`: `npm install`, then `npm run build` (or `npm run watch`).

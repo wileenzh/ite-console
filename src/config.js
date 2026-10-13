@@ -16,6 +16,7 @@ export const DEFAULTS = {
     sachetStates: "maharashtra,telangana,tamil_nadu,gujarat", off: {} },
   unrest: { countries: ["philippines", "indonesia", "burma", "thailand", "hongkong", "bangladesh", "pakistan"] },
   wxModels: "national",
+  cadence: "ttp",          // update timers: "ttp" follows the imported REN TTP per category; "fixed" is 12 h / 24 h
   relay: "", server: "",
   psoc: { desk: "", mobile: "", email: "", leaders: "", intelChannel: "" },
   notify: { desktop: false, sound: false },

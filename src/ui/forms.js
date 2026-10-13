@@ -3,10 +3,11 @@ import { $, $$, esc, copyText } from "../core.js";
 import { CFG } from "../config.js";
 import { SOP_REF, SITES, siteBy, siteCountries, isLive, isOffice, createEvent, decide, catFor, audit, eventLog, CITIES } from "../model.js";
 import { dialog, closeDialog, toast, field } from "./kit.js";
-import { draftsForSignal, mailto } from "./drafts.js";
+import { draftsForSignal, mailto, asHtml } from "./drafts.js";
 import { pickPoint, mapReady } from "./map.js";
 import { go } from "./state.js";
 import { ccFor } from "../sources/people.js";
+import { TTP, ttpName, cadenceFor } from "../ttp.js";
 
 const countryOfSites = codes => { const c = codes.map(x => (siteBy(x) || {}).country).filter(Boolean); return c.sort((a, b) => c.filter(v => v === b).length - c.filter(v => v === a).length)[0] || ""; };
 export function escalateForm(pre = {}, opts = {}){
@@ -27,7 +28,8 @@ export function escalateForm(pre = {}, opts = {}){
     const list = SITES.filter(s => (isLive(s) || isOffice(s) || chosen.has(s.code)) && (showAll || !c || s.country === c || chosen.has(s.code)) && (!q || (s.code + " " + s.city).toLowerCase().includes(q))).slice(0, 400);
     $("#efSites").innerHTML = list.map(s => `<label class="chk"><input type="checkbox" value="${esc(s.code)}"${chosen.has(s.code) ? " checked" : ""}> <span><b>${esc(s.code)}</b> <span class="help">${esc(s.city || "")}${isOffice(s) ? " · office" : ""}</span></span></label>`).join("") || `<div class="help">No sites match.</div>`;
     $("#efCount").textContent = `— ${chosen.size} selected`; };
-  const sop = () => { $("#efSop").innerHTML = `SOP: <button class="linkbtn" type="button" id="efSopBtn">${esc((SOP_REF[$("#efCat").value] || {}).label || "")} procedure</button>`; $("#efSopBtn").onclick = () => sopDialog($("#efCat").value); };
+  const sop = () => { const k = $("#efCat").value, c = cadenceFor(k), t = SOP_REF[k] || {};
+    $("#efSop").innerHTML = `${k === "protest" ? "Updates as it develops; no countdown. " : t.ttp ? `Updates: PSOC Manager every ${c.m} h, Intel / SLT every ${c.i} h (${esc(ttpName())}). ` : ""}<button class="linkbtn" type="button" id="efSopBtn">${esc(t.label || "")} procedure</button>`; $("#efSopBtn").onclick = () => sopDialog($("#efCat").value); };
   drawSites(); sop(); $("#efCat").onchange = sop; $("#efCountry").onchange = drawSites; $("#efFilter").oninput = drawSites; $("#efAll").onchange = e => { showAll = e.target.checked; drawSites(); };
   $("#efNone").onclick = () => { chosen.clear(); drawSites(); }; $("#efSites").onchange = e => { const i = e.target; if (i.checked) chosen.add(i.value); else chosen.delete(i.value); $("#efCount").textContent = `— ${chosen.size} selected`; };
   if ($("#efPick")) $("#efPick").onclick = async () => { const d = $("#scrim"); d.hidden = true; toast("Click the map where the event is", "", null, null, 4000); const ll = await pickPoint(); d.hidden = false; if (ll){ $("#efLat").value = ll.lat.toFixed(5); $("#efLon").value = ll.lng.toFixed(5); } };
@@ -35,7 +37,9 @@ export function escalateForm(pre = {}, opts = {}){
     const ev = createEvent({ title, cat: $("#efCat").value, sev: $("#efSev").value, country: $("#efCountry").value, sites: [...chosen], lat: isFinite(lat) ? lat : null, lon: isFinite(lon) ? lon : null, ren: $("#efRen").value, signals: sig ? [sig.key] : [], from: opts.item ? opts.item.id : null });
     if (opts.item) decide(opts.item, "escalate", { eventId: ev.id }); closeDialog(); toast("Escalation opened", ev.title, 2); go("events", { eventSel: ev.id }); }; }
 
-export function sopDialog(cat){ const s = SOP_REF[cat] || {}; dialog((s.label || cat) + " — SOP", `<div class="prose">${s.html || "No procedure recorded for this category."}</div><p class="help">These are the procedures loaded into this console. Replace them with your organisation's SOP under Settings.</p>`, `<button class="btn" data-close>Close</button>`, { wide: true }); }
+export function sopDialog(cat){ const s = SOP_REF[cat] || {};
+  dialog((s.label || cat) + (s.ttp ? " — " + ttpName() : " — procedure"), `<div class="ttp-body">${s.html || "No procedure recorded for this category."}</div>
+    <p class="help">${s.ttp ? `From ${esc(TTP.file || "the PULSE file")}${TTP.meta.date ? ", dated " + esc(TTP.meta.date) : ""}. Kept in this browser only.` : "This is a placeholder. Import a PULSE file under Sites to load your REN TTP; it stays in this browser."}</p>`, `<button class="btn" data-close>Close</button>`, { wide: true }); }
 
 export function notifyComposer(sig, opts = {}){ const ds = opts.drafts || draftsForSignal(sig);
   dialog(opts.title || "Notify", `<p class="help">Edit, then copy into the channel or open it in your email app. Nothing is sent from the console.</p>${ds.map((d, i) => `<details class="draft"${i ? "" : " open"}><summary>${esc(d.label)}<span class="s">${d.to ? "to " + esc(d.to) : ""}</span></summary>
@@ -43,7 +47,7 @@ export function notifyComposer(sig, opts = {}){ const ds = opts.drafts || drafts
     `<button class="btn" data-close>Close</button>${opts.item ? `<button class="btn primary" id="ncDone">Mark the item notified</button>` : ""}`, { wide: true });
   const text = i => $(`[data-dtext="${i}"]`).value;
   $("#dialog").onclick = async e => { const t = e.target.closest("[data-dcopy],[data-dmail],[data-dsent]"); if (!t) return; const i = +(t.dataset.dcopy ?? t.dataset.dmail ?? t.dataset.dsent), d = Object.assign({}, ds[i], { text: text(i) });
-    if (t.dataset.dcopy != null){ const ok = await copyText(d.text); t.textContent = ok ? "Copied" : "Copy failed"; audit("Copied message", d.label, sig ? sig.title : ""); }
+    if (t.dataset.dcopy != null){ const ok = await copyText(d.text, asHtml(d.text)); t.textContent = ok ? "Copied" : "Copy failed"; audit("Copied message", d.label, sig ? sig.title : ""); }
     if (t.dataset.dmail != null){ e.preventDefault(); location.href = mailto(d); audit("Opened email", d.label, sig ? sig.title : ""); }
     if (t.dataset.dsent != null && opts.onSent){ opts.onSent(d); t.textContent = "Recorded"; t.disabled = true; } };
   if ($("#ncDone")) $("#ncDone").onclick = () => { decide(opts.item, "notify"); closeDialog(); toast("Marked notified", opts.item.title, 0); }; }

@@ -1,7 +1,9 @@
 // SETTINGS — sources and their health, what reaches the Inbox, thresholds, keys, areas, contacts, data.
-import { $, $$, esc, sgt, ago, download, csv, save, load } from "../core.js";
+import { $, $$, esc, sgt, ago, download, csv, save, load, loadScript } from "../core.js";
 import { CFG, saveCfg, resetCfg, DEFAULTS } from "../config.js";
-import { STATE, auditLog, KINDS, SOP_REF, audit } from "../model.js";
+import { STATE, auditLog, KINDS, SOP_REF, EVENTS, INBOX, REPORTS, HISTORY, SITES, REN, saveEvents, applyCadence, audit } from "../model.js";
+import { QARCH } from "../sources/quakes.js";
+import { TTP, ttpName, cadenceFor, clearTTP } from "../ttp.js";
 import { SOURCES, runSource, feedOf } from "../sources/index.js";
 import { JMA_PREFS, KMA_AREAS } from "../sources/agencies.js";
 import { UI, saveUI } from "./state.js";
@@ -9,14 +11,14 @@ import { toast, confirmBox, field } from "./kit.js";
 import { UNREST_COUNTRIES } from "../sources/people.js";
 import { setBase } from "./map.js";
 
-const SECTIONS = [["sources", "Sources", "what each one returns, and whether it works"], ["rules", "What reaches the Inbox", "the SOP triggers"], ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
+const SECTIONS = [["sources", "Sources", "what each one returns, and whether it works"], ["rules", "What reaches the Inbox", "the SOP triggers"], ["procedures", "Procedures", "REN TTP and update cadence"], ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
   ["keys", "Keys", "WAQI, Taiwan CWA, KMA, Claude"], ["areas", "Areas watched", "prefectures, regions, countries, CAP feeds"], ["contacts", "Contacts", "watch desk, leadership, channel"], ["connection", "Connection", "relay or PSOC server"],
   ["data", "Data and audit", "backup, audit trail, appearance"]];
 const val = path => path.split(".").reduce((o, k) => o == null ? o : o[k], CFG);
 const num = (path, label, step = 1) => field(label, `<input type="number" step="${step}" data-cfg="${path}" value="${esc(val(path))}">`);
 const txt = (path, label, ph = "", type = "text") => field(label, `<input type="${type}" data-cfg="${path}" value="${esc(val(path) || "")}" placeholder="${esc(ph)}" autocomplete="off">`);
 export function render(p){ const s = UI.setSel || "sources";
-  p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${({ sources, rules, thresholds, keys, areas, contacts, connection, data })[s]()}</article></div>`; }
+  p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${({ sources, rules, procedures, thresholds, keys, areas, contacts, connection, data })[s]()}</article></div>`; }
 function sources(){ const groups = [...new Set(SOURCES.map(x => x.group))], ok = SOURCES.filter(x => feedOf(x.id).ok).length, bad = SOURCES.filter(x => feedOf(x.id).ok === false);
   return `<h2>Sources</h2><p class="help">${ok} of ${SOURCES.length} working${bad.length ? `; ${bad.length} not responding` : ""}. Sources marked “relay” are often blocked by browsers on office networks; set a relay or the PSOC server under Connection and they are fetched through it.</p>
     <div class="actions" style="margin-bottom:10px"><button class="btn primary" data-stest>Test all now</button><button class="btn" data-sexport>Export the list</button></div>
@@ -30,6 +32,11 @@ function rules(){ const R = [["quake", "Earthquakes", "estimated shaking MMI IV 
     ["travel", "Travel advisories", "an advisory raised to level 3 or 4 in a site country"], ["conditions", "City conditions", "weather, the 48-hour forecast, air quality or river flow at manager level in a city with sites"]];
   return `<h2>What reaches the Inbox</h2><p class="help">Everything is listed in Watch. These triggers decide what also lands in the Inbox for a decision. Each item is raised once; it returns only if it gets worse, or after monitoring.</p>
     <div style="display:flex;flex-direction:column;gap:10px;max-width:760px;margin-top:12px">${R.map(([k, l, d]) => `<label class="chk"><input type="checkbox" data-cfg="rules.${k}"${CFG.rules[k] !== false ? " checked" : ""}><span><b>${esc(l)}</b><br><span class="help">${esc(d)}</span></span></label>`).join("")}</div>`; }
+function procedures(){ const cats = Object.entries(SOP_REF);
+  return `<h2>Procedures</h2><p class="help">${TTP ? `${esc(ttpName())}${TTP.meta.date ? " dated " + esc(TTP.meta.date) : ""}, from ${esc(TTP.file || "a PULSE file")}, imported ${esc(ago(TTP.at))}. It is kept in this browser only.` : "No REN TTP loaded: the procedures are placeholders. Import a PULSE file under Sites to load your REN TTP; it stays in this browser."}</p>
+    <div class="form" style="max-width:640px">${field("Update timers", `<select data-cfg="cadence"><option value="ttp"${CFG.cadence !== "fixed" ? " selected" : ""}>Follow the REN TTP for each category</option><option value="fixed"${CFG.cadence === "fixed" ? " selected" : ""}>Fixed: Manager every 12 h, Intel / SLT every 24 h</option></select>`, true)}</div>
+    <table class="tbl" style="margin-top:12px;max-width:760px"><tr><th>Category</th><th>Manager update</th><th>Intel / SLT update</th><th>Source</th></tr>${cats.map(([k, v]) => { const c = cadenceFor(k); return `<tr><td>${esc(v.label)}</td><td>${k === "protest" ? "as it develops" : "every " + c.m + " h"}</td><td>${k === "protest" ? "as it develops" : "every " + c.i + " h"}</td><td class="help">${v.ttp ? esc(c.src === "fixed" ? "fixed" : ttpName()) : "placeholder"}</td></tr>`; }).join("")}</table>
+    ${TTP ? `<div class="actions" style="margin-top:14px"><button class="btn danger" data-sttpclear>Remove the REN TTP from this browser</button></div>` : ""}`; }
 function thresholds(){ return `<h2>Thresholds</h2><h3 class="help" style="margin-top:14px">Earthquakes</h3><div class="form">${num("quake.globalMag", "Alarm anywhere at magnitude", .1)}${num("quake.nearMag", "Near-site alarm at magnitude", .1)}${num("quake.nearKm", "Near-site distance (km)", 10)}${num("quake.listMag", "List down to magnitude", .5)}
       ${field("Sites counted", `<select data-cfg="quake.scope"><option value="live"${CFG.quake.scope === "live" ? " selected" : ""}>Live sites and offices</option><option value="livebuild"${CFG.quake.scope === "livebuild" ? " selected" : ""}>Also sites under construction</option></select>`)}</div>
     <h3 class="help" style="margin-top:18px">Air quality (US AQI)</h3><div class="form">${num("aqi.monitor", "Monitor from")}${num("aqi.manager", "Manager trigger from")}${num("aqi.intel", "Escalate from")}</div>
@@ -51,17 +58,20 @@ function areas(){ const chk = (attr, list, sel) => `<div class="checks">${list.m
 function contacts(){ return `<h2>Contacts</h2><p class="help">Used in the messages the console writes. A PULSE file import fills the watch desk.</p><div class="form" style="margin-top:12px">${txt("psoc.desk", "Watch desk phone")}${txt("psoc.mobile", "Watch desk mobile")}${txt("psoc.email", "Watch desk email")}${txt("psoc.leaders", "Leadership update recipients", "a@company.com; b@company.com")}${txt("psoc.intelChannel", "Intelligence Channel (email address of the channel)")}</div>`; }
 function connection(){ return `<h2>Connection</h2><p class="help">Some agencies block browsers from reading their data. A relay (relay.js) or the PSOC server fetches those for the console. The desktop app has one built in.</p><div class="form" style="margin-top:12px">${txt("relay", "Relay address", "https://relay.example.com")}${txt("server", "PSOC server address (shared data comes in stage 2)", "https://psoc.example.com")}</div>`; }
 function data(){ const A = auditLog().slice(0, 300), theme = document.documentElement.dataset.theme || "night";
-  return `<h2>Data and audit</h2><div class="actions"><button class="btn" data-sbackup>Download a backup</button><button class="btn" data-srestore>Restore from a backup</button><button class="btn" data-saudit>Export the audit trail</button></div>
+  let bytes = 0; try{ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k.startsWith("ite2.")) bytes += (k.length + (localStorage.getItem(k) || "").length) * 2; } }catch(e){}
+  return `<h2>Data and audit</h2><div class="actions"><button class="btn primary" data-sxlsx>Export everything to Excel</button><button class="btn" data-sbackup>Download a backup</button><button class="btn" data-srestore>Restore from a backup</button><button class="btn" data-saudit>Export the audit trail</button></div>
+    <p class="help" style="margin-top:8px">Browser storage used by the console: <b>${(bytes / 1048576).toFixed(2)} MB</b> of about 5 MB this browser allows a page. ${bytes > 4 * 1048576 ? `<span class="late">Nearly full — export to Excel, then clear old reports.</span>` : "Plenty of room."}</p>
     <h3 class="help" style="margin-top:18px">Appearance</h3><div class="seg"><button data-theme="night" aria-pressed="${theme !== "day"}">Night</button><button data-theme="day" aria-pressed="${theme === "day"}">Day</button></div>
     <h3 class="help" style="margin-top:18px">Audit trail — last ${A.length}</h3><table class="tbl"><tr><th>When (SGT)</th><th>Who</th><th>What</th><th>Item</th><th>Detail</th></tr>${A.map(a => `<tr><td>${esc(sgt(a.t))}</td><td>${esc(a.by)}</td><td>${esc(a.action)}</td><td>${esc(a.what)}</td><td>${esc(a.detail)}</td></tr>`).join("")}</table>`; }
 
 export function bind(p, rerender){ const after = () => { saveCfg(); };
   p.onchange = e => { const t = e.target;
-    if (t.dataset.cfg){ const path = t.dataset.cfg.split("."), last = path.pop(); let o = CFG; path.forEach(k => o = o[k] = o[k] || {}); o[last] = t.type === "checkbox" ? t.checked : t.type === "number" ? parseFloat(t.value) : t.value.trim(); after(); toast("Saved", "", 0, null, 1500); return; }
+    if (t.dataset.cfg){ const path = t.dataset.cfg.split("."), last = path.pop(); let o = CFG; path.forEach(k => o = o[k] = o[k] || {}); o[last] = t.type === "checkbox" ? t.checked : t.type === "number" ? parseFloat(t.value) : t.value.trim(); after();
+      if (t.dataset.cfg === "cadence"){ let n = 0; EVENTS.forEach(ev => { if (applyCadence(ev, "Settings")) n++; }); saveEvents(); rerender(); if (n) toast("Cadence applied", `${n} open escalation${n === 1 ? "" : "s"} updated.`, 0); return; } toast("Saved", "", 0, null, 1500); return; }
     const list = (attr, arr) => { const v = t.dataset[attr]; return t.checked ? [...new Set(arr.concat(v))] : arr.filter(x => x !== v); };
     if (t.dataset.jma){ CFG.agency.jmaPrefs = list("jma", CFG.agency.jmaPrefs); after(); } if (t.dataset.kma){ CFG.agency.kmaAreas = list("kma", CFG.agency.kmaAreas); after(); } if (t.dataset.unr){ CFG.unrest.countries = list("unr", CFG.unrest.countries); after(); }
     if (t.dataset.agon){ CFG.agency.off = Object.assign({}, CFG.agency.off, { [t.dataset.agon]: !t.checked }); after(); } };
-  p.onclick = async e => { const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme]"); if (!t) return; const d = t.dataset;
+  p.onclick = async e => { const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx]"); if (!t) return; const d = t.dataset;
     if (d.ssec){ UI.setSel = d.ssec; saveUI(); rerender(); return; }
     if (d.stest !== undefined){ t.disabled = true; t.textContent = "Testing…"; await Promise.all(SOURCES.map(runSource)); rerender(); return; }
     if (d.stest1){ await runSource(SOURCES.find(x => x.id === d.stest1)); rerender(); return; }
@@ -73,4 +83,19 @@ export function bind(p, rerender){ const after = () => { saveCfg(); };
     if (d.srestore !== undefined){ const i = document.createElement("input"); i.type = "file"; i.accept = ".json"; i.onchange = async () => { try{ const all = JSON.parse(await i.files[0].text()); if (!await confirmBox("Restore this backup?", "Everything in this browser's console is replaced by the backup, then the page reloads.", "Restore")) return;
         Object.keys(localStorage).filter(k => k.startsWith("ite2.")).forEach(k => localStorage.removeItem(k)); Object.entries(all).forEach(([k, v]) => { if (k.startsWith("ite2.")) localStorage.setItem(k, v); }); location.reload(); }catch(err){ toast("Not a backup file", err.message, 3); } }; i.click(); return; }
     if (d.saudit !== undefined){ download("ite-audit.csv", csv([["time_utc", "who", "action", "item", "detail"]].concat(auditLog().map(a => [new Date(a.t).toISOString(), a.by, a.action, a.what, a.detail]))), "text/csv"); return; }
+    if (d.sxlsx !== undefined){ t.textContent = "Preparing…"; try{ await exportExcel(); t.textContent = "Export everything to Excel"; }catch(err){ toast("Export failed", err.message, 3); t.textContent = "Export everything to Excel"; } return; }
+    if (d.sttpclear !== undefined){ if (await confirmBox("Remove the REN TTP?", "The procedures go back to placeholders and update timers to 12 h / 24 h for open escalations that follow it.", "Remove")){ clearTTP(); EVENTS.forEach(ev => applyCadence(ev, "TTP removed")); saveEvents(); audit("REN TTP removed"); rerender(); } return; }
     if (d.theme){ document.documentElement.dataset.theme = d.theme; save("theme", d.theme); rerender(); setBase(); } }; }
+
+// one workbook with everything the console holds: escalations and their logs, decisions, reports, history, earthquakes, sites, audit
+async function exportExcel(){ await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"); const X = window.XLSX, wb = X.utils.book_new(), T = t => t ? sgt(t) : "";
+  const add = (name, rows) => X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{ note: "none" }]), name);
+  add("Escalations", EVENTS.map(e => ({ title: e.title, category: (SOP_REF[e.cat] || {}).label || e.cat, severity: e.sev, country: e.country, status: e.status, event_notice: REN[e.ren], opened_sgt: T(e.created), closed_sgt: e.closed ? T(e.closed.at) : "", closed_by: e.closed ? e.closed.by : "", summary: e.closed ? e.closed.summary : "", sites: e.sites.join(", "), welfare: Object.entries(e.welfare || {}).map(([k, v]) => k + " " + v.status).join("; "), messages_sent: (e.comms || []).length })));
+  add("Escalation log", EVENTS.flatMap(e => e.log.map(l => ({ escalation: e.title, time_sgt: T(l.t), by: l.by, entry: l.m }))));
+  add("Inbox decisions", INBOX.map(i => ({ item: i.title, priority: i.pri, raised_sgt: T(i.createdAt), status: i.status, decision: i.decision || "", reason: i.reason || "", by: i.by || "", decided_sgt: T(i.decidedAt) })));
+  add("Reports", REPORTS.map(r => ({ title: r.title, type: r.type, by: r.by, saved_sgt: T(r.at), text: String(r.text || "").slice(0, 32000) })));
+  add("Detection history", HISTORY.map(h => ({ report: h.title, type: h.kind, highest_level: h.tier, first_seen_sgt: T(h.first), last_seen_sgt: T(h.last), sites: h.sites, where: h.area || h.cities.join(", "), source: h.url })));
+  add("Earthquakes", QARCH.map(q => Object.assign({ time_sgt: T(q.t) }, q, { t: undefined })));
+  add("Sites", SITES.map(x => ({ code: x.code, name: x.name, city: x.city, country: x.country, class: x.cls, status: x.status, lat: x.lat, lon: x.lon, added_by_hand: x.manual ? "yes" : "" })));
+  add("Audit", auditLog().map(a => ({ time_sgt: T(a.t), who: a.by, action: a.action, item: a.what, detail: a.detail })));
+  X.writeFile(wb, `ite-export-${new Date().toISOString().slice(0, 16).replace(":", "")}.xlsx`); audit("Exported everything to Excel"); }

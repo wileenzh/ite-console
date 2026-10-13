@@ -1,5 +1,5 @@
 // Disasters (GDACS, NASA EONET), tropical cyclones (JMA official forecast + GDACS), volcanoes (Smithsonian + EONET).
-import { getJSON, viaRelay, xmlDoc, tx, km, load, save, inAPAC, asArr } from "../core.js";
+import { getJSON, viaRelay, xmlDoc, tx, km, load, save, inAPAC, asArr, sgt } from "../core.js";
 import { CFG } from "../config.js";
 import { sitesNear, watchSites, nearestSite } from "../model.js";
 import { register } from "./index.js";
@@ -48,9 +48,10 @@ export function exposure(storm){ const pts = [storm.now].concat(storm.fc || []),
   for (let i = 0; i < pts.length; i++){ const a = pts[i], b = pts[i + 1]; if (!b){ tl.push({ t: a.time, lat: a.lat, lon: a.lon, R: a.stormKm || 0, P: a.probKm || 0 }); break; }
     const ta = a.time || Date.now(), tb = b.time || ta + ((b.h || 0) - (a.h || 0)) * 3600e3, n = Math.max(1, Math.round((tb - ta) / 3600e3));
     for (let k = 0; k < n; k++){ const f = k / n, L = (x, y) => (x || 0) + ((y || 0) - (x || 0)) * f; tl.push({ t: ta + (tb - ta) * f, lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f, R: L(a.stormKm, b.stormKm), P: L(a.probKm, b.probKm) }); } }
-  const out = []; watchSites().forEach(s => { let best = 1e9, at = null, direct = null, poss = null;
-    tl.forEach(q => { const d = km(s.lat, s.lon, q.lat, q.lon); if (d < best){ best = d; at = q.t; } if (q.R > 0 && d <= q.R && direct == null) direct = q.t; if ((q.R + q.P) > 0 && d <= q.R + q.P && poss == null) poss = q.t; });
-    const level = direct != null ? "direct" : poss != null ? "possible" : best <= CFG.ranges.cycloneWatchKm ? "watch" : null; if (level) out.push({ code: s.code, km: best, level, at: direct ?? poss ?? at }); });
+  const out = []; watchSites().forEach(s => { let best = 1e9, at = null, direct = null, poss = null, until = null;
+    tl.forEach(q => { const d = km(s.lat, s.lon, q.lat, q.lon); if (d < best){ best = d; at = q.t; } if (q.R > 0 && d <= q.R){ if (direct == null) direct = q.t; until = q.t; } if ((q.R + q.P) > 0 && d <= q.R + q.P && poss == null) poss = q.t; });
+    const level = direct != null ? "direct" : poss != null ? "possible" : best <= CFG.ranges.cycloneWatchKm ? "watch" : null;
+    if (level) out.push({ code: s.code, km: best, level, at: direct ?? poss ?? at, closestAt: at, until: direct != null ? until : null, open: direct != null && until === tl[tl.length - 1].t }); });
   const r = { direct: 0, possible: 1, watch: 2 }; return out.sort((a, b) => r[a.level] - r[b.level] || a.km - b.km); }
 register({ id: "cyclones", name: "Tropical cyclones", provider: "JMA (RSMC Tokyo) official forecasts and GDACS (all basins)", what: "Position, intensity, forecast track, storm-force and 70 % probability circles; every site graded direct, possible or watch", group: "Disasters", every: 10 * 60e3,
   async run(){ const [jr, gr] = await Promise.allSettled([jmaStorms(), gdacsStorms()]); if (jr.status === "rejected" && gr.status === "rejected") throw new Error("JMA: " + jr.reason.message + "; GDACS: " + gr.reason.message);
@@ -61,8 +62,8 @@ register({ id: "cyclones", name: "Tropical cyclones", provider: "JMA (RSMC Tokyo
     return storms.map(s => { const ex = exposure(s), worst = ex[0] ? ex[0].level : null, c = tcClass(s.now.kt), first = ex.filter(x => x.level !== "watch").map(x => x.at).filter(Boolean).sort((a, b) => a - b)[0];
       return { id: "tc:" + norm(s.name || s.id), src: "cyclones", kind: "cyclone", rule: "cyclone", cat: "weather", title: `${c[1]} ${s.name}${worst === "direct" ? ` — storm-force winds forecast at ${ex.filter(x => x.level === "direct").length} site(s)` : worst === "possible" ? " — sites inside the 70 % circle" : worst === "watch" ? " — sites within watch range" : ""}`,
         tier: worst === "direct" ? 3 : worst === "possible" ? 2 : worst === "watch" ? 1 : 0, lat: s.now.lat, lon: s.now.lon, t: s.issue || s.now.time || Date.now(), url: s.src === "JMA" ? "https://www.jma.go.jp/bosai/map.html#contents=typhoon&lang=en" : s.gdacs.report,
-        text: `${s.now.kt != null ? Math.round(s.now.kt) + " kt (" + Math.round(s.now.kt * 1.852) + " km/h)" : "wind unknown"}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}${s.now.course ? ", moving " + s.now.course + (s.now.speed ? " at " + s.now.speed + " km/h" : "") : ""}${s.now.stormKm ? `, storm-force winds up to ${s.now.stormKm} km` : ""}. Source: ${s.src === "JMA" ? "JMA official forecast" + (s.gdacs ? " with GDACS " + s.gdacs.level + " alert" : "") : "GDACS (JTWC/NOAA advisories)"}.${first ? " First affects a site " + new Date(first).toISOString().slice(0, 16).replace("T", " ") + " UTC." : ""}`,
-        sites: ex.map(x => ({ code: x.code, km: x.km, level: x.level, at: x.at })), citySites: false, extra: { storm: s, cone: s.gdacs && s.gdacs.track ? s.gdacs.track.cone : [], obs: s.gdacs && s.gdacs.track ? s.gdacs.track.obs : [] } }; }); } });
+        text: `${s.now.kt != null ? Math.round(s.now.kt) + " kt (" + Math.round(s.now.kt * 1.852) + " km/h)" : "wind unknown"}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}${s.now.course ? ", moving " + s.now.course + (s.now.speed ? " at " + s.now.speed + " km/h" : "") : ""}${s.now.stormKm ? `, storm-force winds up to ${s.now.stormKm} km` : ""}. Source: ${s.src === "JMA" ? "JMA official forecast" + (s.gdacs ? " with GDACS " + s.gdacs.level + " alert" : "") : "GDACS (JTWC/NOAA advisories)"}.${first ? " Damaging winds first reach a site around " + sgt(first) + " SGT." : ""}`,
+        sites: ex.map(x => ({ code: x.code, km: x.km, level: x.level, at: x.at, closestAt: x.closestAt, until: x.until, open: x.open })), citySites: false, extra: { storm: s, cone: s.gdacs && s.gdacs.track ? s.gdacs.track.cone : [], obs: s.gdacs && s.gdacs.track ? s.gdacs.track.obs : [] } }; }); } });
 
 /* ---------- volcanoes: Smithsonian / USGS weekly report merged with NASA EONET open events ---------- */
 const vnorm = s => String(s || "").toLowerCase().replace(/\s*volcano\b/g, "").replace(/[^a-z0-9]+/g, "");

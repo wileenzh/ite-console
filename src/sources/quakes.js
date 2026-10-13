@@ -7,6 +7,7 @@ import { register } from "./index.js";
 
 export const estimateMMI = (mag, surfaceKm, depthKm) => Math.max(0, Math.min(12, mag - 2.5 * Math.log10(Math.max(Math.sqrt(surfaceKm ** 2 + depthKm ** 2), 1)) + 1.5));
 export const roman = v => v >= 11 ? "XI+" : ["I", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"][Math.max(0, Math.floor(v))];
+export const mmiWord = v => v < 2 ? "not felt" : v < 4 ? "weak" : v < 5 ? "light" : v < 6 ? "moderate" : v < 7 ? "strong" : v < 8 ? "very strong" : v < 9 ? "severe" : v < 11 ? "violent" : "extreme";
 export const magLabel = m => m < 4 ? "Minor" : m < 5 ? "Light" : m < 6 ? "Moderate" : m < 7 ? "Strong" : m < 8 ? "Major" : m < 9 ? "Great" : "Extreme";
 const feedUrl = t => "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/" + (t >= 4.5 ? "4.5_day" : t >= 2.5 ? "2.5_day" : t >= 1 ? "1.0_day" : "all_day") + ".geojson";
 let EMSC = [];

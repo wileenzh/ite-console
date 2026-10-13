@@ -49,6 +49,7 @@ a{color:var(--signal)}
 /* ---------- top bar: the one next thing to do, then health and clocks ---------- */
 .next{display:flex;align-items:center;gap:10px;min-width:0;flex:1;border:0;background:none;padding:6px 10px;border-radius:var(--r2);text-align:left;cursor:pointer}
 .next:hover{background:var(--raise)}
+.feeddown{flex-shrink:0;background:var(--t3);color:#fff;border:0;border-radius:var(--r2);padding:6px 10px;font-size:12.5px;cursor:pointer;max-width:46%;text-align:left}.feeddown b{font-weight:600}
 .next .lead{font:600 12px var(--cond);color:var(--muted);white-space:nowrap}
 .next .what{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .next .when{white-space:nowrap;font-weight:600}
@@ -98,6 +99,16 @@ a{color:var(--signal)}
 .sec{margin-top:18px}
 .sec > h3{font:600 13px var(--cond);color:var(--muted);margin:0 0 6px;display:flex;align-items:center;gap:8px}
 .sec > h3 .r{margin-left:auto}
+details.proc,details.crit{border-top:1px solid var(--rule);padding:6px 0}details.proc summary,details.crit summary{cursor:pointer;font-weight:500;padding:2px 0}
+details.proc .chk{display:flex;gap:8px;align-items:flex-start;padding:4px 0 4px 4px;line-height:1.4}details.proc .chk input{margin-top:3px}
+details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:var(--signal);font-size:13px}details.crit ul,.warnbox ul,.ttp-body ul{margin:4px 0 6px;padding-left:18px}details.crit li,.warnbox li{margin:3px 0}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media (max-width:700px){.cols2{grid-template-columns:1fr}}
+.tv{padding:0 16px 16px}.tvframe{position:relative;background:#000;border-radius:var(--r2);overflow:hidden;aspect-ratio:16/9}.tvframe video{width:100%;height:100%;display:block}
+.tvmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#e3eaf0;background:rgba(0,0,0,.7);font-size:13.5px;line-height:1.5}.tvmsg a,.tvmsg .linkbtn{color:#8cc4f0}
+.cpquick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.cplog{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.msg{padding:9px 12px;border-radius:var(--r2);line-height:1.5;max-width:92%}.msg.user{align-self:flex-end;background:var(--raise)}.msg.assistant{background:var(--panel);border:1px solid var(--rule)}.msg.err{border-color:var(--t3)}.msg .linkbtn{display:block;margin-top:4px;font-size:12px}
+.warnbox{border-left:3px solid var(--t2);background:color-mix(in srgb,var(--t2) 10%,transparent);padding:8px 12px;margin:8px 0;border-radius:0 var(--r2) var(--r2) 0}
+.ttp-h{font:600 13px var(--cond);color:var(--text);margin:16px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}.ttp-sub{font:600 12px var(--cond);color:var(--muted);margin:6px 0 2px}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
 .tbl th{text-align:left;font:600 12px var(--cond);color:var(--muted);border-bottom:1px solid var(--rule2);padding:4px 6px}
 .tbl td{border-bottom:1px solid var(--rule);padding:5px 6px;vertical-align:top}
@@ -175,7 +186,11 @@ a{color:var(--signal)}
 /* map markers */
 .mk{border-radius:50%;border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(255,255,255,.25)}
 .mk.t0{background:var(--t0)}.mk.t1{background:var(--t1)}.mk.t2{background:var(--t2)}.mk.t3{background:var(--t3)}.mk.sel{box-shadow:0 0 0 3px var(--signal)}
-.sitedot{width:7px;height:7px;border-radius:50%;background:var(--muted);border:1px solid var(--bg)}.sitedot.off{border-radius:1px;background:var(--faint)}.sitedot.hit{background:var(--text);width:9px;height:9px}
+.sitedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);border:1px solid var(--bg);box-sizing:border-box}
+.sitedot.ab{background:#9DB8D4}.sitedot.c{background:#B49BD6}.sitedot.e{background:#7FB6A6;border-radius:1px;transform:rotate(45deg)}.sitedot.o{background:#D7C89A;border-radius:1px}
+.sitedot.notlive{background:transparent;border:1.5px dashed var(--muted)}.sitedot.hit{outline:2px solid var(--text);outline-offset:1px}
+.maplegend .sep{width:1px;background:var(--rule2);align-self:stretch}.maplegend .sitedot{margin-right:4px;vertical-align:-1px}
+.basesel{position:absolute;right:10px;top:10px;z-index:500;background:var(--panel);color:var(--text);border:1px solid var(--rule2);border-radius:var(--r);padding:3px 6px;font-size:12px}
 .leaflet-container{font:inherit;background:var(--bg)}
 .leaflet-tooltip{background:var(--panel);color:var(--text);border:1px solid var(--rule2);box-shadow:none;font-size:12.5px}
 .leaflet-tooltip-top:before{border-top-color:var(--rule2)}
@@ -198,7 +213,7 @@ a{color:var(--signal)}
   .top .next{order:3;flex-basis:100%;flex-wrap:wrap;gap:2px 8px;padding:4px 0}.top .tools{margin-right:auto}
   .next .what{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex-basis:100%;order:3}
   .toasts{bottom:70px;left:12px;right:12px;width:auto}.toast{max-width:none}
-  .keyhint{display:none}
+  .keyhint{display:none}.rail [data-guide]{display:none}.maplegend .sep,.maplegend .sep ~ span{display:none}
   .city,.cityhead{grid-template-columns:4px 90px repeat(3,1fr)}.city .c.x4,.city .c.x5,.cityhead .x4,.cityhead .x5{display:none}
 }
 @media (hover:none){ .keyhint,.decide kbd{display:none} }
