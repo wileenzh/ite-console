@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>ITE — PSOC console</title>
+<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build __BUILD__.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>try{ var t = localStorage.getItem("ite2.theme"); if (t) document.documentElement.dataset.theme = JSON.parse(t); }catch(e){}</script>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<div id="app" class="app" hidden>
+  <nav class="rail" id="rail" aria-label="Workspaces"></nav>
+  <header class="top" id="top"></header>
+  <main class="work" id="work">
+    <div class="mapcell" id="mapcell"><div id="map" role="region" aria-label="Map"></div></div>
+    <section class="pane" id="pane" aria-live="polite"></section>
+  </main>
+</div>
+<div class="gate" id="gate" hidden></div>
+<div class="alarm" id="alarm" role="alertdialog" aria-modal="true" hidden></div>
+<div class="scrim" id="scrim" hidden><div class="dialog" id="dialog" role="dialog" aria-modal="true"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script>/*__JS__*/</script>
+</body>
+</html>

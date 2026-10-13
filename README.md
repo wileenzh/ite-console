@@ -20,3 +20,19 @@ described in the hosting guide that ships with the full package.
 The desktop app runs the console with its own built-in server on your computer only, so the video wall,
 channel look-ups and blocked news sources all work without any hosting. The app isn't code-signed, so Windows
 may show "Windows protected your PC": click **More info → Run anyway**.
+
+## The rebuilt console (preview)
+
+**Open it:** https://wileenzh.github.io/ite-console/next/
+
+A clean rebuild organised around the officer's workflow, running alongside the current console until it replaces it:
+
+- **Watch** — one map and one feed. Every source (earthquakes, official warnings from each national agency, typhoons, volcanoes, floods and fires, unrest, news, travel advisories, city conditions) lands here; hazard type is a filter, not a page.
+- **Inbox** — only what needs a decision, the one due soonest first. Escalate, notify, monitor or dismiss, one key each.
+- **Events** — each escalation in one place: the 12-hour and 24-hour update timers, the event notice, sites and welfare checks, the messages to send, the log and the close-out.
+- **Reports** — the shift handover and the SITREP, written from the live picture, plus everything saved.
+- **Sites** — the estate, each site's contacts, and what is affecting it now. Load your site file or a PULSE file here; it is read in your browser only.
+
+On first start it brings over the current console's settings, keys, sites, site contacts and open escalations from the same browser; the current console is not changed.
+
+Source code is in `src/` and is built into the single page `next/index.html`: `npm install`, then `npm run build` (or `npm run watch`).

@@ -1,0 +1,12 @@
+{
+  "name": "ite-console",
+  "private": true,
+  "description": "ITE — PSOC operational console. The rebuilt app lives in src/ and is bundled into next/index.html.",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "watch": "node tools/build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}
