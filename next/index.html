@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ITE — PSOC console</title>
-<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 16:54 UTC.">
+<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 18:57 UTC.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -130,6 +130,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
 .spark{display:flex;align-items:flex-end;gap:2px;height:70px;border-bottom:1px solid var(--rule)}.spark i{flex:1;min-height:1px;background:var(--t0);border-radius:2px 2px 0 0}.spark i.t1{background:var(--t1)}.spark i.t2{background:var(--t2)}.spark i.t3{background:var(--t3)}
 @media (max-width:900px){.kpis{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}}
 .tcplay{display:flex;flex-direction:column;gap:4px;margin:4px 0 10px}.tcplay input{width:100%}
+.stylebar{font-size:12.5px;margin:6px 0 2px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}.stylebar:empty{display:none}
+.stylebar .sb-sum{font-weight:600}.stylebar .sb-sum.ok{color:var(--t0)}.stylebar .sb-sum.bad{color:var(--t2)}
+.stylebar ul{flex-basis:100%;margin:2px 0 0;padding-left:18px;color:var(--muted)}.stylebar li.error{color:var(--text)}.stylebar li.info{color:var(--muted)}.stylebar .sb-note{flex-basis:100%;margin:2px 0 0;color:var(--muted)}
+.exbox{white-space:pre-wrap;font:12.5px/1.5 var(--font);margin:0 11px 8px;max-height:260px;overflow:auto;color:var(--muted)}
 .warnbox{border-left:3px solid var(--t2);background:color-mix(in srgb,var(--t2) 10%,transparent);padding:8px 12px;margin:8px 0;border-radius:0 var(--r2) var(--r2) 0}
 .ttp-h{font:600 13px var(--cond);color:var(--text);margin:16px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}.ttp-sub{font:600 12px var(--cond);color:var(--muted);margin:6px 0 2px}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -285,12 +289,12 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   var fClock = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   var fDay = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
   var fUtc = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
-  var sgt = (t) => t ? fDT.format(t) : "—";
-  var clock = (t) => fClock.format(t);
-  var dayLabel = (t) => fDay.format(t);
-  function ago(t) {
-    if (!t) return "";
-    const m = (Date.now() - t) / 6e4;
+  var sgt = (t2) => t2 ? fDT.format(t2) : "—";
+  var clock = (t2) => fClock.format(t2);
+  var dayLabel = (t2) => fDay.format(t2);
+  function ago(t2) {
+    if (!t2) return "";
+    const m = (Date.now() - t2) / 6e4;
     if (m < 1) return "just now";
     if (m < 60) return Math.round(m) + " min ago";
     if (m < 2880) return Math.round(m / 60) + " h ago";
@@ -300,8 +304,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     const neg = ms < 0, a = Math.abs(ms), h = Math.floor(a / 36e5), m = Math.floor(a % 36e5 / 6e4);
     return (neg ? "-" : "") + (h ? h + " h " : "") + m + " min";
   }
-  function toSgtInput(t) {
-    const d = new Date(t + 8 * 36e5);
+  function toSgtInput(t2) {
+    const d = new Date(t2 + 8 * 36e5);
     return d.toISOString().slice(0, 16);
   }
   function fromSgtInput(v) {
@@ -372,12 +376,12 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     });
   }
   async function fetchText(url, opts = {}, ms = 2e4) {
-    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+    const ctl = new AbortController(), t2 = setTimeout(() => ctl.abort(), ms);
     try {
       const r = await fetch(url, Object.assign({ cache: "no-store", signal: ctl.signal }, opts));
       return { ok: r.ok, status: r.status, text: await r.text() };
     } finally {
-      clearTimeout(t);
+      clearTimeout(t2);
     }
   }
   async function getJSON(url, ms) {
@@ -407,8 +411,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     }
   }
   var relayJSON = async (url, ms) => JSON.parse(await viaRelay(url, null, ms));
-  var xmlDoc = (t) => {
-    const d = new DOMParser().parseFromString(t, "application/xml");
+  var xmlDoc = (t2) => {
+    const d = new DOMParser().parseFromString(t2, "application/xml");
     if (d.getElementsByTagName("parsererror").length) throw new Error("unreadable XML");
     return d;
   };
@@ -475,6 +479,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     // what opens an Inbox item without anyone asking (the SOP triggers)
     rules: { quake: true, warnings: true, cyclone: true, volcano: true, air: true, gdacs: true, unrest: true, travel: true, conditions: true },
     keys: { waqi: "", cwa: "", kma: "", claude: "" },
+    // the language model every drafting feature uses: Anthropic directly with a key, or a company gateway that speaks the same API
+    llm: { provider: "anthropic", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "" },
     agency: {
       jmaPrefs: ["130000", "120000", "110000", "140000", "270000", "280000", "260000"],
       kmaAreas: ["seoul", "busan"],
@@ -584,32 +590,32 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     const m = (list || []).map((x) => /every\s+\*{0,2}(\d+)\s*hours?/i.exec(x)).find(Boolean);
     return m ? +m[1] : null;
   };
-  function ttpHtml(t) {
-    if (!t) return "";
+  function ttpHtml(t2) {
+    if (!t2) return "";
     const sec = (title, body) => `<h4 class="ttp-h">${esc(title)}</h4>${body}`, part2 = (x) => `${ul(x.trig)}<div class="ttp-sub">Follow-up</div>${ul(x.cad)}<div class="ttp-sub">End — final update when all are met</div>${ul(x.end)}`;
-    return `<p class="prose">${md(t.desc)}</p>${sec("Monitor", ul(t.monitor))}${sec("PSOC Operations / Regional Manager trigger", part2(t.mgr))}${sec("APAC Escalation Chat trigger", ul(t.esc))}
-    ${sec("Intelligence Channel / SLT trigger", part2(t.intel))}${sec("Event notice (REN) — issue when any is met", `${TTP.meta.recipients ? `<p class="help">Recipients: ${esc(TTP.meta.recipients)}</p>` : ""}${ul(t.ren.crit)}${t.ren.cad && t.ren.cad.length ? `<div class="ttp-sub">Follow-up</div>${ul(t.ren.cad)}` : ""}${t.ren.reason ? `<div class="ttp-sub">Why</div><p class="prose">${md(t.ren.reason)}</p>` : ""}`)}
-    ${sec("Close monitoring when all are achieved", ul(t.close))}${t.cons && t.cons.length ? sec("Security, EHS and resiliency considerations", ul(t.cons)) : ""}${t.psoc && t.psoc.length ? sec("PSOC will", ul(t.psoc)) : ""}${t.note ? `<p class="help">${md(t.note)}</p>` : ""}`;
+    return `<p class="prose">${md(t2.desc)}</p>${sec("Monitor", ul(t2.monitor))}${sec("PSOC Operations / Regional Manager trigger", part2(t2.mgr))}${sec("APAC Escalation Chat trigger", ul(t2.esc))}
+    ${sec("Intelligence Channel / SLT trigger", part2(t2.intel))}${sec("Event notice (REN) — issue when any is met", `${TTP.meta.recipients ? `<p class="help">Recipients: ${esc(TTP.meta.recipients)}</p>` : ""}${ul(t2.ren.crit)}${t2.ren.cad && t2.ren.cad.length ? `<div class="ttp-sub">Follow-up</div>${ul(t2.ren.cad)}` : ""}${t2.ren.reason ? `<div class="ttp-sub">Why</div><p class="prose">${md(t2.ren.reason)}</p>` : ""}`)}
+    ${sec("Close monitoring when all are achieved", ul(t2.close))}${t2.cons && t2.cons.length ? sec("Security, EHS and resiliency considerations", ul(t2.cons)) : ""}${t2.psoc && t2.psoc.length ? sec("PSOC will", ul(t2.psoc)) : ""}${t2.note ? `<p class="help">${md(t2.note)}</p>` : ""}`;
   }
   var strs = (a) => Array.isArray(a) ? a.map((x) => String(x)).slice(0, 60) : [];
   var part = (x) => ({ trig: strs(x && x.trig), cad: strs(x && x.cad), end: strs(x && x.end) });
   function clean(raw) {
     const cats = {};
     (raw.order || Object.keys(raw.ttp || {})).forEach((k) => {
-      const t = (raw.ttp || {})[k];
-      if (!t || typeof t !== "object") return;
+      const t2 = (raw.ttp || {})[k];
+      if (!t2 || typeof t2 !== "object") return;
       cats[KEYMAP[k] || k] = {
-        label: String(t.label || k),
-        desc: String(t.desc || ""),
-        monitor: strs(t.monitor),
-        mgr: part(t.mgr),
-        esc: strs(t.esc),
-        intel: part(t.intel),
-        ren: { crit: strs(t.ren && t.ren.crit), cad: strs(t.ren && t.ren.cad), reason: String(t.ren && t.ren.reason || "") },
-        close: strs(t.close),
-        cons: strs(t.cons),
-        psoc: strs(t.psoc),
-        note: String(t.note || "")
+        label: String(t2.label || k),
+        desc: String(t2.desc || ""),
+        monitor: strs(t2.monitor),
+        mgr: part(t2.mgr),
+        esc: strs(t2.esc),
+        intel: part(t2.intel),
+        ren: { crit: strs(t2.ren && t2.ren.crit), cad: strs(t2.ren && t2.ren.cad), reason: String(t2.ren && t2.ren.reason || "") },
+        close: strs(t2.close),
+        cons: strs(t2.cons),
+        psoc: strs(t2.psoc),
+        note: String(t2.note || "")
       };
     });
     const m = raw.meta || {};
@@ -621,17 +627,17 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       if (!PLACEHOLDER[k]) delete sop_default[k];
       else sop_default[k] = Object.assign({}, PLACEHOLDER[k]);
     });
-    if (TTP) Object.entries(TTP.cats).forEach(([k, t]) => {
-      sop_default[k] = { label: t.label, html: ttpHtml(t), ttp: true };
+    if (TTP) Object.entries(TTP.cats).forEach(([k, t2]) => {
+      sop_default[k] = { label: t2.label, html: ttpHtml(t2), ttp: true };
     });
   }
   apply();
   var ttpFor = (cat) => TTP && TTP.cats[cat] || null;
   var ttpName = () => TTP ? `REN TTP${TTP.meta.version ? " v" + TTP.meta.version : ""}` : "";
   function cadenceFor(cat) {
-    const t = ttpFor(cat);
-    if (!t || CFG.cadence === "fixed") return { m: 12, i: 24, src: "fixed" };
-    const m = hours(t.mgr.cad), i = hours(t.intel.cad);
+    const t2 = ttpFor(cat);
+    if (!t2 || CFG.cadence === "fixed") return { m: 12, i: 24, src: "fixed" };
+    const m = hours(t2.mgr.cad), i = hours(t2.intel.cad);
     return { m: m || 12, i: i || 24, src: ttpName() };
   }
   function setTTP(raw, file) {
@@ -650,9 +656,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     emit("ttp");
   }
   var checklistFor = (cat) => {
-    const t = ttpFor(cat);
-    if (!t) return null;
-    return { close: t.close.map(plain), psoc: t.psoc.map(plain), cons: t.cons.map(plain), ren: t.ren.crit.map(plain) };
+    const t2 = ttpFor(cat);
+    if (!t2) return null;
+    return { close: t2.close.map(plain), psoc: t2.psoc.map(plain), cons: t2.cons.map(plain), ren: t2.ren.crit.map(plain) };
   };
   function extractTTP(trackerHtml) {
     return new Promise((res, rej) => {
@@ -664,7 +670,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       f.style.display = "none";
       const done = (v, e) => {
         window.removeEventListener("message", on2);
-        clearTimeout(t);
+        clearTimeout(t2);
         f.remove();
         e ? rej(e) : res(v);
       };
@@ -678,7 +684,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         }
         else done(null, new Error(d.err || "TTP not found"));
       };
-      const t = setTimeout(() => done(null, new Error("reading the TTP timed out")), 8e3);
+      const t2 = setTimeout(() => done(null, new Error("reading the TTP timed out")), 8e3);
       window.addEventListener("message", on2);
       f.srcdoc = `<script>onmessage=function(e){var s=e.data,b=0,r=null;while((b=s.indexOf("})();",b+1))>0){try{r=new Function(s.slice(0,b+5)+";return {meta:TTP_META,order:TTP_ORDER,ttp:TTP};")();break;}catch(x){}}
     parent.postMessage(r?{ttp:JSON.stringify(r)}:{err:"TTP not found"},"*");};<\/script>`;
@@ -693,7 +699,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   var REGIONS = ["North Asia", "South Asia", "India", "ANZ"];
   var TIER = [{ label: "Normal", cls: "t0" }, { label: "Monitor", cls: "t1" }, { label: "Manager trigger", cls: "t2" }, { label: "Escalate", cls: "t3" }];
   var PRI = { P1: { sla: 5, tier: 3 }, P2: { sla: 15, tier: 2 }, P3: { sla: 60, tier: 1 }, P4: { sla: 240, tier: 0 } };
-  var tierToPri = (t) => t >= 3 ? "P1" : t === 2 ? "P2" : t === 1 ? "P3" : "P4";
+  var tierToPri = (t2) => t2 >= 3 ? "P1" : t2 === 2 ? "P2" : t2 === 1 ? "P3" : "P4";
   var STATE = { me: load("me", null), feeds: {}, signals: {}, list: [], city: { wx: {}, air: {}, cams: {}, river: {} }, scores: {} };
   function signIn(name) {
     STATE.me = { name: String(name).trim(), at: Date.now() };
@@ -963,18 +969,18 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     STATE.list.forEach((sig) => {
       if (sig.tier < 2 || !RULE_ON(sig) || sig.noInbox) return;
       if (!sig.sites.length && !sig.cities.length && !sig.alarm) return;
-      const key = "sig:" + sig.key, ex = INBOX.find((i) => i.key === key);
-      if (ex) {
-        if (ex.status === "open" && sig.tier > ex.tier) {
-          ex.tier = sig.tier;
-          ex.pri = tierToPri(sig.tier);
-          ex.title = sig.title;
-          ex.log.push({ t: now, m: "Raised to " + ex.pri + " by the source" });
+      const key = "sig:" + sig.key, ex2 = INBOX.find((i) => i.key === key);
+      if (ex2) {
+        if (ex2.status === "open" && sig.tier > ex2.tier) {
+          ex2.tier = sig.tier;
+          ex2.pri = tierToPri(sig.tier);
+          ex2.title = sig.title;
+          ex2.log.push({ t: now, m: "Raised to " + ex2.pri + " by the source" });
           changed = true;
-        } else if (ex.status === "monitor" && ex.until && now > ex.until) {
-          ex.status = "open";
-          ex.createdAt = now;
-          ex.log.push({ t: now, m: "Back from monitoring" });
+        } else if (ex2.status === "monitor" && ex2.until && now > ex2.until) {
+          ex2.status = "open";
+          ex2.createdAt = now;
+          ex2.log.push({ t: now, m: "Back from monitoring" });
           changed = true;
         }
         return;
@@ -1145,7 +1151,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     const out = [];
     const oldEv = loadRaw2("psoc.uni.events.v1", []).filter((e) => e.status !== "closed");
     oldEv.forEach((d) => {
-      const t = (x) => x ? new Date(x).getTime() : Date.now();
+      const t2 = (x) => x ? new Date(x).getTime() : Date.now();
       const known = (d.sites || []).filter((c) => SITES.some((x) => x.code === c));
       EVENTS.push({
         id: d.id || nid("ev"),
@@ -1158,14 +1164,14 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         lon: d.eventLon ?? null,
         ren: ["assess", "issued", "none"].includes(d.ren) ? d.ren : "assess",
         timer: d.timerMode === "awaiting" ? "awaiting" : "running",
-        created: t(d.created || d.last),
-        last12: t(d.last12 || d.last),
-        last24: t(d.last24 || d.last),
+        created: t2(d.created || d.last),
+        last12: t2(d.last12 || d.last),
+        last24: t2(d.last24 || d.last),
         status: "active",
         signals: [],
         welfare: {},
         comms: [],
-        log: (d.log || []).map((l) => ({ t: t(l.t), by: l.by || "", m: l.m || "" })).concat([{ t: Date.now(), by: "system", m: "Brought over from the current console." }])
+        log: (d.log || []).map((l) => ({ t: t2(l.t), by: l.by || "", m: l.m || "" })).concat([{ t: Date.now(), by: "system", m: "Brought over from the current console." }])
       });
     });
     if (oldEv.length) {
@@ -1230,7 +1236,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   var roman = (v) => v >= 11 ? "XI+" : ["I", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"][Math.max(0, Math.floor(v))];
   var mmiWord = (v) => v < 2 ? "not felt" : v < 4 ? "weak" : v < 5 ? "light" : v < 6 ? "moderate" : v < 7 ? "strong" : v < 8 ? "very strong" : v < 9 ? "severe" : v < 11 ? "violent" : "extreme";
   var magLabel = (m) => m < 4 ? "Minor" : m < 5 ? "Light" : m < 6 ? "Moderate" : m < 7 ? "Strong" : m < 8 ? "Major" : m < 9 ? "Great" : "Extreme";
-  var feedUrl = (t) => "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/" + (t >= 4.5 ? "4.5_day" : t >= 2.5 ? "2.5_day" : t >= 1 ? "1.0_day" : "all_day") + ".geojson";
+  var feedUrl = (t2) => "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/" + (t2 >= 4.5 ? "4.5_day" : t2 >= 2.5 ? "2.5_day" : t2 >= 1 ? "1.0_day" : "all_day") + ".geojson";
   var EMSC = [];
   var QARCH = load("quakeArchive", []);
   var QSTATE = load("quakeState", {});
@@ -1343,8 +1349,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         welfare: st.welfare || null
       };
       if (!(s.alarm || s.extra.mag >= 4.5 || s.tier >= 2)) return;
-      const ex = by.get(s.id);
-      if (!ex || JSON.stringify(ex) !== JSON.stringify(rec)) {
+      const ex2 = by.get(s.id);
+      if (!ex2 || JSON.stringify(ex2) !== JSON.stringify(rec)) {
         by.set(s.id, rec);
         ch2 = true;
       }
@@ -1381,7 +1387,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
 
   // src/sources/agencies.js
   function hazardType(text) {
-    const t = String(text || "").toUpperCase();
+    const t2 = String(text || "").toUpperCase();
     const m = [
       ["TSUNAMI", /TSUNAMI|津波|海嘯/],
       ["TYPHOON", /TYPHOON|TROPICAL|CYCLONE|HURRICANE|颱風|台风|台風|TC SIGNAL|SIGNAL NO/],
@@ -1401,7 +1407,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       ["FOG", /FOG|濃霧/],
       ["WAVE", /WAVE|SEAS|波浪|OMBAK|SWELL/]
     ];
-    for (const [k, re] of m) if (re.test(t)) return k;
+    for (const [k, re] of m) if (re.test(t2)) return k;
     return "WEATHER";
   }
   var STATE_OF = {
@@ -1434,7 +1440,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     Zhangjiakou: ["张家口", "Hebei"]
   };
   var SEV_TIER = { EXTREME: 3, SEVERE: 2, MODERATE: 1, MINOR: 1, UNKNOWN: 1 };
-  var tierSev = (t) => t >= 3 ? "EXTREME" : t === 2 ? "SEVERE" : "MODERATE";
+  var tierSev = (t2) => t2 >= 3 ? "EXTREME" : t2 === 2 ? "SEVERE" : "MODERATE";
   function warning(o) {
     const sev = String(o.severity || "MODERATE").toUpperCase(), hazard = o.hazard || hazardType(o.title + " " + (o.desc || "")), txt2 = `${o.area || ""} ${o.title} ${o.desc || ""}`.toLowerCase();
     let sites = [], cities = o.points ? o.points.slice() : [];
@@ -1947,10 +1953,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   });
   var PM = [[0, 9, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]];
   var pm25ToAqi = (c) => {
-    const t = Math.floor(c * 10) / 10;
-    for (const [a2, b2, i2, j2] of PM) if (t >= a2 && t <= b2) return Math.round((j2 - i2) / (b2 - a2) * (t - a2) + i2);
+    const t2 = Math.floor(c * 10) / 10;
+    for (const [a2, b2, i2, j2] of PM) if (t2 >= a2 && t2 <= b2) return Math.round((j2 - i2) / (b2 - a2) * (t2 - a2) + i2);
     const [a, b, i, j] = PM[5];
-    return Math.round((j - i) / (b - a) * (t - a) + i);
+    return Math.round((j - i) / (b - a) * (t2 - a) + i);
   };
   var nums = (n, keys3, out = []) => {
     if (Array.isArray(n)) n.forEach((x) => nums(x, keys3, out));
@@ -1976,8 +1982,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
           rows.push(["Rainfall, highest station", `${mx.toFixed(1)} mm in 5 min`, mx > 4.2 ? "very heavy" : mx > 0.85 ? "heavy" : mx > 0.2 ? "moderate" : "light or none"]);
           if (mx > 0.85) add("rain:" + (mx > 4.2 ? "vh" : "h"), `${mx > 4.2 ? "Very heavy" : "Heavy"} rain — ${mx.toFixed(1)} mm in 5 min`, "RAIN", mx > 4.2 ? "SEVERE" : "MODERATE", `Highest NEA station, about ${Math.round(mx * 12)} mm/h if sustained.`);
         }).catch((e) => errs.push("rainfall: " + e.message)),
-        viaRelay("https://api-open.data.gov.sg/v2/real-time/api/weather?api=wbgt").then((t) => {
-          const d = JSON.parse(t), rec = d && d.data && d.data.records ? d.data.records[0] : null, LV = ["Low", "Moderate", "High"];
+        viaRelay("https://api-open.data.gov.sg/v2/real-time/api/weather?api=wbgt").then((t2) => {
+          const d = JSON.parse(t2), rec = d && d.data && d.data.records ? d.data.records[0] : null, LV = ["Low", "Moderate", "High"];
           const v = (rec && rec.item && rec.item.readings || []).map((r) => ({ n: r.station && (r.station.townCenter || r.station.name) || "station", w: parseFloat(r.wbgt), l: String(r.heatStress || "").trim() })).filter((r) => LV.includes(r.l));
           if (!v.length) throw new Error("no heat stress level");
           const top2 = Math.max(...v.map((r) => LV.indexOf(r.l))), pk = v.filter((r) => LV.indexOf(r.l) === top2).sort((a, b) => (b.w || 0) - (a.w || 0))[0];
@@ -2053,17 +2059,17 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         s = String(s || "").toUpperCase();
         return /DANGER|BAHAYA/.test(s) ? 3 : /WARNING|AMARAN/.test(s) ? 2 : /ALERT|WASPADA/.test(s) ? 1 : 0;
       };
-      return arr.map((s) => ({ s, t: lvl(s.water_level_indicator || s.status || s.level) })).filter((x) => x.t > 0).map(({ s, t }) => {
+      return arr.map((s) => ({ s, t: lvl(s.water_level_indicator || s.status || s.level) })).filter((x) => x.t > 0).map(({ s, t: t2 }) => {
         const lat = +s.latitude, lon = +s.longitude;
         return warning({
           src: "myflood",
           id: "jps:" + (s.station_id || s.station_name),
-          title: `River at ${["", "alert", "warning", "danger"][t]} level — ${s.station_name || "station"}`,
+          title: `River at ${["", "alert", "warning", "danger"][t2]} level — ${s.station_name || "station"}`,
           hazard: "FLOOD",
           area: [s.district, s.state].filter(Boolean).join(", "),
           lat: isFinite(lat) ? lat : null,
           lon: isFinite(lon) ? lon : null,
-          severity: tierSev(t),
+          severity: tierSev(t2),
           start: Date.parse(s.last_updated || s.date) || Date.now(),
           desc: `Water level ${s.water_level_current ?? ""} m (alert ${s.water_level_alert ?? "?"}, warning ${s.water_level_warning ?? "?"}, danger ${s.water_level_danger ?? "?"}).`,
           agency: "JPS (DID Malaysia)",
@@ -2083,9 +2089,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       await Promise.all(["Kuala Lumpur", "Johor Bahru"].map(async (city) => {
         try {
           const list = asArr(await getJSON(`https://api.data.gov.my/weather/forecast?icontains=${encodeURIComponent(city)}@location__location_name&date_start=${today}@date&date_end=${today}@date&limit=5`));
-          const t = list.map((r) => r && r.max_temp).filter((v) => typeof v === "number");
-          if (!t.length) throw new Error("no forecast today");
-          const mx = Math.max(...t);
+          const t2 = list.map((r) => r && r.max_temp).filter((v) => typeof v === "number");
+          if (!t2.length) throw new Error("no forecast today");
+          const mx = Math.max(...t2);
           const lv = mx > 40 ? [3, "Level 3 extreme heatwave range", "EXTREME"] : mx > 37 ? [2, "Level 2 heatwave range", "SEVERE"] : mx >= 35 ? [1, "Level 1 alert range", "MODERATE"] : null;
           rows.push([city + " forecast high today", mx + "°C", lv ? lv[1] : "below the 35°C alert"]);
           if (lv) out.push(warning({
@@ -2141,13 +2147,13 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     if (/moderate\s+rain|showers|hujan\s+sedang/.test(d) || c === 63 || ws != null && ws >= 25) return 1;
     return 0;
   }
-  function bmkgTargets(t) {
+  function bmkgTargets(t2) {
     const o = [];
-    if (/\bkarawang\b/i.test(t)) o.push("Karawang");
-    if (/\bbekasi\b|\bcikarang\b/i.test(t)) o.push("Bekasi");
-    const wj = /\bjakarta\s+barat\b|\bwest\s+jakarta\b|\b(?:grogol|petamburan|tomang|kembangan|cengkareng|kalideres|tambora|palmerah|kebon\s+jeruk)\b/i.test(t);
+    if (/\bkarawang\b/i.test(t2)) o.push("Karawang");
+    if (/\bbekasi\b|\bcikarang\b/i.test(t2)) o.push("Bekasi");
+    const wj = /\bjakarta\s+barat\b|\bwest\s+jakarta\b|\b(?:grogol|petamburan|tomang|kembangan|cengkareng|kalideres|tambora|palmerah|kebon\s+jeruk)\b/i.test(t2);
     if (wj) o.push("West Jakarta");
-    if (/\bjakarta\b/i.test(t) && !wj) o.push("Jakarta");
+    if (/\bjakarta\b/i.test(t2) && !wj) o.push("Jakarta");
     return o;
   }
   agencySource({
@@ -2175,8 +2181,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
             errs.push(a.label + ": " + e.message);
           }
         }),
-        viaRelay("https://www.bmkg.go.id/alerts/nowcast/en").then((t) => {
-          const doc = xmlDoc(t);
+        viaRelay("https://www.bmkg.go.id/alerts/nowcast/en").then((t2) => {
+          const doc = xmlDoc(t2);
           [...doc.querySelectorAll("item, entry")].forEach((n) => {
             const rd = (k) => {
               const e = n.querySelector(k);
@@ -2259,8 +2265,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     what: "Numbered warning bulletins and CAP alerts naming Bangkok or the East",
     key: "No (relay)",
     async run() {
-      const out = [], errs = [], now = Date.now(), areas2 = (t) => TMD_AREAS.filter(([, re]) => re.test(t)).map(([n]) => n);
-      const sevOf = (t) => /tropical\s+storm|typhoon|depression|พายุ/i.test(t) ? "SEVERE" : /heavy\s+rain|strong\s+wind|wind-?waves?|ฝนตกหนัก|คลื่นลมแรง/i.test(t) ? "MODERATE" : "MINOR";
+      const out = [], errs = [], now = Date.now(), areas2 = (t2) => TMD_AREAS.filter(([, re]) => re.test(t2)).map(([n]) => n);
+      const sevOf = (t2) => /tropical\s+storm|typhoon|depression|พายุ/i.test(t2) ? "SEVERE" : /heavy\s+rain|strong\s+wind|wind-?waves?|ฝนตกหนัก|คลื่นลมแรง/i.test(t2) ? "MODERATE" : "MINOR";
       try {
         const items = tmdItems(await viaRelay("https://tmd.go.th/api/xml/warning-news")).filter((i) => i.title || i.desc);
         items.forEach((i) => {
@@ -2330,16 +2336,16 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         try {
           const rss = xmlDoc(await viaRelay(`https://sachet.ndma.gov.in/cap_public_website/rss/rss_${st}.xml`));
           Array.from(rss.getElementsByTagName("item")).slice(0, 40).forEach((it) => {
-            const t = tx(it, "title"), d = stripHtml(tx(it, "description")), link = tx(it, "link"), ex = beYear(tx(it, "expires"));
-            if (ex && ex < Date.now()) return;
+            const t2 = tx(it, "title"), d = stripHtml(tx(it, "description")), link = tx(it, "link"), ex2 = beYear(tx(it, "expires"));
+            if (ex2 && ex2 < Date.now()) return;
             out.push(warning({
               src: "sachet",
-              id: "sachet:" + (tx(it, "guid") || link || t),
-              title: t.slice(0, 140),
+              id: "sachet:" + (tx(it, "guid") || link || t2),
+              title: t2.slice(0, 140),
               area: (tx(it, "areaDesc") || st.replace(/_/g, " ")).slice(0, 160),
-              severity: (tx(it, "severity") || (/(red|extreme)/i.test(t + d) ? "Extreme" : /(orange|severe)/i.test(t + d) ? "Severe" : "Moderate")).toUpperCase(),
+              severity: (tx(it, "severity") || (/(red|extreme)/i.test(t2 + d) ? "Extreme" : /(orange|severe)/i.test(t2 + d) ? "Severe" : "Moderate")).toUpperCase(),
               start: Date.parse(tx(it, "pubDate")) || Date.now(),
-              end: ex,
+              end: ex2,
               desc: d.slice(0, 1e3),
               agency: "NDMA SACHET",
               uri: link || "https://sachet.ndma.gov.in/",
@@ -2363,10 +2369,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     async run() {
       const d = xmlDoc(await viaRelay("https://www.tsunami.gov/events/xml/PHEBAtom.xml"));
       return Array.from(d.getElementsByTagName("entry")).slice(0, 10).filter((e) => Date.now() - Date.parse(tx(e, "updated")) < 864e5).map((e) => {
-        const t = tx(e, "title"), s = stripHtml(tx(e, "summary")), pt = (tx(e, "point") || "").split(/\s+/).map(Number);
-        if (/no tsunami threat/i.test(t + s)) return null;
-        const tier = /WARNING/i.test(t + s) ? 3 : /THREAT|ADVISORY/i.test(t + s) ? 2 : 1;
-        const w = warning({ src: "ptwc", id: "ptwc:" + tx(e, "id"), title: t, hazard: "TSUNAMI", area: "Pacific", lat: isFinite(pt[0]) ? pt[0] : null, lon: isFinite(pt[1]) ? pt[1] : null, severity: tierSev(tier), start: Date.parse(tx(e, "updated")), desc: s.slice(0, 900), agency: "Pacific Tsunami Warning Center", uri: "https://www.tsunami.gov/", cc: "" });
+        const t2 = tx(e, "title"), s = stripHtml(tx(e, "summary")), pt = (tx(e, "point") || "").split(/\s+/).map(Number);
+        if (/no tsunami threat/i.test(t2 + s)) return null;
+        const tier = /WARNING/i.test(t2 + s) ? 3 : /THREAT|ADVISORY/i.test(t2 + s) ? 2 : 1;
+        const w = warning({ src: "ptwc", id: "ptwc:" + tx(e, "id"), title: t2, hazard: "TSUNAMI", area: "Pacific", lat: isFinite(pt[0]) ? pt[0] : null, lon: isFinite(pt[1]) ? pt[1] : null, severity: tierSev(tier), start: Date.parse(tx(e, "updated")), desc: s.slice(0, 900), agency: "Pacific Tsunami Warning Center", uri: "https://www.tsunami.gov/", cc: "" });
         if (w.lat != null) w.sites = sitesNear(w.lat, w.lon, CFG.ranges.tsunamiKm).map((x) => ({ code: x.code, km: x.km }));
         return w;
       }).filter(Boolean);
@@ -2385,7 +2391,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     async run() {
       const from = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10), j = await getJSON(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=FL;WF;DR&fromDate=${from}&alertlevel=Green;Orange;Red`);
       return (j.features || []).filter((f) => f.geometry && f.geometry.type === "Point" && String(f.properties.iscurrent) !== "false").map((f) => {
-        const p = f.properties, [lon, lat] = f.geometry.coordinates, t = GD_T[p.eventtype] || ["Event", "weather", "WEATHER"];
+        const p = f.properties, [lon, lat] = f.geometry.coordinates, t2 = GD_T[p.eventtype] || ["Event", "weather", "WEATHER"];
         if (!inAPAC(lat, lon)) return null;
         const lvl = { Red: 3, Orange: 2, Green: 1 }[p.alertlevel] || 1, sites = sitesNear(lat, lon, CFG.ranges.gdacsKm);
         return {
@@ -2393,8 +2399,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
           src: "gdacs",
           kind: "disaster",
           rule: "gdacs",
-          cat: t[1],
-          title: `${p.alertlevel || "Green"} ${t[0].toLowerCase()} alert — ${p.country || p.name || ""}`,
+          cat: t2[1],
+          title: `${p.alertlevel || "Green"} ${t2[0].toLowerCase()} alert — ${p.country || p.name || ""}`,
           tier: sites.length ? lvl : Math.max(0, lvl - 1),
           lat,
           lon,
@@ -2402,7 +2408,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
           url: p.url && p.url.report || "https://www.gdacs.org/",
           text: [(p.severitydata || {}).severitytext, p.description].filter(Boolean).join(". "),
           sites: sites.map((x) => ({ code: x.code, km: x.km })),
-          extra: { hazard: t[2], level: p.alertlevel }
+          extra: { hazard: t2[2], level: p.alertlevel }
         };
       }).filter(Boolean);
     }
@@ -2477,12 +2483,12 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     };
   }
   async function jmaStorms() {
-    const J = "https://www.jma.go.jp/bosai/typhoon/data/", list = asArr(await getJSON(J + "targetTc.json")).filter((t) => t && t.tropicalCyclone);
-    return (await Promise.all(list.map(async (t) => {
+    const J = "https://www.jma.go.jp/bosai/typhoon/data/", list = asArr(await getJSON(J + "targetTc.json")).filter((t2) => t2 && t2.tropicalCyclone);
+    return (await Promise.all(list.map(async (t2) => {
       try {
         let title = null, now = null;
         const fc = [];
-        asArr(await getJSON(J + t.tropicalCyclone + "/specifications.json")).forEach((p) => {
+        asArr(await getJSON(J + t2.tropicalCyclone + "/specifications.json")).forEach((p) => {
           if (p.part === "title") title = p;
           else if (p.position && p.position.deg) {
             const q = jmaPart(p);
@@ -2491,7 +2497,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
             else fc.push(q);
           }
         });
-        return title && now ? { id: t.tropicalCyclone, number: title.typhoonNumber, name: title.name && title.name.en || t.tropicalCyclone, issue: title.issue && title.issue.UTC ? Date.parse(title.issue.UTC) : null, now, fc: fc.sort((a, b) => a.h - b.h) } : null;
+        return title && now ? { id: t2.tropicalCyclone, number: title.typhoonNumber, name: title.name && title.name.en || t2.tropicalCyclone, issue: title.issue && title.issue.UTC ? Date.parse(title.issue.UTC) : null, now, fc: fc.sort((a, b) => a.h - b.h) } : null;
       } catch (e) {
         return null;
       }
@@ -2518,8 +2524,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     (gj.features || []).forEach((f) => {
       const g = f.geometry || {}, p = f.properties || {}, cls = String(p.Class || p.class || p.polygonlabel || "").toLowerCase();
       if (g.type === "Point") {
-        const [lon, lat] = g.coordinates, isF = /^(false|0|no)$/i.test(String(p.actual).trim()) || /forecast/.test(cls), t = Date.parse(String(p.trackdate || p.todate || "").replace(" ", "T")) || null, kmh = parseFloat(p.windspeed || p.wind_speed);
-        (isF ? out.fc : out.obs).push({ lat, lon, t, kt: isFinite(kmh) ? kts(kmh) : null });
+        const [lon, lat] = g.coordinates, isF = /^(false|0|no)$/i.test(String(p.actual).trim()) || /forecast/.test(cls), t2 = Date.parse(String(p.trackdate || p.todate || "").replace(" ", "T")) || null, kmh = parseFloat(p.windspeed || p.wind_speed);
+        (isF ? out.fc : out.obs).push({ lat, lon, t: t2, kt: isFinite(kmh) ? kts(kmh) : null });
       } else if (/polygon/i.test(g.type) && (/cone|uncert/.test(cls) || /cone/.test(JSON.stringify(p).toLowerCase()))) out.cone.push(g);
     });
     out.obs.sort((a, b) => (a.t || 0) - (b.t || 0));
@@ -2582,21 +2588,21 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         storms.push({ id: "gdacs" + g.eventid, name: g.name || "Tropical cyclone", src: "GDACS", gdacs: g, now: { lat: last.lat, lon: last.lon, kt: last.kt ?? kts(g.kmh), time: last.t, stormKm: 0, probKm: 0 }, fc: (g.track ? g.track.fc : []).map((p) => ({ lat: p.lat, lon: p.lon, kt: p.kt, time: p.t, stormKm: 0, probKm: 0 })) });
       });
       return storms.map((s) => {
-        const ex = exposure(s), worst = ex[0] ? ex[0].level : null, c = tcClass(s.now.kt), first = ex.filter((x) => x.level !== "watch").map((x) => x.at).filter(Boolean).sort((a, b) => a - b)[0];
+        const ex2 = exposure(s), worst = ex2[0] ? ex2[0].level : null, c = tcClass(s.now.kt), first = ex2.filter((x) => x.level !== "watch").map((x) => x.at).filter(Boolean).sort((a, b) => a - b)[0];
         return {
           id: "tc:" + norm(s.name || s.id),
           src: "cyclones",
           kind: "cyclone",
           rule: "cyclone",
           cat: "weather",
-          title: `${c[1]} ${s.name}${worst === "direct" ? ` — storm-force winds forecast at ${ex.filter((x) => x.level === "direct").length} site(s)` : worst === "possible" ? " — sites inside the 70 % circle" : worst === "watch" ? " — sites within watch range" : ""}`,
+          title: `${c[1]} ${s.name}${worst === "direct" ? ` — storm-force winds forecast at ${ex2.filter((x) => x.level === "direct").length} site(s)` : worst === "possible" ? " — sites inside the 70 % circle" : worst === "watch" ? " — sites within watch range" : ""}`,
           tier: worst === "direct" ? 3 : worst === "possible" ? 2 : worst === "watch" ? 1 : 0,
           lat: s.now.lat,
           lon: s.now.lon,
           t: s.issue || s.now.time || Date.now(),
           url: s.src === "JMA" ? "https://www.jma.go.jp/bosai/map.html#contents=typhoon&lang=en" : s.gdacs.report,
           text: `${s.now.kt != null ? Math.round(s.now.kt) + " kt (" + Math.round(s.now.kt * 1.852) + " km/h)" : "wind unknown"}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}${s.now.course ? ", moving " + s.now.course + (s.now.speed ? " at " + s.now.speed + " km/h" : "") : ""}${s.now.stormKm ? `, storm-force winds up to ${s.now.stormKm} km` : ""}. Source: ${s.src === "JMA" ? "JMA official forecast" + (s.gdacs ? " with GDACS " + s.gdacs.level + " alert" : "") : "GDACS (JTWC/NOAA advisories)"}.${first ? " Damaging winds first reach a site around " + sgt(first) + " SGT." : ""}`,
-          sites: ex.map((x) => ({ code: x.code, km: x.km, level: x.level, at: x.at, closestAt: x.closestAt, until: x.until, open: x.open })),
+          sites: ex2.map((x) => ({ code: x.code, km: x.km, level: x.level, at: x.at, closestAt: x.closestAt, until: x.until, open: x.open })),
           citySites: false,
           extra: { storm: s, cone: s.gdacs && s.gdacs.track ? s.gdacs.track.cone : [], obs: s.gdacs && s.gdacs.track ? s.gdacs.track.obs : [] }
         };
@@ -2622,9 +2628,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
           let summary = "", sources2 = "";
           try {
             const h = new DOMParser().parseFromString(tx(it, "description"), "text/html");
-            [...h.querySelectorAll("p")].map((p) => p.textContent.trim()).filter(Boolean).forEach((t) => {
-              if (/^Sources?:/i.test(t)) sources2 = t.replace(/^Sources?:\s*/i, "");
-              else summary += (summary ? " " : "") + t;
+            [...h.querySelectorAll("p")].map((p) => p.textContent.trim()).filter(Boolean).forEach((t2) => {
+              if (/^Sources?:/i.test(t2)) sources2 = t2.replace(/^Sources?:\s*/i, "");
+              else summary += (summary ? " " : "") + t2;
             });
           } catch (e) {
           }
@@ -2715,7 +2721,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   })();
   function ccFor(name) {
     const n = String(name || "").toLowerCase().replace(/\s+(travel advisory|travel advice)$/, "").replace(/^the /, "").trim();
-    for (const t of [n, n.replace(/\s*\(.*\)\s*/g, "").trim(), (/\(([^)]+)\)/.exec(n) || [])[1], n.split(",")[0].trim()]) if (t && NAME_CC[t]) return NAME_CC[t];
+    for (const t2 of [n, n.replace(/\s*\(.*\)\s*/g, "").trim(), (/\(([^)]+)\)/.exec(n) || [])[1], n.split(",")[0].trim()]) if (t2 && NAME_CC[t2]) return NAME_CC[t2];
     return null;
   }
   var siteCC = () => new Set(SITES.map((s) => ccFor(s.country)).filter(Boolean));
@@ -2723,10 +2729,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     const m = /^(\d{4})(\d\d)(\d\d)T?(\d\d)(\d\d)(\d\d)/.exec(String(s || ""));
     return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : Date.now();
   };
-  function unrestClass(t) {
-    t = String(t || "").toLowerCase();
-    if (/\bkill(ed|ing)?\b|\bdead\b|\bdeaths?\b|\bfatal\b|shot dead|gunfire|live rounds|explosion|\bbomb(ed|ing)?\b|martial law|\bcoup\b|massacre/.test(t)) return [2, "severe / violent"];
-    if (/clash(es|ed)?|violence|tear gas|injured|wounded|arrest(ed|s)?|crackdown|\briot(s|ing)?\b|water cannon|curfew|detain(ed|s)?/.test(t)) return [1, "clashes / unrest"];
+  function unrestClass(t2) {
+    t2 = String(t2 || "").toLowerCase();
+    if (/\bkill(ed|ing)?\b|\bdead\b|\bdeaths?\b|\bfatal\b|shot dead|gunfire|live rounds|explosion|\bbomb(ed|ing)?\b|martial law|\bcoup\b|massacre/.test(t2)) return [2, "severe / violent"];
+    if (/clash(es|ed)?|violence|tear gas|injured|wounded|arrest(ed|s)?|crackdown|\briot(s|ing)?\b|water cannon|curfew|detain(ed|s)?/.test(t2)) return [1, "clashes / unrest"];
     return [0, "protest / demonstration"];
   }
   var UNREST_COUNTRIES = [
@@ -2826,7 +2832,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       const out = [], groups = [CITIES.slice(0, 11), CITIES.slice(11, 21), CITIES.slice(21)];
       for (let i = 0; i < groups.length; i++) {
         if (i) await sleep(6500);
-        const q = `(${groups[i].map((c) => c.name.includes(" ") ? `"${c.name}"` : c.name).join(" OR ")}) (${NEWS_TERMS.map((t) => t.includes(" ") ? `"${t}"` : t).join(" OR ")}) sourcelang:english`;
+        const q = `(${groups[i].map((c) => c.name.includes(" ") ? `"${c.name}"` : c.name).join(" OR ")}) (${NEWS_TERMS.map((t2) => t2.includes(" ") ? `"${t2}"` : t2).join(" OR ")}) sourcelang:english`;
         const r = await fetchText(`https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=ArtList&format=json&maxrecords=75&sort=DateDesc&timespan=12h`, {}, 3e4);
         let j = null;
         try {
@@ -2881,11 +2887,11 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         try {
           const doc = xmlDoc(await viaRelay(`https://${EMB[cc]}/?s=demonstration&feed=rss2`));
           [...doc.getElementsByTagName("item")].slice(0, 10).forEach((it) => {
-            const title = tx(it, "title"), link = tx(it, "link"), t = Date.parse(tx(it, "pubDate")) || 0, body = stripHtml(tx(it, "encoded") || tx(it, "description"));
-            if (!/demonstrat|protest|rally|march/i.test(title + " " + body) || Date.now() - t > 21 * 864e5) return;
+            const title = tx(it, "title"), link = tx(it, "link"), t2 = Date.parse(tx(it, "pubDate")) || 0, body = stripHtml(tx(it, "encoded") || tx(it, "description"));
+            if (!/demonstrat|protest|rally|march/i.test(title + " " + body) || Date.now() - t2 > 21 * 864e5) return;
             const cities = CITIES.filter((c) => c.cc === cc && (title + " " + body).toLowerCase().includes(c.name.toLowerCase())).map((c) => c.name);
             const size = (/(\d[\d,]*)(?:\s*(?:-|–|to)\s*(\d[\d,]*))?\s+(?:expected\s+)?(?:protesters|demonstrators|participants|people)/i.exec(body) || [])[0];
-            out.push({ id: "emb:" + (link || title), src: "embassy", kind: "unrest", rule: "unrest", cat: "protest", title: `${CC_NAME[cc] || cc}: ${title}`, tier: cities.length ? 2 : 1, cc, t, url: link, text: body.slice(0, 900) + (size ? ` Expected: ${size}.` : ""), cities });
+            out.push({ id: "emb:" + (link || title), src: "embassy", kind: "unrest", rule: "unrest", cat: "protest", title: `${CC_NAME[cc] || cc}: ${title}`, tier: cities.length ? 2 : 1, cc, t: t2, url: link, text: body.slice(0, 900) + (size ? ` Expected: ${size}.` : ""), cities });
           });
         } catch (e) {
           errs.push(cc + ": " + e.message);
@@ -3147,8 +3153,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       j.forEach((r, i) => {
         const c = r.current || {};
         let fmax = null;
-        if (r.hourly && r.hourly.us_aqi) r.hourly.time.forEach((t, k) => {
-          const ts = Date.parse(t + "Z");
+        if (r.hourly && r.hourly.us_aqi) r.hourly.time.forEach((t2, k) => {
+          const ts = Date.parse(t2 + "Z");
           if (ts > Date.now() && r.hourly.us_aqi[k] != null) fmax = Math.max(fmax || 0, r.hourly.us_aqi[k]);
         });
         STATE.city.cams[CITIES[i].name] = { aqi: c.us_aqi != null ? Math.round(c.us_aqi) : null, pm25: c.pm2_5, pm10: c.pm10, fmax: fmax != null ? Math.round(fmax) : null };
@@ -3206,9 +3212,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         const d = r.daily;
         if (!d || !d.river_discharge) return;
         const past = [], fut = [];
-        d.time.forEach((t, k) => {
+        d.time.forEach((t2, k) => {
           const v = d.river_discharge[k];
-          if (v != null) (t < today ? past : fut).push(v);
+          if (v != null) (t2 < today ? past : fut).push(v);
         });
         if (!past.length || !fut.length) return;
         const med = past.slice().sort((a, b) => a - b)[Math.floor(past.length / 2)], peak = Math.max(...fut);
@@ -3268,7 +3274,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     siteLayer = L.layerGroup().addTo(map);
     shakeLayer = L.layerGroup().addTo(map);
     layers = L.layerGroup().addTo(map);
-    $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}<span class="sep"></span>${[["ab", "A / B"], ["c", "C, C-PE"], ["e", "Edge"], ["o", "Office"]].map(([k, l]) => `<button class="lgcls" data-lgcls="${k}" aria-pressed="${!HIDE.has(k)}" title="Show or hide these sites on the map"><i class="sitedot ${k}"></i>${l}</button>`).join("")}<span id="shakeNote"></span></div>
+    $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t2, i) => `<span><i style="background:var(--t${i})"></i>${esc(t2.label)}</span>`).join("")}<span class="sep"></span>${[["ab", "A / B"], ["c", "C, C-PE"], ["e", "Edge"], ["o", "Office"]].map(([k, l]) => `<button class="lgcls" data-lgcls="${k}" aria-pressed="${!HIDE.has(k)}" title="Show or hide these sites on the map"><i class="sitedot ${k}"></i>${l}</button>`).join("")}<span id="shakeNote"></span></div>
     <select class="basesel" aria-label="Basemap">${Object.entries(BASE_NAMES).map(([k, l]) => `<option value="${k}"${load("basemap", "auto") === k ? " selected" : ""}>${l}</option>`).join("")}</select>`);
     $("#mapcell .basesel").onchange = (e) => {
       save("basemap", e.target.value);
@@ -3296,9 +3302,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   var SHAKE = {};
   var MMI_COL = ["#ffffff", "#ffffff", "#bfccff", "#a0e6ff", "#80ffff", "#7aff93", "#ffff00", "#ffc800", "#ff9100", "#ff0000", "#c80000"];
   var shakeFor = null;
-  function shakeNote(t) {
+  function shakeNote(t2) {
     const n = $("#shakeNote");
-    if (n) n.textContent = t || "";
+    if (n) n.textContent = t2 || "";
   }
   async function shakeMap(s) {
     if (shakeFor === s.key) return;
@@ -3484,20 +3490,20 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     ms = ms || (tier >= 2 ? 8e3 : 3500);
     const box2 = $("#toasts");
     while (box2.children.length >= 3) box2.firstElementChild.remove();
-    const t = document.createElement("div");
-    t.className = "toast";
-    if (tier != null) t.style.setProperty("--c", `var(--t${tier})`);
-    t.innerHTML = `<b>${esc(title)}</b>${body ? esc(body) : ""}`;
-    t.onclick = () => {
-      t.remove();
+    const t2 = document.createElement("div");
+    t2.className = "toast";
+    if (tier != null) t2.style.setProperty("--c", `var(--t${tier})`);
+    t2.innerHTML = `<b>${esc(title)}</b>${body ? esc(body) : ""}`;
+    t2.onclick = () => {
+      t2.remove();
       if (go2) go2();
     };
-    box2.appendChild(t);
-    setTimeout(() => t.remove(), ms);
+    box2.appendChild(t2);
+    setTimeout(() => t2.remove(), ms);
   }
-  var tierWord = (t) => `<span class="tierword t${t}">${esc(TIER[t].label)}</span>`;
+  var tierWord = (t2) => `<span class="tierword t${t2}">${esc(TIER[t2].label)}</span>`;
   var priChip = (p) => `<span class="pri ${p}">${p}</span>`;
-  var when = (t) => `<span title="${esc(sgt(t))} SGT">${esc(ago(t))}</span>`;
+  var when = (t2) => `<span title="${esc(sgt(t2))} SGT">${esc(ago(t2))}</span>`;
   function dueText(ms) {
     return ms < 0 ? `<span class="late">late ${esc(dur(-ms))}</span>` : ms < 5 * 6e4 ? `<span class="soon">due in ${esc(dur(ms))}</span>` : `due in ${esc(dur(ms))}`;
   }
@@ -3515,7 +3521,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
 
   // src/ui/brief.js
   var RISK = { direct: "In the path", possible: "May be affected", watch: "Worth watching" };
-  var hhmm = (t) => t ? sgt(t) + " SGT" : "—";
+  var hhmm = (t2) => t2 ? sgt(t2) + " SGT" : "—";
   function briefFor(s) {
     const e = s.extra || {}, L2 = [];
     L2.push(`${s.title}`, `${KINDS[s.kind].label} · ${TIER[s.tier].label} · reported ${sgt(s.t)} SGT${s.end ? ", until " + sgt(s.end) + " SGT" : ""}`);
@@ -3577,10 +3583,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     video.addEventListener("playing", () => msg(""));
     return box;
   }
-  function msg(t) {
+  function msg(t2) {
     const m = box.querySelector(".tvmsg");
-    m.hidden = !t;
-    m.innerHTML = t ? `<div>${t}</div>` : "";
+    m.hidden = !t2;
+    m.innerHTML = t2 ? `<div>${t2}</div>` : "";
   }
   function youtube() {
     const c = CHANNELS[ch];
@@ -3784,11 +3790,288 @@ PSOC`
     return `mailto:${encodeURIComponent(d.to || "")}?subject=${encodeURIComponent(d.subject || d.text.split("\n")[0])}&body=${encodeURIComponent(d.text)}`;
   }
   function asHtml(text) {
-    const e = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const e = (t2) => t2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return text.split(/\n{2,}/).map((p) => `<p>${e(p).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")}</p>`).join("");
   }
 
+  // src/llm.js
+  var MODELS = { "claude-sonnet-5-5": "Claude Sonnet 5.5 — fast, good for most drafting", "claude-opus-5-5": "Claude Opus 5.5 — slower, strongest at following a strict style" };
+  var llmReady = () => CFG.llm.provider === "gateway" ? !!CFG.llm.url : !!CFG.keys.claude;
+  var llmName = () => CFG.llm.provider === "gateway" ? "the company gateway" : (MODELS[CFG.llm.model] || CFG.llm.model).split(" — ")[0];
+  async function llm({ system: system2, messages, max = 1800 }) {
+    if (!llmReady()) throw new Error("connect a language model in Settings › Writing style first");
+    const gw = CFG.llm.provider === "gateway", url = gw ? CFG.llm.url : "https://api.anthropic.com/v1/messages";
+    const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
+    if (gw) {
+      if (CFG.llm.header && CFG.llm.headerValue) headers[CFG.llm.header] = CFG.llm.headerValue;
+    } else Object.assign(headers, { "x-api-key": CFG.keys.claude, "anthropic-dangerous-direct-browser-access": "true" });
+    let r;
+    try {
+      r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ model: CFG.llm.model || "claude-sonnet-5-5", max_tokens: max, system: system2, messages }) });
+    } catch (e) {
+      throw new Error(gw ? "the gateway could not be reached from this browser" : "api.anthropic.com could not be reached from this network");
+    }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? "the key was rejected" : j.error && j.error.message || "HTTP " + r.status);
+    return (j.content || []).map((b) => b.text || "").join("").trim();
+  }
+
+  // src/style.js
+  var TYPES = { sitrep: "SITREP", handover: "Shift handover", leadership: "Leadership update", welfare: "Welfare update", intel: "Intelligence Channel post", stakeholders: "Site stakeholders email", closeout: "Close-out report", note: "Log note or summary" };
+  var GUIDE = `Write as PSOC, in the third person: "PSOC has identified", "PSOC is monitoring". Never "I" or "we".
+Lead with what happened, where and when; then the impact to personnel, sites and operations; then what PSOC is doing.
+State facts only. Mark anything not yet confirmed "(unconfirmed)", or "(confirm)" where a value is still needed. No speculation and no alarming adjectives.
+Times on the 24-hour clock with the zone: "1415 SGT", or "0614 hours (UTC)" in leadership updates. Dates as "14 Oct 2026".
+Sites by code (TOK39); distances in km; earthquakes as "M6.1"; shaking as "MMI IV"; wind in km/h.
+Name official sources in full on first use: "the U.S. Geological Survey (USGS)", "the Japan Meteorological Agency (JMA)".
+Short paragraphs. Sentences under 30 words. Plain words.
+Leadership and welfare updates end with "Monitoring is ongoing."
+Use "datacenter" as one word.`;
+  var SITREP_EX = `PSOC APAC | Daily Situation Report
+14 Oct 2026
+
+Executive summary
+This report from the Physical Security Operations Center (PSOC) includes an overview of the current events in APAC and is provided for situational awareness.
+Assigned PSOC officer: (name)
+
+Regional events
+EVENT 1 | STATUS: Active
+Country: Japan
+Impacted area: Tokyo Region (mainland)
+Event category: Adverse Weather (Typhoon/Tropical Storm)
+Effective dates: From: 14 Oct 2026 To: 15 Oct 2026
+Time identified: 14 Oct 2026, 0655 SGT
+Description: Very strong Typhoon TESTSTORM (No. 2614) is forecast to bring storm-force winds to the Tokyo area from 0855 SGT. The Japan Meteorological Agency (JMA) has issued a Level 3 heavy rain warning for the Tokyo Region.
+
+Closest datacenter(s)
+Site code | Site class | Proximity (km) | Operational status
+TOK51 | Class A | 5 | Operational
+TOK39 | Class C | 5 | Operational
+
+Closest corporate office(s): Demo Corp Office (Tokyo)
+Data source strength: High — official JMA warning and forecast track.`;
+  var LEAD_EX = `Hachioji, Japan | Earthquake | M6.1
+
+At 1414 hours (UTC), PSOC has identified a magnitude 6.1 earthquake approximately 40 km south of Hachioji, Japan, at a depth of 30 km.
+
+No tsunami warning has been issued. The PAGER alert level was assessed as Yellow by the U.S. Geological Survey (USGS).
+
+The closest site, located in Tokyo, is approximately 37 km north-east of the epicenter. At this time, no impacts to personnel, assets, or operations have been identified.
+
+Monitoring is ongoing.`;
+  var WELF_EX = `Following updates from welfare checks on site:
+
+At the time of reporting, no impacts to personnel, assets, or operations have been identified. Welfare checks with personnel at TOK39 and TOK51 confirmed normal operations and personnel safety.
+
+Monitoring is ongoing.`;
+  var ex = (type, text) => ({ id: "builtin-" + type, text, title: "From the PULSE template", builtin: true });
+  var DEFAULTS2 = {
+    guide: GUIDE,
+    maxWords: 30,
+    avoid: ["!", "ASAP", "FYI", "kindly", "please be informed", "I think", "maybe", "probably", "massive", "huge", "etc."],
+    prefer: [["data center", "datacenter"], ["data centre", "datacenter"], ["datacentre", "datacenter"], ["Singapore time", "SGT"], ["e-mail", "email"], ["approx.", "approximately"]],
+    types: {
+      sitrep: { headings: ["Executive summary", "Regional events"], endsWith: "", examples: [ex("sitrep", SITREP_EX)] },
+      handover: { headings: ["OPEN ESCALATIONS", "WAITING FOR A DECISION", "ACTIONS FOR THE INCOMING SHIFT"], endsWith: "", examples: [] },
+      leadership: { headings: [], endsWith: "Monitoring is ongoing.", examples: [ex("leadership", LEAD_EX)] },
+      welfare: { headings: [], endsWith: "Monitoring is ongoing.", examples: [ex("welfare", WELF_EX)] },
+      intel: { headings: [], endsWith: "", examples: [] },
+      stakeholders: { headings: [], endsWith: "", examples: [] },
+      closeout: { headings: ["Summary"], endsWith: "", examples: [] },
+      note: { headings: [], endsWith: "", examples: [] }
+    }
+  };
+  var clone = (o) => JSON.parse(JSON.stringify(o));
+  function merged() {
+    const s = load("style", null), d = clone(DEFAULTS2);
+    if (!s) return d;
+    const out = Object.assign(d, s, { types: d.types });
+    Object.keys(d.types).forEach((k) => {
+      if (s.types && s.types[k]) out.types[k] = Object.assign(d.types[k], s.types[k]);
+    });
+    return out;
+  }
+  var STYLE = merged();
+  function saveStyle() {
+    save("style", STYLE);
+    emit("style");
+  }
+  function resetStyle() {
+    save("style", null);
+    STYLE = merged();
+    emit("style");
+  }
+  function addExample(type, text, title, by) {
+    STYLE.types[type].examples.unshift({ id: nid("ex"), text: String(text).trim(), title: title || "Example", by: by || "", at: Date.now() });
+    STYLE.types[type].examples = STYLE.types[type].examples.slice(0, 12);
+    saveStyle();
+  }
+  function removeExample(type, id) {
+    STYLE.types[type].examples = STYLE.types[type].examples.filter((e) => e.id !== id);
+    saveStyle();
+  }
+  var styleBrief = () => `
+
+HOUSE STYLE — follow it for anything you draft:
+${STYLE.guide}
+Avoid: ${STYLE.avoid.join(", ")}.`;
+  var reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var wordRe = (w) => /^[\w ]+$/.test(w) ? new RegExp(`\\b${reEsc(w)}\\b`, "gi") : new RegExp(reEsc(w), "gi");
+  function lint(text, type) {
+    const t2 = String(text || ""), cfg = STYLE.types[type] || {}, out = [], add = (level, msg2, fix) => out.push({ level, msg: msg2, fix: !!fix });
+    STYLE.avoid.forEach((w) => {
+      const m = t2.match(wordRe(w));
+      if (m) add("error", `Avoid “${w}”${m.length > 1 ? ` (${m.length}×)` : ""}`);
+    });
+    STYLE.prefer.forEach(([a, b]) => {
+      const m = t2.match(wordRe(a));
+      if (m) add("error", `Write “${b}”, not “${a}”`, true);
+    });
+    const fp = t2.match(/\b(I|I'm|I've|we|we're|we've)\b/g);
+    if (fp && type !== "note") add("error", `First person (${[...new Set(fp)].join(", ")}): write as PSOC`);
+    const ampm = t2.match(/\b\d{1,2}(?::\d\d)?\s?(?:am|pm|a\.m\.|p\.m\.)(?=\W|$)/gi);
+    if (ampm) add("error", `Use the 24-hour clock with a zone, not “${ampm[0]}”`);
+    const long = t2.replace(/\n+/g, " . ").split(/(?<=[.?!])\s+/).filter((sn) => sn.split(/\s+/).filter(Boolean).length > STYLE.maxWords);
+    if (long.length) add("warn", `${long.length} sentence${long.length === 1 ? "" : "s"} over ${STYLE.maxWords} words: “${long[0].split(/\s+/).slice(0, 8).join(" ")}…”`);
+    (cfg.headings || []).forEach((h) => {
+      if (!new RegExp(`^\\s*${reEsc(h)}\\b`, "im").test(t2)) add("error", `Missing heading “${h}”`);
+    });
+    if (cfg.endsWith && !t2.trim().endsWith(cfg.endsWith)) add("error", `End with “${cfg.endsWith}”`, true);
+    const ph = t2.match(/\[[^\]\n]{2,40}\]/g);
+    if (ph) add("error", `Template placeholder left in: ${ph[0]}`);
+    if (/ {2,}| ,|\s+\./.test(t2)) add("warn", "Stray spaces", true);
+    const conf = (t2.match(/\((?:confirm|unconfirmed)\)/gi) || []).length;
+    if (conf) add("info", `${conf} item${conf === 1 ? "" : "s"} marked to confirm before sending`);
+    return out;
+  }
+  function fixLocal(text, type) {
+    let t2 = String(text || "");
+    const cfg = STYLE.types[type] || {};
+    STYLE.prefer.forEach(([a, b]) => {
+      t2 = t2.replace(wordRe(a), b);
+    });
+    t2 = t2.replace(/!+/g, ".").replace(/[ \t]{2,}/g, " ").replace(/ ,/g, ",").replace(/[ \t]+\./g, ".");
+    if (cfg.endsWith && !t2.trim().endsWith(cfg.endsWith)) t2 = t2.trimEnd() + "\n\n" + cfg.endsWith;
+    return t2;
+  }
+  var facts = (t2) => new Set([...String(t2).match(/\b[A-Z]{2,5}\d{1,3}\b/g) || [], ...String(t2).replace(/(\d):(\d\d)/g, "$1$2").match(/\d+(?:\.\d+)?/g) || []].map((x) => x.replace(/^0+(?=\d)/, "")));
+  function newFacts(before, after) {
+    const a = facts(before);
+    return [...facts(after)].filter((x) => !a.has(x) && !/^(19|20)\d\d$/.test(x) && !/^[0-3]?\d$/.test(x));
+  }
+  function system(type) {
+    const cfg = STYLE.types[type] || {}, exs = (cfg.examples || []).slice(0, 6);
+    return `You rewrite text for a physical security operations center (PSOC) into the organisation's house style. Match the examples' structure, headings, order, tone, punctuation and formatting as closely as the content allows.
+Hard rules: keep every fact, name, number, time, date, distance and site code exactly as given in the draft. Do not add facts. Do not drop facts. Where the house format needs a value the draft does not have, write (confirm). Output only the rewritten text, with no preamble or commentary.
+<style_guide>
+${STYLE.guide}
+Sentences under ${STYLE.maxWords} words.
+</style_guide>
+<avoid>${STYLE.avoid.join(" | ")}</avoid>
+<preferred_terms>${STYLE.prefer.map(([a, b]) => `${b} (not ${a})`).join("; ")}</preferred_terms>
+${cfg.headings && cfg.headings.length ? `<required_headings>${cfg.headings.join(" | ")}</required_headings>
+` : ""}${cfg.endsWith ? `<must_end_with>${cfg.endsWith}</must_end_with>
+` : ""}${exs.length ? `<examples type="${TYPES[type]}">
+${exs.map((e) => `<example>
+${e.text}
+</example>`).join("\n")}
+</examples>` : ""}`;
+  }
+  async function rewrite(text, type) {
+    if (!llmReady()) throw new Error("connect a language model in Settings › Writing style");
+    let out = await llm({ system: system(type), messages: [{ role: "user", content: `Rewrite this ${TYPES[type] || "text"} in the house style.
+<draft>
+${text}
+</draft>` }], max: 2500 });
+    out = fixLocal(out.replace(/^<draft>\s*|\s*<\/draft>$/g, ""), type);
+    let issues = lint(out, type).filter((i) => i.level === "error");
+    if (issues.length) {
+      out = fixLocal(await llm({ system: system(type), messages: [
+        { role: "user", content: `Rewrite this ${TYPES[type] || "text"} in the house style.
+<draft>
+${text}
+</draft>` },
+        { role: "assistant", content: out },
+        { role: "user", content: `That still breaks these house-style rules:
+${issues.map((i) => "- " + i.msg).join("\n")}
+Fix only those. Keep everything else, and keep every fact exactly. Output only the text.` }
+      ], max: 2500 }), type);
+      issues = lint(out, type).filter((i) => i.level === "error");
+    }
+    return { text: out, issues, added: newFacts(text, out) };
+  }
+
+  // src/ui/stylebar.js
+  var styleBar = (id, type) => `<div class="stylebar" data-sbar="${esc(id)}" data-stype="${esc(type)}"></div>`;
+  function paint(bar) {
+    const box2 = document.getElementById(bar.dataset.sbar);
+    if (!box2) return;
+    if (!box2.value.trim() && !NOTE[bar.dataset.sbar]) {
+      bar.innerHTML = "";
+      return;
+    }
+    const type = bar.dataset.stype, iss = lint(box2.value, type), err = iss.filter((i) => i.level !== "info"), fixable = iss.some((i) => i.fix);
+    bar.innerHTML = `<span class="sb-sum ${err.length ? "bad" : "ok"}">${err.length ? `${err.length} house-style point${err.length === 1 ? "" : "s"}` : "Meets the house style"}</span>
+    ${fixable ? `<button class="linkbtn" type="button" data-sfix>Fix wording</button>` : ""}${llmReady() ? `<button class="linkbtn" type="button" data-sllm>Rewrite in house style</button>` : err.length ? `<span class="help">To rewrite automatically, connect a language model in Settings › Writing style.</span>` : ""}
+    ${iss.length ? `<ul>${iss.map((i) => `<li class="${i.level}">${esc(i.msg)}</li>`).join("")}</ul>` : ""}${NOTE[bar.dataset.sbar] ? `<p class="sb-note">${NOTE[bar.dataset.sbar]}</p>` : ""}`;
+  }
+  function paintBars(root) {
+    (root || document).querySelectorAll("[data-sbar]").forEach(paint);
+  }
+  var set = (box2, v) => {
+    box2.value = v;
+    box2.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  var t = null;
+  var NOTE = {};
+  var PREV = {};
+  document.addEventListener("input", (e) => {
+    const id = e.target.id;
+    if (!id) return;
+    const bar = document.querySelector(`[data-sbar="${CSS.escape(id)}"]`);
+    if (!bar) return;
+    clearTimeout(t);
+    t = setTimeout(() => paint(bar), 250);
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-sfix],[data-sllm]");
+    if (!b) return;
+    const bar = b.closest("[data-sbar]"), box2 = bar && document.getElementById(bar.dataset.sbar);
+    if (!box2) return;
+    if (b.dataset.sfix !== void 0) {
+      set(box2, fixLocal(box2.value, bar.dataset.stype));
+      NOTE[bar.dataset.sbar] = "";
+      paint(bar);
+      return;
+    }
+    const before = box2.value;
+    b.disabled = true;
+    b.textContent = `Rewriting with ${llmName()}…`;
+    try {
+      const r = await rewrite(before, bar.dataset.stype);
+      set(box2, r.text);
+      PREV[bar.dataset.sbar] = before;
+      NOTE[bar.dataset.sbar] = `${r.added.length ? `<b>Check before sending:</b> these were not in your draft — ${esc(r.added.slice(0, 8).join(", "))}. ` : "Every figure and site code came from your draft. "}${r.issues.length ? "Some points are still open (listed above). " : ""}<button class="linkbtn" type="button" data-sundo>Undo the rewrite</button>`;
+      paint(bar);
+    } catch (err) {
+      toast("Could not rewrite", err.message, 2);
+      b.disabled = false;
+      b.textContent = "Rewrite in house style";
+    }
+  });
+  document.addEventListener("click", (e) => {
+    const u = e.target.closest("[data-sundo]");
+    if (!u) return;
+    const bar = u.closest("[data-sbar]"), box2 = bar && document.getElementById(bar.dataset.sbar);
+    if (!box2 || PREV[bar.dataset.sbar] == null) return;
+    set(box2, PREV[bar.dataset.sbar]);
+    PREV[bar.dataset.sbar] = null;
+    NOTE[bar.dataset.sbar] = "";
+    paint(bar);
+  });
+
   // src/ui/forms.js
+  var STYPE = { leadership: "leadership", welfare: "welfare", intel: "intel", stakeholders: "stakeholders" };
   var countryOfSites = (codes) => {
     const c = codes.map((x) => (siteBy(x) || {}).country).filter(Boolean);
     return c.sort((a, b) => c.filter((v) => v === b).length - c.filter((v) => v === a).length)[0] || "";
@@ -3814,8 +4097,8 @@ PSOC`
       $("#efCount").textContent = `— ${chosen.size} selected`;
     };
     const sop = () => {
-      const k = $("#efCat").value, c = cadenceFor(k), t = SOP_REF[k] || {};
-      $("#efSop").innerHTML = `${k === "protest" ? "Updates as it develops; no countdown. " : t.ttp ? `Updates: PSOC Manager every ${c.m} h, Intel / SLT every ${c.i} h (${esc(ttpName())}). ` : ""}<button class="linkbtn" type="button" id="efSopBtn">${esc(t.label || "")} procedure</button>`;
+      const k = $("#efCat").value, c = cadenceFor(k), t2 = SOP_REF[k] || {};
+      $("#efSop").innerHTML = `${k === "protest" ? "Updates as it develops; no countdown. " : t2.ttp ? `Updates: PSOC Manager every ${c.m} h, Intel / SLT every ${c.i} h (${esc(ttpName())}). ` : ""}<button class="linkbtn" type="button" id="efSopBtn">${esc(t2.label || "")} procedure</button>`;
       $("#efSopBtn").onclick = () => sopDialog($("#efCat").value);
     };
     const near = () => {
@@ -3895,29 +4178,30 @@ PSOC`
     dialog(
       opts.title || "Notify",
       `<p class="help">Edit, then copy into the channel or open it in your email app. Nothing is sent from the console.</p>${ds.map((d, i) => `<details class="draft"${i ? "" : " open"}><summary>${esc(d.label)}<span class="s">${d.to ? "to " + esc(d.to) : ""}</span></summary>
-      <textarea data-dtext="${i}">${esc(d.text)}</textarea><div class="actions"><button class="btn small" data-dcopy="${i}">Copy</button>${d.to !== void 0 ? `<a class="btn small" style="text-decoration:none" data-dmail="${i}" href="#">Email…</a>` : ""}${opts.onSent ? `<button class="btn small" data-dsent="${i}">Mark as sent</button>` : ""}</div></details>`).join("")}`,
+      <textarea data-dtext="${i}" id="dt${i}">${esc(d.text)}</textarea>${styleBar("dt" + i, STYPE[d.id] || "note")}<div class="actions"><button class="btn small" data-dcopy="${i}">Copy</button>${d.to !== void 0 ? `<a class="btn small" style="text-decoration:none" data-dmail="${i}" href="#">Email…</a>` : ""}${opts.onSent ? `<button class="btn small" data-dsent="${i}">Mark as sent</button>` : ""}</div></details>`).join("")}`,
       `<button class="btn" data-close>Close</button>${opts.item ? `<button class="btn primary" id="ncDone">Mark the item notified</button>` : ""}`,
       { wide: true }
     );
+    paintBars($("#dialog"));
     const text = (i) => $(`[data-dtext="${i}"]`).value;
     $("#dialog").onclick = async (e) => {
-      const t = e.target.closest("[data-dcopy],[data-dmail],[data-dsent]");
-      if (!t) return;
-      const i = +(t.dataset.dcopy ?? t.dataset.dmail ?? t.dataset.dsent), d = Object.assign({}, ds[i], { text: text(i) });
-      if (t.dataset.dcopy != null) {
+      const t2 = e.target.closest("[data-dcopy],[data-dmail],[data-dsent]");
+      if (!t2) return;
+      const i = +(t2.dataset.dcopy ?? t2.dataset.dmail ?? t2.dataset.dsent), d = Object.assign({}, ds[i], { text: text(i) });
+      if (t2.dataset.dcopy != null) {
         const ok = await copyText(d.text, asHtml(d.text));
-        t.textContent = ok ? "Copied" : "Copy failed";
+        t2.textContent = ok ? "Copied" : "Copy failed";
         audit("Copied message", d.label, sig ? sig.title : "");
       }
-      if (t.dataset.dmail != null) {
+      if (t2.dataset.dmail != null) {
         e.preventDefault();
         location.href = mailto(d);
         audit("Opened email", d.label, sig ? sig.title : "");
       }
-      if (t.dataset.dsent != null && opts.onSent) {
+      if (t2.dataset.dsent != null && opts.onSent) {
         opts.onSent(d);
-        t.textContent = "Recorded";
-        t.disabled = true;
+        t2.textContent = "Recorded";
+        t2.disabled = true;
       }
     };
     if ($("#ncDone")) $("#ncDone").onclick = () => {
@@ -3987,22 +4271,22 @@ PSOC`
     <span class="rt">${s.sites.length ? `<b>${s.sites.length} site${s.sites.length === 1 ? "" : "s"}</b>` : ""}${item ? item.status === "open" ? "in Inbox" : item.decision : ""}</span></button>`;
   }
   function detail(s) {
-    const e = s.extra || {}, item = INBOX.find((i) => i.key === "sig:" + s.key), facts = [["Level", tierWord(s.tier)], ["Source", `${esc(srcName(s.src))}${e.agency ? " — " + esc(e.agency) : ""}`], ["Reported", `${esc(sgt(s.t))} SGT (${esc(ago(s.t))})`]];
-    if (s.end) facts.push(["Until", esc(sgt(s.end)) + " SGT"]);
-    if (s.area) facts.push(["Area", esc(s.area)]);
-    if (s.cities.length) facts.push(["Cities", esc(s.cities.join(", "))]);
+    const e = s.extra || {}, item = INBOX.find((i) => i.key === "sig:" + s.key), facts2 = [["Level", tierWord(s.tier)], ["Source", `${esc(srcName(s.src))}${e.agency ? " — " + esc(e.agency) : ""}`], ["Reported", `${esc(sgt(s.t))} SGT (${esc(ago(s.t))})`]];
+    if (s.end) facts2.push(["Until", esc(sgt(s.end)) + " SGT"]);
+    if (s.area) facts2.push(["Area", esc(s.area)]);
+    if (s.cities.length) facts2.push(["Cities", esc(s.cities.join(", "))]);
     if (s.kind === "quake") {
-      facts.push(["Magnitude", `M${e.mag.toFixed(1)} (${magLabel(e.mag)}), depth ${Math.round(e.depth)} km`]);
-      if (e.topSite) facts.push(["Strongest at a site", `MMI ${roman(e.topMMI)} (${mmiWord(e.topMMI)}) at ${esc(e.topSite)}, ${Math.round(e.topKm)} km — estimated`]);
-      facts.push(["Tsunami", e.tsunami ? "<b>flag set by USGS</b>" : "no flag"]);
-      if (e.alert) facts.push(["PAGER", esc(e.alert)]);
-      if (e.emsc) facts.push(["EMSC", `M${e.emsc.mag.toFixed(1)}`]);
-      if (s.alarm) facts.push(["Alarm", s.alarm === "global" ? "global magnitude threshold" : "near-site threshold"]);
+      facts2.push(["Magnitude", `M${e.mag.toFixed(1)} (${magLabel(e.mag)}), depth ${Math.round(e.depth)} km`]);
+      if (e.topSite) facts2.push(["Strongest at a site", `MMI ${roman(e.topMMI)} (${mmiWord(e.topMMI)}) at ${esc(e.topSite)}, ${Math.round(e.topKm)} km — estimated`]);
+      facts2.push(["Tsunami", e.tsunami ? "<b>flag set by USGS</b>" : "no flag"]);
+      if (e.alert) facts2.push(["PAGER", esc(e.alert)]);
+      if (e.emsc) facts2.push(["EMSC", `M${e.emsc.mag.toFixed(1)}`]);
+      if (s.alarm) facts2.push(["Alarm", s.alarm === "global" ? "global magnitude threshold" : "near-site threshold"]);
     }
     if (s.kind === "cyclone") {
       const st = e.storm, c = tcClass(st.now.kt);
-      facts.push(["Class", `${c[1]}${st.number ? " (No. " + esc(st.number) + ")" : ""}`]);
-      if (st.now.hpa) facts.push(["Pressure", st.now.hpa + " hPa"]);
+      facts2.push(["Class", `${c[1]}${st.number ? " (No. " + esc(st.number) + ")" : ""}`]);
+      if (st.now.hpa) facts2.push(["Pressure", st.now.hpa + " hPa"]);
     }
     const siteRows = s.sites.slice(0, 60).map((x) => {
       const st = siteBy(x.code) || {};
@@ -4010,7 +4294,7 @@ PSOC`
     }).join("");
     const qs = s.kind === "quake" ? QSTATE[s.id] || {} : null;
     return `<div class="detail"><button class="back" data-wback>Back to the feed</button><h2>${esc(s.title)}</h2>
-    <dl class="facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>
+    <dl class="facts">${facts2.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>
     ${s.text ? `<p class="prose">${esc(s.text)}</p>` : ""}${e.instruction ? `<p class="prose"><b>Agency advice:</b> ${esc(e.instruction)}</p>` : ""}
     <div class="actions">${item && item.status === "open" ? `<button class="btn primary" data-goinbox="${esc(item.id)}">Decide in the Inbox</button>` : `<button class="btn primary" data-wesc>Escalate</button>`}
       <button class="btn" data-wnotify>Notify</button><button class="btn" data-wbrief>Copy brief</button>${!item ? `<button class="btn" data-wadd>Add to Inbox</button>` : ""}${s.url ? `<a class="btn" style="text-decoration:none" href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">Open the source</a>` : ""}</div>
@@ -4024,15 +4308,15 @@ PSOC`
   }
   var RISK2 = { direct: ["In the path", 3], possible: ["May be affected", 2], watch: ["Worth watching", 1] };
   function stormTiming(s) {
-    const t = (x) => x ? esc(sgt(x)) : "—", rows = s.sites.slice(0, 60);
+    const t2 = (x) => x ? esc(sgt(x)) : "—", rows = s.sites.slice(0, 60);
     if (!rows.length) return "";
     const first = rows.filter((x) => x.level !== "watch" && x.at).sort((a, b) => a.at - b.at)[0];
     const pts = [s.extra.storm.now].concat(s.extra.storm.fc || []), last = Math.max(0, ...pts.map((p) => p.h || 0)), h = Math.min(UI.tcHour || 0, last);
     const play2 = last ? `<div class="tcplay"><label for="tcR" class="help">Forecast position: <b id="tcL">${h ? "+" + h + " h, " + esc(sgt(Date.now() + h * 36e5)) + " SGT" : "now"}</b></label><input type="range" id="tcR" min="0" max="${last}" step="1" value="${h}" data-tcr></div>` : "";
-    return `<div class="sec"><h3>What to expect at our sites</h3>${play2}${first ? `<p class="prose">Damaging winds first reach <b>${esc(first.code)}</b> around <b>${t(first.at)} SGT</b>. Times follow the official forecast track hour by hour and move as each new advisory is issued.</p>` : `<p class="help">No site is forecast inside the damaging-wind area; sites listed are within watch range.</p>`}
+    return `<div class="sec"><h3>What to expect at our sites</h3>${play2}${first ? `<p class="prose">Damaging winds first reach <b>${esc(first.code)}</b> around <b>${t2(first.at)} SGT</b>. Times follow the official forecast track hour by hour and move as each new advisory is issued.</p>` : `<p class="help">No site is forecast inside the damaging-wind area; sites listed are within watch range.</p>`}
     <table class="tbl"><tr><th>Site</th><th>Risk</th><th>Damaging winds (SGT)</th><th>Closest</th><th>Closest at (SGT)</th></tr>${rows.map((x) => {
       const st = siteBy(x.code) || {}, r = RISK2[x.level] || [x.level, 0];
-      return `<tr${x.level === "direct" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button><div class="help">${esc(st.city || "")}</div></td><td><span class="tierword t${r[1]}">${esc(r[0])}</span></td><td>${x.level === "watch" ? "—" : t(x.at) + (x.open ? " to the end of the forecast" : x.until && x.until !== x.at ? " to " + t(x.until) : "")}</td><td>${Math.round(x.km)} km</td><td>${t(x.closestAt)}</td></tr>`;
+      return `<tr${x.level === "direct" ? ` class="hot"` : ""}><td><button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button><div class="help">${esc(st.city || "")}</div></td><td><span class="tierword t${r[1]}">${esc(r[0])}</span></td><td>${x.level === "watch" ? "—" : t2(x.at) + (x.open ? " to the end of the forecast" : x.until && x.until !== x.at ? " to " + t2(x.until) : "")}</td><td>${Math.round(x.km)} km</td><td>${t2(x.closestAt)}</td></tr>`;
     }).join("")}</table></div>`;
   }
   function cityOrder() {
@@ -4078,10 +4362,10 @@ PSOC`
     <div class="sec"><h3>Sites in ${esc(name)} (${sites.length})</h3>${Object.keys(byCls).length ? `<p class="help">${Object.entries(byCls).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${esc(k.replace("CLASS ", "Class "))} ${v}`).join(" · ")}</p>` : ""}<p class="help">${sites.map((x) => `<button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button>`).join(", ") || "None."}</p></div></div>`;
   }
   function outlookHtml(d) {
-    const D0 = d.daily || {}, D = new Proxy(D0, { get: (o, k) => o[k] || [] }), F = CFG.fc, W = CFG.wx, t = (v, warn, bad) => v >= bad ? 3 : v >= warn ? 2 : 0, r = (v) => v == null ? "—" : Math.round(v);
+    const D0 = d.daily || {}, D = new Proxy(D0, { get: (o, k) => o[k] || [] }), F = CFG.fc, W = CFG.wx, t2 = (v, warn, bad) => v >= bad ? 3 : v >= warn ? 2 : 0, r = (v) => v == null ? "—" : Math.round(v);
     return `<table class="tbl"><tr><th>Day</th><th>Weather</th><th>High / low</th><th>Rain</th><th>Chance</th><th>Gusts</th></tr>${D.time.map((day, i) => {
       const hi = D.temperature_2m_max[i], rain = D.precipitation_sum[i], g = D.wind_gusts_10m_max[i];
-      return `<tr><td>${esc((/* @__PURE__ */ new Date(day + "T00:00:00")).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</td><td>${D.weather_code[i] != null ? esc(wmo(D.weather_code[i])) : "—"}</td><td><span class="tierword t${t(hi, W.hotWarn, W.hotBad)}">${r(hi)}°</span> / ${r(D.temperature_2m_min[i])}°</td><td><span class="tierword t${t(rain, F.rainWarn, F.rainBad)}">${rain != null ? rain.toFixed(1) : "—"} mm</span></td><td>${D.precipitation_probability_max[i] ?? "—"} %</td><td><span class="tierword t${t(g, F.gustWarn, F.gustBad)}">${g != null ? Math.round(g) : "—"} km/h</span></td></tr>`;
+      return `<tr><td>${esc((/* @__PURE__ */ new Date(day + "T00:00:00")).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</td><td>${D.weather_code[i] != null ? esc(wmo(D.weather_code[i])) : "—"}</td><td><span class="tierword t${t2(hi, W.hotWarn, W.hotBad)}">${r(hi)}°</span> / ${r(D.temperature_2m_min[i])}°</td><td><span class="tierword t${t2(rain, F.rainWarn, F.rainBad)}">${rain != null ? rain.toFixed(1) : "—"} mm</span></td><td>${D.precipitation_probability_max[i] ?? "—"} %</td><td><span class="tierword t${t2(g, F.gustWarn, F.gustBad)}">${g != null ? Math.round(g) : "—"} km/h</span></td></tr>`;
     }).join("")}</table>
     <p class="help">Open-Meteo, ${d.auto ? "best available model" : "national model"}. Coloured by the same thresholds as the city board.</p>`;
   }
@@ -4108,9 +4392,9 @@ PSOC`
   }
   function bind(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site],[data-wbrief],[data-whist],[data-tv],[data-woutlook],[data-wkindgo]");
-      if (!t) return;
-      const d = t.dataset;
+      const t2 = e.target.closest("[data-wsel],[data-wback],[data-wkind],[data-wmode],[data-wesc],[data-wnotify],[data-wadd],[data-goinbox],[data-wcity],[data-wcityback],[data-site],[data-wbrief],[data-whist],[data-tv],[data-woutlook],[data-wkindgo]");
+      if (!t2) return;
+      const d = t2.dataset;
       if (d.wsel) {
         UI.watchSel = d.wsel;
         UI.watchCity = null;
@@ -4170,14 +4454,14 @@ PSOC`
       }
       if (d.woutlook) {
         const c = CITIES.find((x) => x.name === d.woutlook), box2 = p.querySelector("#outlook");
-        t.textContent = "Loading…";
+        t2.textContent = "Loading…";
         try {
           const o = await outlook(c);
           if (box2) box2.innerHTML = outlookHtml(o);
-          t.remove();
+          t2.remove();
         } catch (err) {
           if (box2) box2.innerHTML = `<p class="help">The outlook could not load (${esc(err.message)}).</p>`;
-          t.textContent = "Try again";
+          t2.textContent = "Try again";
         }
         return;
       }
@@ -4204,7 +4488,7 @@ PSOC`
       if (d.wnotify !== void 0) notifyComposer(s, { title: "Notify — " + s.title });
       if (d.wbrief !== void 0) {
         const ok = await copyText(briefFor(s));
-        t.textContent = ok ? "Copied" : "Copy failed";
+        t2.textContent = ok ? "Copied" : "Copy failed";
       }
       if (d.wadd !== void 0) {
         const i = addManualItem({ title: s.title, tier: s.tier, pri: s.tier >= 3 ? "P1" : s.tier === 2 ? "P2" : "P3", kind: s.kind });
@@ -4249,26 +4533,26 @@ PSOC`
       emit("map");
     });
     p.onchange = (e) => {
-      const t = e.target;
-      if (t.matches("[data-wall]")) {
-        UI.watchAll = t.checked;
+      const t2 = e.target;
+      if (t2.matches("[data-wall]")) {
+        UI.watchAll = t2.checked;
         saveUI();
         rerender();
       }
-      if (t.matches("[data-csort]")) {
-        UI.citySort = t.value;
+      if (t2.matches("[data-csort]")) {
+        UI.citySort = t2.value;
         saveUI();
         rerender();
       }
-      if (t.matches("[data-wsort]")) {
-        UI.watchSort = t.value;
+      if (t2.matches("[data-wsort]")) {
+        UI.watchSort = t2.value;
         saveUI();
         rerender();
       }
       const s = signalBy(UI.watchSel);
-      if (s && (t.dataset.qshake || t.dataset.qdmg)) {
-        const st = QSTATE[s.id] = QSTATE[s.id] || {}, k = t.dataset.qshake ? "shaking" : "damage", c = t.dataset.qshake || t.dataset.qdmg;
-        st[k] = (st[k] || []).filter((x) => x !== c).concat(t.checked ? [c] : []);
+      if (s && (t2.dataset.qshake || t2.dataset.qdmg)) {
+        const st = QSTATE[s.id] = QSTATE[s.id] || {}, k = t2.dataset.qshake ? "shaking" : "damage", c = t2.dataset.qshake || t2.dataset.qdmg;
+        st[k] = (st[k] || []).filter((x) => x !== c).concat(t2.checked ? [c] : []);
         saveQ();
       }
     };
@@ -4334,19 +4618,19 @@ PSOC`
     if (decision === "dismiss") return dialog("Dismiss", `<p class="prose">${esc(item.title)}</p><div class="actions" style="flex-direction:column;align-items:stretch">${REASONS.map((r) => `<button class="btn" data-dr="${esc(r)}">${esc(r)}</button>`).join("")}</div>${field("Or another reason", `<input id="drOther" placeholder="Reason">`)}`, `<button class="btn" data-close>Cancel</button><button class="btn primary" id="drGo">Dismiss</button>`);
   }
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("#dialog [data-mh], #dialog [data-dr], #dialog #drGo");
-    if (!t) return;
+    const t2 = e.target.closest("#dialog [data-mh], #dialog [data-dr], #dialog #drGo");
+    if (!t2) return;
     const item = INBOX.find((i) => i.id === UI.inboxSel);
     if (!item) return;
     const list = openItems(), at = list.findIndex((i) => i.id === item.id), nxt = list[at + 1] || list[at - 1];
     UI.inboxSel = nxt ? nxt.id : null;
     saveUI();
-    if (t.dataset.mh) {
-      decide(item, "monitor", { hours: +t.dataset.mh });
+    if (t2.dataset.mh) {
+      decide(item, "monitor", { hours: +t2.dataset.mh });
       closeDialog();
-      toast("Monitoring for " + t.dataset.mh + " h", item.title, 1);
+      toast("Monitoring for " + t2.dataset.mh + " h", item.title, 1);
     } else {
-      const r = t.dataset.dr || ($("#drOther") || {}).value || "";
+      const r = t2.dataset.dr || ($("#drOther") || {}).value || "";
       decide(item, "dismiss", { reason: r.trim() });
       closeDialog();
       toast("Dismissed", item.title);
@@ -4389,9 +4673,9 @@ PSOC`
   }
   function bind2(p, rerender) {
     p.onclick = (e) => {
-      const t = e.target.closest("[data-isel],[data-idec],[data-iadd],[data-idone],[data-ireopen],[data-iwatch],[data-iev]");
-      if (!t) return;
-      const d = t.dataset;
+      const t2 = e.target.closest("[data-isel],[data-idec],[data-iadd],[data-idone],[data-ireopen],[data-iwatch],[data-iev]");
+      if (!t2) return;
+      const d = t2.dataset;
       if (d.isel) {
         UI.inboxSel = d.isel;
         saveUI();
@@ -4431,13 +4715,13 @@ PSOC`
       if (d.iadd !== void 0) {
         dialog(
           "Add an item to the Inbox",
-          `<div class="form">${field("What needs a decision", `<input id="maT" placeholder="e.g. Call from site security: power outage at XSG11">`, true)}${field("Priority", `<select id="maP"><option>P1</option><option>P2</option><option selected>P3</option><option>P4</option></select>`)}${field("Details", `<textarea id="maX" rows="3"></textarea>`, true)}</div>`,
+          `<div class="form">${field("What needs a decision", `<input id="maT" placeholder="e.g. Call from site security: power outage at XSG11">`, true)}${field("Priority", `<select id="maP"><option>P1</option><option>P2</option><option selected>P3</option><option>P4</option></select>`)}${field("Details", `<textarea id="maX" rows="3"></textarea>`, true)}${styleBar("maX", "note")}</div>`,
           `<button class="btn" data-close>Cancel</button><button class="btn primary" id="maGo">Add</button>`
         );
         $("#maGo").onclick = () => {
-          const t2 = $("#maT").value.trim();
-          if (!t2) return;
-          const it = addManualItem({ title: t2, pri: $("#maP").value, text: $("#maX").value.trim() });
+          const t22 = $("#maT").value.trim();
+          if (!t22) return;
+          const it = addManualItem({ title: t22, pri: $("#maP").value, text: $("#maX").value.trim() });
           UI.inboxSel = it.id;
           closeDialog();
         };
@@ -4462,16 +4746,20 @@ PSOC`
   };
   var catLabel2 = (c) => (SOP_REF[c] || {}).label || c;
   function timerText(ev) {
-    const t = timers(ev);
-    if (t.state === "closed") return `closed ${esc(ago(ev.closed && ev.closed.at))}`;
-    if (t.state === "immediate") return "update as it develops";
-    if (t.state === "awaiting") return "timers start when the event notice is issued";
-    const next = Math.min(t.d12, t.d24), which = t.d12 <= t.d24 ? "Manager update" : "Intel / SLT update";
-    return next < 0 ? `<span class="late">${which} overdue ${esc(dur(-next))}</span>` : `${which} due in ${t.state === "duesoon" ? `<span class="soon">${esc(dur(next))}</span>` : esc(dur(next))}`;
+    const t2 = timers(ev);
+    if (t2.state === "closed") return `closed ${esc(ago(ev.closed && ev.closed.at))}`;
+    if (t2.state === "immediate") return "update as it develops";
+    if (t2.state === "awaiting") return "timers start when the event notice is issued";
+    const next = Math.min(t2.d12, t2.d24), which = t2.d12 <= t2.d24 ? "Manager update" : "Intel / SLT update";
+    return next < 0 ? `<span class="late">${which} overdue ${esc(dur(-next))}</span>` : `${which} due in ${t2.state === "duesoon" ? `<span class="soon">${esc(dur(next))}</span>` : esc(dur(next))}`;
   }
   function render3(p) {
     const ev = UI.eventSel && EVENTS.find((e) => e.id === UI.eventSel);
-    if (ev) return p.innerHTML = detail2(ev);
+    if (ev) {
+      p.innerHTML = detail2(ev);
+      paintBars(p);
+      return;
+    }
     const q = (UI.eventQ || "").trim().toLowerCase(), f = UI.eventF || "open", c = count3(), match = (e) => !q || (e.title + " " + e.country + " " + catLabel2(e.cat) + " " + e.sites.join(" ")).toLowerCase().includes(q);
     const open = openEvents().filter(match), closed = EVENTS.filter((e) => e.status === "closed" && match(e)).sort((a, b) => b.closed.at - a.closed.at).slice(0, 100);
     const list = f === "overdue" ? open.filter((e) => timers(e).state === "overdue") : f === "closed" ? closed : f === "all" ? open.concat(closed) : open;
@@ -4482,7 +4770,7 @@ PSOC`
     <div class="scroll">${list.map(rowHtml2).join("") || `<div class="empty"><b>${f === "open" && !q ? "No open escalations." : "No events match."}</b>${f === "open" && !q ? "Escalate from the Inbox, or start one with “New escalation”." : ""}</div>`}</div>`;
   }
   function rowHtml2(ev) {
-    const t = timers(ev), w = Object.values(ev.welfare || {}), tier = t.state === "overdue" ? 3 : t.state === "duesoon" ? 2 : ev.status === "closed" ? 0 : PRI[ev.sev].tier;
+    const t2 = timers(ev), w = Object.values(ev.welfare || {}), tier = t2.state === "overdue" ? 3 : t2.state === "duesoon" ? 2 : ev.status === "closed" ? 0 : PRI[ev.sev].tier;
     return `<button class="row" data-esel="${esc(ev.id)}"><span class="bar t${tier}"></span><span><span class="tt">${priChip(ev.sev)}${esc(ev.title)}</span>
     <div class="mt">${esc(catLabel2(ev.cat))}${ev.country ? " · " + esc(ev.country) : ""} · event notice ${esc(REN[ev.ren].toLowerCase())} · opened ${when(ev.created)}</div></span>
     <span class="rt"><b>${timerText(ev)}</b>${ev.sites.length ? `${ev.sites.length} site${ev.sites.length === 1 ? "" : "s"}${w.length ? `, ${w.length} checked` : ""}` : ""}</span></button>`;
@@ -4501,7 +4789,7 @@ PSOC`
     }).join("")}</details>`).join("")}</div>`;
   }
   function detail2(ev) {
-    const t = timers(ev), c = cad(ev), ck = checklistFor(ev.cat), closed = ev.status === "closed", sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
+    const t2 = timers(ev), c = cad(ev), ck = checklistFor(ev.cat), closed = ev.status === "closed", sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
     const tm = (label, d, st, total, which) => `<div class="timer ${st}"><div class="l">${label}</div><div class="v">${d < 0 ? "overdue " + dur(-d) : dur(d)}</div><div class="help">${d < 0 ? "was due" : "due"} ${esc(sgt(Date.now() + d))} SGT</div><div class="gauge"><i style="width:${gauge(d, total)}%"></i></div><button class="btn small" data-etimer="${which}">${label.split(" ")[0] === "PSOC" ? "Manager update sent" : "Intel / SLT update sent"}</button> <button class="linkbtn" data-etimeat="${which}">sent earlier?</button></div>`;
     const welfare = ev.sites.map((code) => {
       const s = siteBy(code) || { code }, c2 = contactFor(s) || {}, w = ev.welfare[code] || {};
@@ -4512,7 +4800,7 @@ PSOC`
     return `<div class="detail"><button class="back" data-eback>All events</button>
     <h2>${priChip(ev.sev)}${esc(ev.title)}</h2><p class="help">${esc(catLabel2(ev.cat))}${ev.country ? " · " + esc(ev.country) : ""} · opened ${esc(sgt(ev.created))} SGT · <button class="linkbtn" data-esop>SOP</button> · <button class="linkbtn" data-eedit>Edit</button>${sig ? ` · <button class="linkbtn" data-ewatch="${esc(sig.key)}">Source report</button>` : ""}</p>
     ${closed ? `<p class="prose"><b>Closed</b> by ${esc(ev.closed.by)} ${esc(sgt(ev.closed.at))} SGT. ${esc(ev.closed.summary || "")}</p>` : `
-    <div class="sec"><h3>Updates</h3>${t.state === "immediate" ? `<p class="help">Civil unrest is updated as it develops; there is no countdown.</p><button class="btn small" data-etimer="both">Update sent</button>` : t.state === "awaiting" ? `<p class="help">The 12-hour and 24-hour update timers start when the event notice is issued, so nothing counts down while you draft.</p>` : `<div class="timers">${tm(`PSOC Manager update, every ${c.m} h`, t.d12, t.s12, c.m * 36e5, "12")}${tm(`Intel / SLT update, every ${c.i} h`, t.d24, t.s24, c.i * 36e5, "24")}</div>`}
+    <div class="sec"><h3>Updates</h3>${t2.state === "immediate" ? `<p class="help">Civil unrest is updated as it develops; there is no countdown.</p><button class="btn small" data-etimer="both">Update sent</button>` : t2.state === "awaiting" ? `<p class="help">The 12-hour and 24-hour update timers start when the event notice is issued, so nothing counts down while you draft.</p>` : `<div class="timers">${tm(`PSOC Manager update, every ${c.m} h`, t2.d12, t2.s12, c.m * 36e5, "12")}${tm(`Intel / SLT update, every ${c.i} h`, t2.d24, t2.s24, c.i * 36e5, "24")}</div>`}
       <p class="help">${c.src === "fixed" ? "Standard cadence." : `Cadence from the ${esc(c.src)}.`} <button class="linkbtn" data-ecad>Change</button></p>
       <div class="ren">Event notice <div class="seg">${Object.entries(REN).map(([k, l]) => `<button data-eren="${k}" aria-pressed="${ev.ren === k}">${esc(l)}</button>`).join("")}</div></div>
       ${ck && ck.ren.length && ev.ren === "assess" ? `<details class="crit"><summary>When to issue an event notice (${esc(ttpName())})</summary><ul>${ck.ren.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}</div>`}
@@ -4522,7 +4810,7 @@ PSOC`
     <div class="sec"><h3>Sites and welfare<span class="r">${ev.sites.length ? `${wv.filter((w) => w.status).length} of ${ev.sites.length} checked${wv.some((w) => w.status === "impacted") ? ` · <span class="late">${wv.filter((w) => w.status === "impacted").length} impacted</span>` : ""}` : ""}</span></h3>
       ${ev.sites.length ? `<table class="tbl"><tr><th>Site</th><th>SOC phone</th><th>Welfare</th></tr>${welfare}</table>` : `<p class="help">No sites on this escalation. <button class="linkbtn" data-eedit>Add sites</button></p>`}</div>
     <div class="sec"><h3>Log</h3><ul class="log">${ev.log.slice().reverse().map((l) => `<li><time>${esc(sgt(l.t))}</time><span>${esc(l.m)}${l.by && l.by !== "system" ? ` <span class="help">— ${esc(l.by)}</span>` : ""}</span></li>`).join("")}</ul>
-      ${!closed ? `<form class="note" data-enote><input placeholder="Add to the log" aria-label="Add to the log"><button class="btn small">Add</button></form>` : ""}</div>
+      ${!closed ? `<form class="note" data-enote><input id="enoteIn" placeholder="Add to the log" aria-label="Add to the log"><button class="btn small">Add</button></form>${styleBar("enoteIn", "note")}` : ""}</div>
     <div class="actions">${closed ? `<button class="btn" data-ereopen>Reopen</button>` : `<button class="btn" data-eclose>Close the escalation</button>`}</div></div>`;
   }
   function mapSpec3() {
@@ -4533,9 +4821,9 @@ PSOC`
   }
   function bind3(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch],[data-ecad],[data-ef],[data-eexport],[data-eimport],[data-etimeat]");
-      if (!t) return;
-      const d = t.dataset;
+      const t2 = e.target.closest("[data-esel],[data-eback],[data-enew],[data-eclosed],[data-etimer],[data-eren],[data-enotify],[data-eclose],[data-ereopen],[data-esop],[data-eedit],[data-site],[data-ewatch],[data-ecad],[data-ef],[data-eexport],[data-eimport],[data-etimeat]");
+      if (!t2) return;
+      const d = t2.dataset;
       if (d.esel) {
         UI.eventSel = d.esel;
         saveUI();
@@ -4570,12 +4858,12 @@ PSOC`
             if (!evs.length) throw new Error("no events in this file");
             let n = 0;
             evs.forEach((e2) => {
-              const ex = EVENTS.findIndex((x) => x.id === e2.id);
-              if (ex < 0) {
+              const ex2 = EVENTS.findIndex((x) => x.id === e2.id);
+              if (ex2 < 0) {
                 EVENTS.push(e2);
                 n++;
-              } else if ((e2.updatedAt || 0) > (EVENTS[ex].updatedAt || 0)) {
-                EVENTS[ex] = e2;
+              } else if ((e2.updatedAt || 0) > (EVENTS[ex2].updatedAt || 0)) {
+                EVENTS[ex2] = e2;
                 n++;
               }
             });
@@ -4684,9 +4972,10 @@ PSOC`
         const ck = checklistFor(ev.cat), open2 = ck ? ck.close.filter((x, i) => !(ev.checks || {})["close" + i]) : [];
         dialog(
           "Close the escalation",
-          `<p class="prose">${esc(ev.title)}</p>${open2.length ? `<div class="warnbox"><b>Not yet ticked under “close when all are achieved”:</b><ul>${open2.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}<p class="help">A close-out report is saved to Reports.</p>`,
+          `<p class="prose">${esc(ev.title)}</p>${open2.length ? `<div class="warnbox"><b>Not yet ticked under “close when all are achieved”:</b><ul>${open2.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}${styleBar("ecSum", "note")}<p class="help">A close-out report is saved to Reports.</p>`,
           `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ecGo">Close it</button>`
         );
+        paintBars($("#dialog"));
         $("#ecGo").onclick = () => {
           const sm = $("#ecSum").value.trim();
           closeEvent(ev, sm);
@@ -4703,31 +4992,32 @@ PSOC`
       }
     };
     p.onchange = (e) => {
-      const t = e.target;
-      if (t.dataset.eck) {
+      const t2 = e.target;
+      if (t2.dataset.eck) {
         const ev2 = EVENTS.find((x) => x.id === UI.eventSel);
         if (ev2) {
-          setCheck(ev2, t.dataset.eck, t.checked, t.dataset.ecl);
+          setCheck(ev2, t2.dataset.eck, t2.checked, t2.dataset.ecl);
           rerender();
         }
         return;
       }
-      if (!t.dataset.ewel) return;
+      if (!t2.dataset.ewel) return;
       const ev = EVENTS.find((x) => x.id === UI.eventSel);
       if (!ev) return;
-      if (!t.value) {
-        delete ev.welfare[t.dataset.ewel];
+      if (!t2.value) {
+        delete ev.welfare[t2.dataset.ewel];
         saveEvents();
         rerender();
         return;
       }
-      const code = t.dataset.ewel;
-      if (t.value !== "impacted") {
-        setWelfare(ev, code, t.value);
+      const code = t2.dataset.ewel;
+      if (t2.value !== "impacted") {
+        setWelfare(ev, code, t2.value);
         rerender();
         return;
       }
-      dialog("Impact at " + code, field("What is the impact?", `<textarea id="wiNote" rows="3" placeholder="People, power, access, damage — and who reported it"></textarea>`, true), `<button class="btn" data-close>Cancel</button><button class="btn primary" id="wiGo">Record impact</button>`, { onClose: rerender });
+      dialog("Impact at " + code, field("What is the impact?", `<textarea id="wiNote" rows="3" placeholder="People, power, access, damage — and who reported it"></textarea>`, true) + styleBar("wiNote", "note"), `<button class="btn" data-close>Cancel</button><button class="btn primary" id="wiGo">Record impact</button>`, { onClose: rerender });
+      paintBars($("#dialog"));
       $("#wiGo").onclick = () => {
         setWelfare(ev, code, "impacted", $("#wiNote").value.trim());
         closeDialog();
@@ -4812,10 +5102,10 @@ PSOC`
     L2.push(`OPEN ESCALATIONS (${open.length})`);
     if (!open.length) L2.push("  None.");
     open.forEach((ev) => {
-      const t = timers(ev), w = Object.values(ev.welfare || {});
+      const t2 = timers(ev), w = Object.values(ev.welfare || {});
       L2.push(
         `  • [${ev.sev}] ${ev.title} — ${catLabel3(ev.cat)}${ev.country ? ", " + ev.country : ""}`,
-        `    Event notice ${REN[ev.ren].toLowerCase()}; ${t.state === "awaiting" ? "timers waiting for the notice" : t.state === "immediate" ? "update as it develops" : t.state === "overdue" ? "UPDATE OVERDUE" : `next update ${sgt(now + Math.min(t.d12, t.d24))} SGT`}.`,
+        `    Event notice ${REN[ev.ren].toLowerCase()}; ${t2.state === "awaiting" ? "timers waiting for the notice" : t2.state === "immediate" ? "update as it develops" : t2.state === "overdue" ? "UPDATE OVERDUE" : `next update ${sgt(now + Math.min(t2.d12, t2.d24))} SGT`}.`,
         ev.sites.length ? `    Sites: ${ev.sites.slice(0, 10).join(", ")}${ev.sites.length > 10 ? ` +${ev.sites.length - 10}` : ""}; welfare ${w.filter((x) => x.status).length}/${ev.sites.length} checked${w.some((x) => x.status === "impacted") ? ", IMPACT REPORTED" : ""}.` : "    No sites attached."
       );
     });
@@ -4854,33 +5144,27 @@ PSOC`
     return L2.join("\n");
   }
   function sitrep() {
-    const now = Date.now(), open = openEvents();
-    const L2 = [
-      "PSOC APAC | Daily Situation Report",
-      dayLabel(now) + " " + new Date(now).getFullYear(),
-      "",
-      "Executive summary",
-      `This report from the Physical Security Operations Center (PSOC) gives an overview of current events in Asia-Pacific for situational awareness. ${open.length ? `${open.length} event${open.length === 1 ? " is" : "s are"} being tracked.` : "No events are being tracked."}`,
-      `Assigned PSOC officer: ${who()}`,
-      "",
-      "Regional events"
-    ];
+    const now = Date.now(), open = openEvents(), d = (t2) => new Date(t2 + 8 * 36e5).toISOString().slice(0, 16).replace("T", " "), dd = (t2) => sgt(t2).split(",")[0] + " " + new Date(t2).getUTCFullYear();
+    const L2 = ["PSOC APAC | Daily Situation Report", dd(now), "", "Executive summary", `This report from the Physical Security Operations Center (PSOC) includes an overview of the current events in APAC and is provided for situational awareness.${open.length ? ` ${open.length} event${open.length === 1 ? " is" : "s are"} being tracked.` : ""}`, `Assigned PSOC officer: ${who()}`, "", "Regional events"];
     open.forEach((ev, i) => {
-      const near = ev.sites.slice(0, 5).map((c) => {
-        const s = siteBy(c);
-        return s ? `${c} | ${s.cls} | ${s.status}` : c;
-      });
+      const near = ev.sites.map(siteBy).filter(Boolean).filter((s) => s.cls !== "OFFICE").map((s) => ({ s, k: isFinite(ev.lat) && ev.lat != null ? Math.round(km(ev.lat, ev.lon, s.lat, s.lon)) : null })).sort((a, b) => (a.k ?? 1e9) - (b.k ?? 1e9)).slice(0, 5);
+      const offices = ev.sites.map(siteBy).filter((s) => s && s.cls === "OFFICE").map((s) => `${s.name || s.code}, ${s.city}`), sig = (ev.signals || []).map(signalBy).filter(Boolean)[0];
       L2.push(
         "",
         `EVENT ${i + 1} | STATUS: Active`,
         `Country: ${ev.country || "(confirm)"}`,
+        `Impacted area: ${sig && (sig.area || sig.cities.join(", ")) || "(confirm)"}`,
         `Event category: ${catLabel3(ev.cat)}`,
-        `Severity: ${ev.sev}`,
-        `Time identified: ${sgt(ev.created)} SGT`,
-        `Description: ${ev.title}. ${ev.log.filter((l) => l.kind === "note").slice(-2).map((l) => l.m).join(" ")}`.trim(),
-        "Closest sites (site | class | status):",
-        ...near.length ? near.map((x) => "  " + x) : ["  (confirm)"],
-        `Event notice: ${REN[ev.ren]}`
+        `Effective dates: From: ${dd(ev.created)} To: ${sig && sig.end ? dd(sig.end) : "(ongoing)"}`,
+        `Time identified: ${dd(ev.created)}, ${d(ev.created).slice(11).replace(":", "")} SGT`,
+        `Description: ${ev.title}.${ev.log.filter((l) => l.kind === "note").slice(-2).map((l) => " " + l.m).join("")}`,
+        "",
+        "Closest datacenter(s)",
+        "Site code | Site class | Proximity (km) | Operational status",
+        ...near.length ? near.map(({ s, k }) => `${s.code} | ${s.tier && s.tier !== "Office" ? "Class " + s.tier : s.cls} | ${k ?? "(confirm)"} | ${s.status.charAt(0) + s.status.slice(1).toLowerCase()}`) : ["(confirm)"],
+        "",
+        `Closest corporate office(s): ${offices.join("; ") || "(confirm)"}`,
+        `Data source strength: ${sig ? /^(jma|kma|cwa|hko|nea|bmkg|tmd|swic|sachet|ptwc|usgs|cyclones|volcano|mymet|myflood|myheat|capfeeds)$/.test(sig.src) ? "High — official agency reporting." : "Medium — open-source reporting; confirm with an official source." : "(confirm)"}`
       );
     });
     if (!open.length) L2.push("No active events.");
@@ -4889,23 +5173,7 @@ PSOC`
       L2.push("", "Under observation");
       watch.forEach((s) => L2.push(`  • ${s.title}`));
     }
-    L2.push("", "Data source strength: official agency feeds and monitored open sources (confirm per event).");
     return L2.join("\n");
-  }
-  async function claudeDraft(kind, base2) {
-    const key = CFG.keys.claude;
-    if (!key) throw new Error("add an Anthropic API key in Settings first");
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 1800, system: "You edit security-operations reports for a PSOC. Keep every fact exactly as given; never invent events, sites, times or figures. Improve clarity and order, keep the template headings, write (confirm) where information is missing. Output only the report.", messages: [{ role: "user", content: `Tighten this ${kind} for sending:
-
-${base2}` }] })
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(r.status === 401 ? "the API key was rejected" : j.error && j.error.message || "HTTP " + r.status);
-    audit("Drafted with Claude", kind);
-    return (j.content || []).map((b) => b.text || "").join("").trim();
   }
   var LIVE2 = { handover: ["Shift handover", handover, "Shift handover"], sitrep: ["Situation report (SITREP)", sitrep, "SITREP"] };
   function render4(p) {
@@ -4914,14 +5182,16 @@ ${base2}` }] })
     p.innerHTML = `<div class="doc"><nav aria-label="Reports"><h4>Write from the live picture</h4>${Object.entries(LIVE2).map(([k, v]) => `<button data-rsel="${k}" aria-current="${sel === k}">${esc(v[0])}<small>${k === "handover" ? "open escalations, decisions, hazards" : "regional events for leadership"}</small></button>`).join("")}
       <h4>Saved (${REPORTS.length})</h4>${REPORTS.slice(0, 80).map((r) => `<button data-rsel="${esc(r.id)}" aria-current="${sel === r.id}">${esc(r.title)}<small>${esc(r.type)} · ${esc(r.by)} · ${esc(ago(r.at))}</small></button>`).join("") || `<p class="help" style="padding:0 10px">Saved handovers, SITREPs and close-out reports appear here.</p>`}</nav>
     <article>${live || saved ? `<h2>${esc(live ? live[0] : saved.title)}</h2><p class="help">${live ? `Written ${esc(sgt(Date.now()))} SGT from what the console holds. Edit freely; “Rewrite from live data” starts again.` : `${esc(saved.type)} saved by ${esc(saved.by)} ${esc(sgt(saved.at))} SGT.`}</p>
-      <div class="actions" style="margin:8px 0 10px"><button class="btn primary" data-rcopy>Copy</button>${live ? `<button class="btn" data-rsave>Save to reports</button><button class="btn" data-rfresh>Rewrite from live data</button>${CFG.keys.claude ? `<button class="btn" data-rclaude>Tighten with Claude</button>` : ""}` : `<button class="btn danger" data-rdel>Delete</button>`}<button class="btn" data-rdl>Download</button><button class="btn" data-rprint>Print</button></div>
-      <textarea class="paper" id="rtext" aria-label="Report text">${esc(text)}</textarea>` : `<div class="empty">Choose a report.</div>`}</article></div>`;
+      <div class="actions" style="margin:8px 0 10px"><button class="btn primary" data-rcopy>Copy</button>${live ? `<button class="btn" data-rsave>Save to reports</button><button class="btn" data-rfresh>Rewrite from live data</button>` : `<button class="btn" data-rex>Use as a style example</button><button class="btn danger" data-rdel>Delete</button>`}<button class="btn" data-rdl>Download</button><button class="btn" data-rprint>Print</button></div>
+      <textarea class="paper" id="rtext" aria-label="Report text">${esc(text)}</textarea>${styleBar("rtext", styleType(sel, saved))}` : `<div class="empty">Choose a report.</div>`}</article></div>`;
+    paintBars(p);
   }
+  var styleType = (sel, saved) => LIVE2[sel] ? sel : saved ? { "Shift handover": "handover", SITREP: "sitrep", "Close-out": "closeout" }[saved.type] || "note" : "note";
   function bind4(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-rsel],[data-rcopy],[data-rsave],[data-rfresh],[data-rdl],[data-rprint],[data-rdel],[data-rclaude]");
-      if (!t) return;
-      const d = t.dataset, text = () => ($("#rtext") || {}).value || "", sel = UI.reportSel || "handover", live = LIVE2[sel];
+      const t2 = e.target.closest("[data-rsel],[data-rcopy],[data-rsave],[data-rfresh],[data-rdl],[data-rprint],[data-rdel],[data-rex]");
+      if (!t2) return;
+      const d = t2.dataset, text = () => ($("#rtext") || {}).value || "", sel = UI.reportSel || "handover", live = LIVE2[sel];
       if (d.rsel) {
         UI.reportSel = d.rsel;
         UI.reportDraft = null;
@@ -4931,7 +5201,7 @@ ${base2}` }] })
       }
       if (d.rcopy !== void 0) {
         const ok = await copyText(text());
-        t.textContent = ok ? "Copied" : "Copy failed";
+        t2.textContent = ok ? "Copied" : "Copy failed";
         audit("Copied report", live ? live[0] : sel);
         return;
       }
@@ -4967,19 +5237,11 @@ ${base2}` }] })
         }
         return;
       }
-      if (d.rclaude !== void 0) {
-        t.disabled = true;
-        t.textContent = "Working…";
-        try {
-          const out = await claudeDraft(live[0], text());
-          UI.reportDraft = { k: sel, text: out };
-          saveUI();
-          rerender();
-        } catch (err) {
-          toast("Claude could not help", err.message, 2);
-          t.disabled = false;
-          t.textContent = "Tighten with Claude";
-        }
+      if (d.rex !== void 0) {
+        const r = REPORTS.find((x) => x.id === sel), k = styleType(sel, r);
+        addExample(k, text(), r.title, r.by);
+        toast("Added as a style example", `${TYPES[k]}: the language model follows it from now on.`, 0);
+        return;
       }
     };
     p.oninput = (e) => {
@@ -5094,9 +5356,9 @@ ${base2}` }] })
   var GEO = [];
   var geoDone = null;
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("#dialog [data-geopick]");
-    if (!t) return;
-    const r = GEO[+t.dataset.geopick];
+    const t2 = e.target.closest("#dialog [data-geopick]");
+    if (!t2) return;
+    const r = GEO[+t2.dataset.geopick];
     if (r) {
       found = r;
       closeDialog();
@@ -5116,8 +5378,8 @@ ${base2}` }] })
       <select class="search" data-scls style="width:auto">${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}"${(UI.siteCls || "all") === k ? " selected" : ""}>${l}</option>`).join("")}</select>
       <select class="search" data-sst style="width:auto">${Object.entries(STATUSES).map(([k, l]) => `<option value="${k}"${(UI.siteSt || "live") === k ? " selected" : ""}>${l}</option>`).join("")}</select><span class="help">${list.length} shown</span></div>
     <div class="scroll">${list.slice(0, 400).map((x) => {
-      const t = siteTier(x), h = hazardsAt(x);
-      return `<button class="row" data-ssel="${esc(x.code)}"><span class="bar t${t}"></span><span><span class="tt"><i class="sitedot ${classBand(x.cls)}${statusBand(x) === "live" ? "" : " notlive"}" style="margin-right:6px"></i>${esc(x.code)}${x.name && x.name !== x.code ? " — " + esc(x.name) : ""}</span><div class="mt">${esc(x.cls)} · ${esc(x.status.toLowerCase())} · ${esc([x.city, x.country].filter(Boolean).join(", "))}${x.manual ? " · added by hand" : ""}</div></span><span class="rt">${h.length ? `<b>${h.length} hazard${h.length === 1 ? "" : "s"}</b>` : ""}${contactFor(x) ? "contacts" : ""}</span></button>`;
+      const t2 = siteTier(x), h = hazardsAt(x);
+      return `<button class="row" data-ssel="${esc(x.code)}"><span class="bar t${t2}"></span><span><span class="tt"><i class="sitedot ${classBand(x.cls)}${statusBand(x) === "live" ? "" : " notlive"}" style="margin-right:6px"></i>${esc(x.code)}${x.name && x.name !== x.code ? " — " + esc(x.name) : ""}</span><div class="mt">${esc(x.cls)} · ${esc(x.status.toLowerCase())} · ${esc([x.city, x.country].filter(Boolean).join(", "))}${x.manual ? " · added by hand" : ""}</div></span><span class="rt">${h.length ? `<b>${h.length} hazard${h.length === 1 ? "" : "s"}</b>` : ""}${contactFor(x) ? "contacts" : ""}</span></button>`;
     }).join("") || `<div class="empty">No sites match.</div>`}</div>`;
   }
   function card(s) {
@@ -5201,9 +5463,9 @@ ${base2}` }] })
   }
   function bind5(p, rerender) {
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-ssel],[data-sback],[data-swatch],[data-sev],[data-strack],[data-sadd],[data-scopy],[data-sdel],[data-sgeoback],[data-sescgeo]");
-      if (!t) return;
-      const d = t.dataset;
+      const t2 = e.target.closest("[data-ssel],[data-sback],[data-swatch],[data-sev],[data-strack],[data-sadd],[data-scopy],[data-sdel],[data-sgeoback],[data-sescgeo]");
+      if (!t2) return;
+      const d = t2.dataset;
       if (d.ssel) {
         found = null;
         UI.siteSel = d.ssel;
@@ -5242,7 +5504,7 @@ ${base2}` }] })
       }
       if (d.scopy) {
         const ok = await copyText(d.scopy);
-        t.textContent = ok ? "Copied" : "Copy failed";
+        t2.textContent = ok ? "Copied" : "Copy failed";
         return;
       }
       if (d.sadd !== void 0) {
@@ -5336,6 +5598,7 @@ ${base2}` }] })
     ["sources", "Sources", "what each one returns, and whether it works"],
     ["rules", "What reaches the Inbox", "the SOP triggers"],
     ["procedures", "Procedures", "REN TTP and update cadence"],
+    ["style", "Writing style", "house style, example reports, language model"],
     ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
     ["keys", "Keys", "WAQI, Taiwan CWA, KMA, Claude"],
     ["areas", "Areas watched", "prefectures, regions, countries, CAP feeds"],
@@ -5348,7 +5611,8 @@ ${base2}` }] })
   var txt = (path, label, ph = "", type = "text") => field(label, `<input type="${type}" data-cfg="${path}" value="${esc(val(path) || "")}" placeholder="${esc(ph)}" autocomplete="off">`);
   function render6(p) {
     const s = UI.setSel || "sources";
-    p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${{ sources, rules, procedures, thresholds, keys: keys2, areas, contacts, connection, data }[s]()}</article></div>`;
+    setTimeout(() => paintBars(p), 0);
+    p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${{ sources, rules, procedures, style: writing, thresholds, keys: keys2, areas, contacts, connection, data }[s]()}</article></div>`;
   }
   function sources() {
     const groups = [...new Set(SOURCES.map((x) => x.group))], ok = SOURCES.filter((x) => feedOf(x.id).ok).length, bad = SOURCES.filter((x) => feedOf(x.id).ok === false);
@@ -5388,6 +5652,28 @@ ${base2}` }] })
       return `<tr><td>${esc(v.label)}</td><td>${k === "protest" ? "as it develops" : "every " + c.m + " h"}</td><td>${k === "protest" ? "as it develops" : "every " + c.i + " h"}</td><td class="help">${v.ttp ? esc(c.src === "fixed" ? "fixed" : ttpName()) : "placeholder"}</td></tr>`;
     }).join("")}</table>
 `;
+  }
+  function writing() {
+    const k = UI.styleType || "sitrep", cfg = STYLE.types[k], gw = CFG.llm.provider === "gateway";
+    return `<h2>Writing style</h2><p class="help">Everything the console writes or you type for sending is checked against this house style as you type, without any model. With a language model connected, “Rewrite in house style” turns a draft into the style of your example reports; every figure, time and site code is kept, and any that was not in the draft is flagged.</p>
+    <h3 class="ttp-sub" style="margin-top:16px">Language model</h3>
+    <div class="form" style="max-width:760px">${field("Connect through", `<select data-cfg="llm.provider"><option value="anthropic"${gw ? "" : " selected"}>Anthropic API, with your key</option><option value="gateway"${gw ? " selected" : ""}>Company gateway (same API)</option></select>`)}
+      ${field("Model", `<select data-cfg="llm.model">${Object.entries(MODELS).map(([m, l]) => `<option value="${m}"${CFG.llm.model === m ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
+      ${gw ? txt("llm.url", "Gateway address (Messages API)", "https://ai-gateway.example.com/v1/messages") + txt("llm.header", "Header name", "e.g. api-key") + txt("llm.headerValue", "Header value", "", "password") : txt("keys.claude", "Anthropic API key", "sk-ant-…", "password")}
+      <div class="fld" style="justify-content:flex-end"><button class="btn" data-llmtest type="button">Test the connection</button></div></div>
+    <p class="help">${gw ? "Text goes to your gateway only." : "The key stays in this browser; text goes only to api.anthropic.com, directly from this computer."} Without a model, the style check and “Fix wording” still work.</p>
+    <h3 class="ttp-sub" style="margin-top:18px">House style guide</h3>
+    <textarea class="paper" style="min-height:190px" data-st="guide" aria-label="House style guide">${esc(STYLE.guide)}</textarea>
+    <div class="form" style="max-width:760px;margin-top:8px">${field("Words and phrases to avoid (one per line)", `<textarea rows="5" data-st="avoid">${esc(STYLE.avoid.join("\n"))}</textarea>`)}${field("Preferred terms (one per line: write this → as this)", `<textarea rows="5" data-st="prefer">${esc(STYLE.prefer.map(([a, b]) => a + " → " + b).join("\n"))}</textarea>`)}
+      ${field("Longest sentence (words)", `<input type="number" min="10" max="80" data-st="maxWords" value="${STYLE.maxWords}">`)}</div>
+    <h3 class="ttp-sub" style="margin-top:18px">Each kind of report</h3>
+    <div class="seg" role="group" aria-label="Report type" style="flex-wrap:wrap">${Object.entries(TYPES).map(([t2, l]) => `<button data-stt="${t2}" aria-pressed="${k === t2}">${esc(l)}</button>`).join("")}</div>
+    <div class="form" style="max-width:760px;margin-top:8px">${field("Required headings (one per line, in order)", `<textarea rows="3" data-st="headings">${esc(cfg.headings.join("\n"))}</textarea>`)}${field("Must end with", `<input data-st="endsWith" value="${esc(cfg.endsWith)}">`)}</div>
+    <p class="help">Examples (${cfg.examples.length}). The model copies their structure, headings and tone. Add two or three of your best real reports of this kind; from Reports, “Use as a style example” adds a saved one.</p>
+    ${cfg.examples.map((e) => `<details class="draft"><summary>${esc(e.title)}${e.builtin ? " (built in)" : ""}<span class="s">${e.by ? esc(e.by) + " · " : ""}${e.at ? esc(ago(e.at)) : ""}</span></summary><pre class="exbox">${esc(e.text)}</pre><div class="actions"><button class="btn small danger" data-exdel="${esc(e.id)}">Remove</button></div></details>`).join("")}
+    <textarea class="paper" style="min-height:120px" id="exNew" placeholder="Paste an example ${esc(TYPES[k])} written the way the team wants it"></textarea><div class="actions"><button class="btn" data-exadd>Add as an example</button></div>
+    <h3 class="ttp-sub" style="margin-top:18px">Try it</h3><textarea class="paper" style="min-height:140px" id="styTry" data-style="${k}" placeholder="Paste any draft ${esc(TYPES[k])} to check it or rewrite it in the house style"></textarea>${styleBar("styTry", k)}
+    <div class="actions" style="margin-top:14px"><button class="btn danger" data-styreset>Go back to the PULSE defaults</button></div>`;
   }
   function thresholds() {
     return `<h2>Thresholds</h2><h3 class="help" style="margin-top:14px">Earthquakes</h3><div class="form">${num("quake.globalMag", "Alarm anywhere at magnitude", 0.1)}${num("quake.nearMag", "Near-site alarm at magnitude", 0.1)}${num("quake.nearKm", "Near-site distance (km)", 10)}${num("quake.listMag", "List down to magnitude", 0.5)}
@@ -5459,14 +5745,31 @@ ${base2}` }] })
       }
     };
     p.onchange = (e) => {
-      const t = e.target;
-      if (t.dataset.cfg) {
-        const path = t.dataset.cfg.split("."), last = path.pop();
+      const t2 = e.target;
+      if (t2.dataset.st) {
+        const f = t2.dataset.st, k = UI.styleType || "sitrep", lines = (v) => v.split(/\n/).map((x) => x.trim()).filter(Boolean);
+        if (f === "guide") STYLE.guide = t2.value.trim();
+        else if (f === "avoid") STYLE.avoid = lines(t2.value);
+        else if (f === "maxWords") STYLE.maxWords = Math.max(10, +t2.value || 30);
+        else if (f === "prefer") STYLE.prefer = lines(t2.value).map((l) => l.split(/\s*(?:→|->|=>)\s*/)).filter((x) => x.length === 2 && x[0] && x[1]);
+        else if (f === "headings") STYLE.types[k].headings = lines(t2.value);
+        else if (f === "endsWith") STYLE.types[k].endsWith = t2.value.trim();
+        saveStyle();
+        toast("Saved", "", 0, null, 1500);
+        paintBars(p);
+        return;
+      }
+      if (t2.dataset.cfg) {
+        const path = t2.dataset.cfg.split("."), last = path.pop();
         let o = CFG;
         path.forEach((k) => o = o[k] = o[k] || {});
-        o[last] = t.type === "checkbox" ? t.checked : t.type === "number" ? parseFloat(t.value) : t.value.trim();
+        o[last] = t2.type === "checkbox" ? t2.checked : t2.type === "number" ? parseFloat(t2.value) : t2.value.trim();
         after();
-        if (t.dataset.cfg === "cadence") {
+        if (t2.dataset.cfg === "llm.provider") {
+          rerender();
+          return;
+        }
+        if (t2.dataset.cfg === "cadence") {
           let n = 0;
           EVENTS.forEach((ev) => {
             if (applyCadence(ev, "Settings")) n++;
@@ -5480,30 +5783,30 @@ ${base2}` }] })
         return;
       }
       const list = (attr, arr) => {
-        const v = t.dataset[attr];
-        return t.checked ? [...new Set(arr.concat(v))] : arr.filter((x) => x !== v);
+        const v = t2.dataset[attr];
+        return t2.checked ? [...new Set(arr.concat(v))] : arr.filter((x) => x !== v);
       };
-      if (t.dataset.jma) {
+      if (t2.dataset.jma) {
         CFG.agency.jmaPrefs = list("jma", CFG.agency.jmaPrefs);
         after();
       }
-      if (t.dataset.kma) {
+      if (t2.dataset.kma) {
         CFG.agency.kmaAreas = list("kma", CFG.agency.kmaAreas);
         after();
       }
-      if (t.dataset.unr) {
+      if (t2.dataset.unr) {
         CFG.unrest.countries = list("unr", CFG.unrest.countries);
         after();
       }
-      if (t.dataset.agon) {
-        CFG.agency.off = Object.assign({}, CFG.agency.off, { [t.dataset.agon]: !t.checked });
+      if (t2.dataset.agon) {
+        CFG.agency.off = Object.assign({}, CFG.agency.off, { [t2.dataset.agon]: !t2.checked });
         after();
       }
     };
     p.onclick = async (e) => {
-      const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx],[data-spulse],[data-acledoff],[data-sclear]");
-      if (!t) return;
-      const d = t.dataset;
+      const t2 = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx],[data-spulse],[data-acledoff],[data-sclear],[data-stt],[data-exadd],[data-exdel],[data-styreset],[data-llmtest]");
+      if (!t2) return;
+      const d = t2.dataset;
       if (d.ssec) {
         UI.setSel = d.ssec;
         saveUI();
@@ -5511,8 +5814,8 @@ ${base2}` }] })
         return;
       }
       if (d.stest !== void 0) {
-        t.disabled = true;
-        t.textContent = "Testing…";
+        t2.disabled = true;
+        t2.textContent = "Testing…";
         await Promise.all(SOURCES.map(runSource));
         rerender();
         return;
@@ -5588,6 +5891,47 @@ ${base2}` }] })
         download("ite-audit.csv", csv([["time_utc", "who", "action", "item", "detail"]].concat(auditLog().map((a) => [new Date(a.t).toISOString(), a.by, a.action, a.what, a.detail]))), "text/csv");
         return;
       }
+      if (d.stt) {
+        UI.styleType = d.stt;
+        saveUI();
+        rerender();
+        return;
+      }
+      if (d.exadd !== void 0) {
+        const v = ($("#exNew") || {}).value || "";
+        if (v.trim().length < 40) {
+          toast("Paste a full example first", "", 2);
+          return;
+        }
+        addExample(UI.styleType || "sitrep", v, "Pasted example", who());
+        audit("Style example added", TYPES[UI.styleType || "sitrep"]);
+        rerender();
+        return;
+      }
+      if (d.exdel) {
+        removeExample(UI.styleType || "sitrep", d.exdel);
+        rerender();
+        return;
+      }
+      if (d.styreset !== void 0) {
+        if (await confirmBox("Go back to the PULSE defaults?", "The style guide, word lists, headings and examples return to the defaults. Your own examples are removed.", "Go back")) {
+          resetStyle();
+          audit("House style reset");
+          rerender();
+        }
+        return;
+      }
+      if (d.llmtest !== void 0) {
+        t2.textContent = "Testing…";
+        try {
+          const r = await llm({ system: "Reply with the single word OK.", messages: [{ role: "user", content: "Test" }], max: 10 });
+          toast("Language model connected", `Replied: ${r.slice(0, 40)}`, 0);
+        } catch (err) {
+          toast("Not connected", err.message, 3);
+        }
+        t2.textContent = "Test the connection";
+        return;
+      }
       if (d.sclear !== void 0) {
         dialog(
           "Clear everything?",
@@ -5616,13 +5960,13 @@ ${base2}` }] })
         return;
       }
       if (d.sxlsx !== void 0) {
-        t.textContent = "Preparing…";
+        t2.textContent = "Preparing…";
         try {
           await exportExcel();
-          t.textContent = "Export everything to Excel";
+          t2.textContent = "Export everything to Excel";
         } catch (err) {
           toast("Export failed", err.message, 3);
-          t.textContent = "Export everything to Excel";
+          t2.textContent = "Export everything to Excel";
         }
         return;
       }
@@ -5677,7 +6021,7 @@ ${base2}` }] })
   }
   async function exportExcel() {
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
-    const X = window.XLSX, wb = X.utils.book_new(), T = (t) => t ? sgt(t) : "";
+    const X = window.XLSX, wb = X.utils.book_new(), T = (t2) => t2 ? sgt(t2) : "";
     const add = (name, rows) => X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{ note: "none" }]), name);
     add("Escalations", EVENTS.map((e) => ({ title: e.title, category: (SOP_REF[e.cat] || {}).label || e.cat, severity: e.sev, country: e.country, status: e.status, event_notice: REN[e.ren], opened_sgt: T(e.created), closed_sgt: e.closed ? T(e.closed.at) : "", closed_by: e.closed ? e.closed.by : "", summary: e.closed ? e.closed.summary : "", sites: e.sites.join(", "), welfare: Object.entries(e.welfare || {}).map(([k, v]) => k + " " + v.status).join("; "), messages_sent: (e.comms || []).length })));
     add("Escalation log", EVENTS.flatMap((e) => e.log.map((l) => ({ escalation: e.title, time_sgt: T(l.t), by: l.by, entry: l.m }))));
@@ -5692,15 +6036,14 @@ ${base2}` }] })
   }
 
   // src/ui/copilot.js
-  var MODEL = "claude-sonnet-5-5";
   var chat = [];
   function picture() {
     const now = Date.now(), L2 = [`Now: ${sgt(now)} SGT. Officer: ${who()}.`];
     const ev = openEvents();
     L2.push("", `OPEN ESCALATIONS (${ev.length})`);
     ev.forEach((e) => {
-      const t = timers(e), c = cad(e), w = Object.entries(e.welfare || {});
-      L2.push(`- [${e.sev}] ${e.title} | ${(SOP_REF[e.cat] || {}).label || e.cat} | ${e.country || "?"} | event notice ${REN[e.ren].toLowerCase()} | ${t.state === "awaiting" ? "timers wait for the notice" : t.state === "immediate" ? "update as it develops" : `Manager update every ${c.m} h due ${t.d12 < 0 ? "OVERDUE by " + dur(-t.d12) : "in " + dur(t.d12)}; Intel/SLT every ${c.i} h due ${t.d24 < 0 ? "OVERDUE by " + dur(-t.d24) : "in " + dur(t.d24)}`} | sites: ${e.sites.slice(0, 15).join(", ") || "none"} | welfare: ${w.map(([k, v]) => k + " " + v.status).join(", ") || "none checked"}`);
+      const t2 = timers(e), c = cad(e), w = Object.entries(e.welfare || {});
+      L2.push(`- [${e.sev}] ${e.title} | ${(SOP_REF[e.cat] || {}).label || e.cat} | ${e.country || "?"} | event notice ${REN[e.ren].toLowerCase()} | ${t2.state === "awaiting" ? "timers wait for the notice" : t2.state === "immediate" ? "update as it develops" : `Manager update every ${c.m} h due ${t2.d12 < 0 ? "OVERDUE by " + dur(-t2.d12) : "in " + dur(t2.d12)}; Intel/SLT every ${c.i} h due ${t2.d24 < 0 ? "OVERDUE by " + dur(-t2.d24) : "in " + dur(t2.d24)}`} | sites: ${e.sites.slice(0, 15).join(", ") || "none"} | welfare: ${w.map(([k, v]) => k + " " + v.status).join(", ") || "none checked"}`);
       e.log.slice(-4).forEach((l) => L2.push(`    log ${sgt(l.t)}: ${l.m}`));
     });
     const items = openItems();
@@ -5716,29 +6059,22 @@ ${base2}` }] })
     if (cats.length) {
       L2.push("", `${ttpName()} FOR THE OPEN CATEGORIES`);
       cats.forEach((k) => {
-        const t = ttpFor(k);
-        L2.push(`${t.label}: manager trigger: ${t.mgr.trig.join("; ")} | intel trigger: ${t.intel.trig.join("; ")} | REN when: ${t.ren.crit.join("; ")} | close when: ${t.close.join("; ")}`.replace(/\*\*/g, ""));
+        const t2 = ttpFor(k);
+        L2.push(`${t2.label}: manager trigger: ${t2.mgr.trig.join("; ")} | intel trigger: ${t2.intel.trig.join("; ")} | REN when: ${t2.ren.crit.join("; ")} | close when: ${t2.close.join("; ")}`.replace(/\*\*/g, ""));
       });
     }
     return L2.join("\n");
   }
   var SYSTEM = "You are the PSOC Copilot inside ITE, a physical security operations console for Asia-Pacific. Answer from the live picture given; never invent events, sites, times, figures or contacts. If something is not in the picture, say so. Be brief and operational: lead with what needs doing, use SGT times, and name sites by code. Draft messages in plain text ready to paste.";
   async function ask(text, box2) {
-    const key = CFG.keys.claude;
     chat.push({ role: "user", content: text });
     draw3(box2, true);
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: SYSTEM + "\n\nLIVE PICTURE\n" + picture(), messages: chat.slice(-12) })
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(r.status === 401 ? "the API key was rejected" : j.error && j.error.message || "HTTP " + r.status);
-      chat.push({ role: "assistant", content: (j.content || []).map((b) => b.text || "").join("").trim() });
+      const out = await llm({ system: SYSTEM + styleBrief() + "\n\nLIVE PICTURE\n" + picture(), messages: chat.filter((m) => !m.err).slice(-12).map((m) => ({ role: m.role, content: m.content })), max: 1500 });
+      chat.push({ role: "assistant", content: out });
       audit("Asked Copilot", text.slice(0, 120));
     } catch (e) {
-      chat.push({ role: "assistant", content: "Could not reach Claude: " + e.message + ".", err: true });
+      chat.push({ role: "assistant", content: "Could not reach the language model: " + e.message + ".", err: true });
     }
     draw3(box2, false);
   }
@@ -5747,14 +6083,14 @@ ${base2}` }] })
     box2.scrollTop = box2.scrollHeight;
   }
   function openCopilot() {
-    if (!CFG.keys.claude) {
+    if (!llmReady()) {
       dialog(
         "PSOC Copilot",
-        `<p class="prose">Copilot answers questions about the live picture, summarises what is active and drafts reports. It uses your own Anthropic API key, kept in this browser and sent only to api.anthropic.com.</p>`,
-        `<button class="btn" data-close>Close</button><button class="btn primary" id="cpKey">Add the key in Settings</button>`
+        `<p class="prose">Copilot answers questions about the live picture, summarises what is active and drafts reports in the house style. It needs a language model: your own Anthropic API key (kept in this browser, sent only to api.anthropic.com) or your company's gateway.</p>`,
+        `<button class="btn" data-close>Close</button><button class="btn primary" id="cpKey">Connect a language model</button>`
       );
       $("#cpKey").onclick = () => {
-        go("settings", { setSel: "keys" });
+        go("settings", { setSel: "style" });
         document.querySelector("[data-close]").click();
       };
       return;
@@ -5762,7 +6098,7 @@ ${base2}` }] })
     dialog("PSOC Copilot", `<div class="cpquick">${[
       ["Summarise what is active", "Summarise what is active now for a shift lead: open escalations and their next deadlines, what is waiting for a decision, and anything touching our sites that has no escalation yet."],
       ["What should I do next?", "Given the live picture, list the next three things I should do, most urgent first, each with why and by when."],
-      ["Draft the SITREP", "Draft today's APAC SITREP from the live picture: executive summary, then each open event (country, category, severity, time identified, description, closest sites, event notice status), then items under observation."]
+      ["Draft the SITREP", "Draft today's APAC SITREP from the live picture: executive summary, then each open event, then items under observation. Follow the house SITREP format exactly:\n\n" + ((STYLE.types.sitrep.examples[0] || {}).text || "")]
     ].map(([l, q]) => `<button class="btn small" data-cpq="${esc(q)}">${esc(l)}</button>`).join("")}</div>
     <div class="cplog" id="cpLog"></div><form class="note" id="cpForm"><input id="cpIn" placeholder="Ask about the live picture" aria-label="Ask Copilot" autocomplete="off"><button class="btn small primary">Ask</button></form>
     <p class="help">Answers use the open escalations, the Inbox, hazards touching our sites and this shift's decisions${ttpName() ? " and the " + esc(ttpName()) : ""}. Check before sending anything.</p>`, `<button class="btn" id="cpClear">Clear</button><button class="btn" data-close>Close</button>`, { wide: true });
@@ -5801,6 +6137,7 @@ ${base2}` }] })
     ["Welfare", "In an event, set each site to safe, impacted or no answer. Impacted asks what the impact is. The SOC phone for each site comes from its (fictional) contact record."],
     ["Messages", "Write the messages opens the leadership update, the Intelligence Channel post and the site stakeholders email, written from the event. Edit, copy (it pastes with paragraphs and links into Teams and Outlook) or open in your email app, then Mark as sent. Nothing is sent by the console itself."],
     ["Reports", "The shift handover and the SITREP are written from what the console holds. Edit freely, then copy, save, download or print. Rewrite from live data starts again. With an Anthropic key, Tighten with Claude improves the wording without changing facts. Closing an escalation saves its close-out report here."],
+    ["House style", "Every text box whose words leave the console — reports, message drafts, close-out summaries, log and impact notes — is checked against the house style as you type: words to avoid, preferred terms, first person, 12-hour times, long sentences, required headings and endings. Fix wording corrects what can be corrected without a model. With a language model connected (Settings › Writing style), Rewrite in house style turns a draft into the style of your example reports, keeps every fact, and flags any figure or site code that was not in your draft. Add your best real reports as examples, or use “Use as a style example” on a saved report."],
     ["Copilot", "Ask Copilot questions about the live picture: what is active, what to do next, or to draft the SITREP. It uses your own Anthropic API key from Settings › Keys and only the facts in the console."],
     ["Sites", "The estate with its contacts and what is affecting each site. Filter by class and status. Find an address shows the nearest sites and live threats within 150 km, and can add it as a site. Add a site by hand for an exercise or a temporary location; it is kept in this browser."],
     ["The estate", "The sites are fictional on purpose: codes, classes (A, B, C, Edge, offices) and contacts follow PULSE's conventions, placed at made-up positions in each metro. Everything else is real: hazards, warnings, protests, weather, air, rivers and the REN TTP. Real site lists and site contacts are never loaded into this console."],
@@ -5813,8 +6150,8 @@ ${base2}` }] })
   function openGuide() {
     dialog("Guide", `<input class="search" id="gq" type="search" placeholder="Search the guide" style="width:100%;margin-bottom:10px" autofocus><div id="gl"></div>`, `<button class="btn" data-close>Close</button>`, { wide: true });
     const draw4 = () => {
-      const q = $("#gq").value.trim().toLowerCase(), hit = G.filter(([h, t]) => !q || (h + " " + t).toLowerCase().includes(q));
-      $("#gl").innerHTML = hit.map(([h, t]) => `<h4 class="ttp-h">${esc(h)}</h4><p class="prose">${esc(t)}</p>`).join("") || `<p class="help">Nothing matches. Try a single word, such as timer, welfare or relay.</p>`;
+      const q = $("#gq").value.trim().toLowerCase(), hit = G.filter(([h, t2]) => !q || (h + " " + t2).toLowerCase().includes(q));
+      $("#gl").innerHTML = hit.map(([h, t2]) => `<h4 class="ttp-h">${esc(h)}</h4><p class="prose">${esc(t2)}</p>`).join("") || `<p class="help">Nothing matches. Try a single word, such as timer, welfare or relay.</p>`;
     };
     draw4();
     $("#gq").oninput = draw4;
@@ -5839,14 +6176,14 @@ ${base2}` }] })
     const now = Date.now(), items = openItems(), evs = openEvents(), late = items.find((i) => dueAt(i) < now), over = evs.find((e) => timers(e).state === "overdue");
     if (late) return { lead: "Decide now", what: late.title, when: `late ${dur(now - dueAt(late))}`, tier: 3, go: () => go("inbox", { inboxSel: late.id }) };
     if (over) {
-      const t = timers(over);
-      return { lead: "Update overdue", what: over.title, when: `${dur(-Math.min(t.d12, t.d24))} late`, tier: 3, go: () => go("events", { eventSel: over.id }) };
+      const t2 = timers(over);
+      return { lead: "Update overdue", what: over.title, when: `${dur(-Math.min(t2.d12, t2.d24))} late`, tier: 3, go: () => go("events", { eventSel: over.id }) };
     }
     if (items[0]) return { lead: "Next decision", what: items[0].title, when: `due in ${dur(dueAt(items[0]) - now)}`, tier: PRI[items[0].pri].tier, go: () => go("inbox", { inboxSel: items[0].id }) };
     const soon2 = evs.find((e) => timers(e).state === "duesoon");
     if (soon2) {
-      const t = timers(soon2);
-      return { lead: "Update due", what: soon2.title, when: `in ${dur(Math.min(t.d12, t.d24))}`, tier: 2, go: () => go("events", { eventSel: soon2.id }) };
+      const t2 = timers(soon2);
+      return { lead: "Update due", what: soon2.title, when: `in ${dur(Math.min(t2.d12, t2.d24))}`, tier: 2, go: () => go("events", { eventSel: soon2.id }) };
     }
     const aw = evs.find((e) => timers(e).state === "awaiting");
     if (aw) return { lead: "Waiting", what: `Event notice for “${aw.title}”`, when: "", tier: 1, go: () => go("events", { eventSel: aw.id }) };
@@ -5898,6 +6235,11 @@ ${base2}` }] })
   on("map", drawMap);
   var raf = 0;
   var soon = () => {
+    if (UI.ws === "settings" && UI.setSel && UI.setSel !== "sources") {
+      rail();
+      top();
+      return;
+    }
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(render7);
   };
@@ -6074,9 +6416,9 @@ ${base2}` }] })
     if (queue.length === 1) showAlarm();
   }
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-ws],[data-next],[data-sound],[data-desk],[data-me],[data-qretry],[data-testalarm],[data-ask],[data-guide]");
-    if (!t) return;
-    const d = t.dataset;
+    const t2 = e.target.closest("[data-ws],[data-next],[data-sound],[data-desk],[data-me],[data-qretry],[data-testalarm],[data-ask],[data-guide]");
+    if (!t2) return;
+    const d = t2.dataset;
     if (d.ask !== void 0) {
       openCopilot();
       return;
@@ -6086,7 +6428,7 @@ ${base2}` }] })
       return;
     }
     if (d.qretry !== void 0) {
-      t.textContent = "Retrying…";
+      t2.textContent = "Retrying…";
       runSource(SOURCES.find((x) => x.id === "usgs")).then(top);
       return;
     }

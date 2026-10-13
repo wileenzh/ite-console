@@ -5,9 +5,10 @@ import { CFG } from "../config.js";
 import { STATE, openEvents, openItems, timers, cad, REN, SOP_REF, decided, dueAt, who, audit } from "../model.js";
 import { ttpFor, ttpName } from "../ttp.js";
 import { dialog } from "./kit.js";
+import { llm, llmReady } from "../llm.js";
+import { styleBrief, STYLE } from "../style.js";
 import { go } from "./state.js";
 
-const MODEL = "claude-sonnet-5-5";
 let chat = [];
 function picture(){ const now = Date.now(), L = [`Now: ${sgt(now)} SGT. Officer: ${who()}.`];
   const ev = openEvents(); L.push("", `OPEN ESCALATIONS (${ev.length})`);
@@ -23,21 +24,19 @@ function picture(){ const now = Date.now(), L = [`Now: ${sgt(now)} SGT. Officer:
   return L.join("\n"); }
 const SYSTEM = "You are the PSOC Copilot inside ITE, a physical security operations console for Asia-Pacific. Answer from the live picture given; never invent events, sites, times, figures or contacts. If something is not in the picture, say so. Be brief and operational: lead with what needs doing, use SGT times, and name sites by code. Draft messages in plain text ready to paste.";
 
-async function ask(text, box){ const key = CFG.keys.claude; chat.push({ role: "user", content: text }); draw(box, true);
-  try{ const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: SYSTEM + "\n\nLIVE PICTURE\n" + picture(), messages: chat.slice(-12) }) });
-    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(r.status === 401 ? "the API key was rejected" : (j.error && j.error.message) || "HTTP " + r.status);
-    chat.push({ role: "assistant", content: (j.content || []).map(b => b.text || "").join("").trim() }); audit("Asked Copilot", text.slice(0, 120)); }
-  catch(e){ chat.push({ role: "assistant", content: "Could not reach Claude: " + e.message + ".", err: true }); }
+async function ask(text, box){ chat.push({ role: "user", content: text }); draw(box, true);
+  try{ const out = await llm({ system: SYSTEM + styleBrief() + "\n\nLIVE PICTURE\n" + picture(), messages: chat.filter(m => !m.err).slice(-12).map(m => ({ role: m.role, content: m.content })), max: 1500 });
+    chat.push({ role: "assistant", content: out }); audit("Asked Copilot", text.slice(0, 120)); }
+  catch(e){ chat.push({ role: "assistant", content: "Could not reach the language model: " + e.message + ".", err: true }); }
   draw(box, false); }
 function draw(box, busy){ box.innerHTML = chat.map((m, i) => `<div class="msg ${m.role}${m.err ? " err" : ""}">${esc(m.content).replace(/\n/g, "<br>")}${m.role === "assistant" && !m.err ? `<button class="linkbtn" data-cpcopy="${i}">Copy</button>` : ""}</div>`).join("") + (busy ? `<div class="msg assistant help">Thinking…</div>` : "");
   box.scrollTop = box.scrollHeight; }
 
-export function openCopilot(){ if (!CFG.keys.claude){ dialog("PSOC Copilot", `<p class="prose">Copilot answers questions about the live picture, summarises what is active and drafts reports. It uses your own Anthropic API key, kept in this browser and sent only to api.anthropic.com.</p>`,
-    `<button class="btn" data-close>Close</button><button class="btn primary" id="cpKey">Add the key in Settings</button>`); $("#cpKey").onclick = () => { go("settings", { setSel: "keys" }); document.querySelector("[data-close]").click(); }; return; }
+export function openCopilot(){ if (!llmReady()){ dialog("PSOC Copilot", `<p class="prose">Copilot answers questions about the live picture, summarises what is active and drafts reports in the house style. It needs a language model: your own Anthropic API key (kept in this browser, sent only to api.anthropic.com) or your company's gateway.</p>`,
+    `<button class="btn" data-close>Close</button><button class="btn primary" id="cpKey">Connect a language model</button>`); $("#cpKey").onclick = () => { go("settings", { setSel: "style" }); document.querySelector("[data-close]").click(); }; return; }
   dialog("PSOC Copilot", `<div class="cpquick">${[["Summarise what is active", "Summarise what is active now for a shift lead: open escalations and their next deadlines, what is waiting for a decision, and anything touching our sites that has no escalation yet."],
       ["What should I do next?", "Given the live picture, list the next three things I should do, most urgent first, each with why and by when."],
-      ["Draft the SITREP", "Draft today's APAC SITREP from the live picture: executive summary, then each open event (country, category, severity, time identified, description, closest sites, event notice status), then items under observation."]].map(([l, q]) => `<button class="btn small" data-cpq="${esc(q)}">${esc(l)}</button>`).join("")}</div>
+      ["Draft the SITREP", "Draft today's APAC SITREP from the live picture: executive summary, then each open event, then items under observation. Follow the house SITREP format exactly:\n\n" + ((STYLE.types.sitrep.examples[0] || {}).text || "")]].map(([l, q]) => `<button class="btn small" data-cpq="${esc(q)}">${esc(l)}</button>`).join("")}</div>
     <div class="cplog" id="cpLog"></div><form class="note" id="cpForm"><input id="cpIn" placeholder="Ask about the live picture" aria-label="Ask Copilot" autocomplete="off"><button class="btn small primary">Ask</button></form>
     <p class="help">Answers use the open escalations, the Inbox, hazards touching our sites and this shift's decisions${ttpName() ? " and the " + esc(ttpName()) : ""}. Check before sending anything.</p>`, `<button class="btn" id="cpClear">Clear</button><button class="btn" data-close>Close</button>`, { wide: true });
   const box = $("#cpLog"); draw(box, false);

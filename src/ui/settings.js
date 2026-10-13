@@ -1,7 +1,7 @@
 // SETTINGS — sources and their health, what reaches the Inbox, thresholds, keys, areas, contacts, data.
 import { $, $$, esc, sgt, ago, download, csv, save, load, loadScript } from "../core.js";
 import { CFG, saveCfg, resetCfg, DEFAULTS } from "../config.js";
-import { STATE, auditLog, KINDS, SOP_REF, EVENTS, INBOX, REPORTS, HISTORY, SITES, REN, saveEvents, applyCadence, audit } from "../model.js";
+import { STATE, who, auditLog, KINDS, SOP_REF, EVENTS, INBOX, REPORTS, HISTORY, SITES, REN, saveEvents, applyCadence, audit } from "../model.js";
 import { QARCH } from "../sources/quakes.js";
 import { TTP, ttpName, cadenceFor, clearTTP } from "../ttp.js";
 import { SOURCES, runSource, feedOf } from "../sources/index.js";
@@ -9,17 +9,20 @@ import { JMA_PREFS, KMA_AREAS } from "../sources/agencies.js";
 import { UI, saveUI } from "./state.js";
 import { toast, confirmBox, field, dialog, closeDialog } from "./kit.js";
 import { readPulseFile, applyPulse } from "../sites-import.js";
+import { STYLE, TYPES, saveStyle, resetStyle, addExample, removeExample } from "../style.js";
+import { MODELS, llm } from "../llm.js";
+import { styleBar, paintBars } from "./stylebar.js";
 import { UNREST_COUNTRIES, acledAuth, acledConnect, acledDisconnect } from "../sources/people.js";
 import { setBase } from "./map.js";
 
-const SECTIONS = [["sources", "Sources", "what each one returns, and whether it works"], ["rules", "What reaches the Inbox", "the SOP triggers"], ["procedures", "Procedures", "REN TTP and update cadence"], ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
+const SECTIONS = [["sources", "Sources", "what each one returns, and whether it works"], ["rules", "What reaches the Inbox", "the SOP triggers"], ["procedures", "Procedures", "REN TTP and update cadence"], ["style", "Writing style", "house style, example reports, language model"], ["thresholds", "Thresholds", "earthquakes, air, weather, ranges"],
   ["keys", "Keys", "WAQI, Taiwan CWA, KMA, Claude"], ["areas", "Areas watched", "prefectures, regions, countries, CAP feeds"], ["contacts", "Contacts", "watch desk, leadership, channel"], ["connection", "Connection", "relay or PSOC server"],
   ["data", "Data and audit", "backup, audit trail, appearance"]];
 const val = path => path.split(".").reduce((o, k) => o == null ? o : o[k], CFG);
 const num = (path, label, step = 1) => field(label, `<input type="number" step="${step}" data-cfg="${path}" value="${esc(val(path))}">`);
 const txt = (path, label, ph = "", type = "text") => field(label, `<input type="${type}" data-cfg="${path}" value="${esc(val(path) || "")}" placeholder="${esc(ph)}" autocomplete="off">`);
-export function render(p){ const s = UI.setSel || "sources";
-  p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${({ sources, rules, procedures, thresholds, keys, areas, contacts, connection, data })[s]()}</article></div>`; }
+export function render(p){ const s = UI.setSel || "sources"; setTimeout(() => paintBars(p), 0);
+  p.innerHTML = `<div class="doc"><nav aria-label="Settings">${SECTIONS.map(([k, l, d]) => `<button data-ssec="${k}" aria-current="${s === k}">${esc(l)}<small>${esc(d)}</small></button>`).join("")}</nav><article>${({ sources, rules, procedures, style: writing, thresholds, keys, areas, contacts, connection, data })[s]()}</article></div>`; }
 function sources(){ const groups = [...new Set(SOURCES.map(x => x.group))], ok = SOURCES.filter(x => feedOf(x.id).ok).length, bad = SOURCES.filter(x => feedOf(x.id).ok === false);
   return `<h2>Sources</h2><p class="help">${ok} of ${SOURCES.length} working${bad.length ? `; ${bad.length} not responding` : ""}. Sources marked “relay” are often blocked by browsers on office networks; set a relay or the PSOC server under Connection and they are fetched through it.</p>
     <div class="actions" style="margin-bottom:10px"><button class="btn primary" data-stest>Test all now</button><button class="btn" data-sexport>Export the list</button></div>
@@ -42,6 +45,26 @@ function procedures(){ const cats = Object.entries(SOP_REF);
     <div class="form" style="max-width:640px">${field("Update timers", `<select data-cfg="cadence"><option value="ttp"${CFG.cadence !== "fixed" ? " selected" : ""}>Follow the REN TTP for each category</option><option value="fixed"${CFG.cadence === "fixed" ? " selected" : ""}>Fixed: Manager every 12 h, Intel / SLT every 24 h</option></select>`, true)}</div>
     <table class="tbl" style="margin-top:12px;max-width:760px"><tr><th>Category</th><th>Manager update</th><th>Intel / SLT update</th><th>Source</th></tr>${cats.map(([k, v]) => { const c = cadenceFor(k); return `<tr><td>${esc(v.label)}</td><td>${k === "protest" ? "as it develops" : "every " + c.m + " h"}</td><td>${k === "protest" ? "as it develops" : "every " + c.i + " h"}</td><td class="help">${v.ttp ? esc(c.src === "fixed" ? "fixed" : ttpName()) : "placeholder"}</td></tr>`; }).join("")}</table>
 `; }
+function writing(){ const k = UI.styleType || "sitrep", cfg = STYLE.types[k], gw = CFG.llm.provider === "gateway";
+  return `<h2>Writing style</h2><p class="help">Everything the console writes or you type for sending is checked against this house style as you type, without any model. With a language model connected, “Rewrite in house style” turns a draft into the style of your example reports; every figure, time and site code is kept, and any that was not in the draft is flagged.</p>
+    <h3 class="ttp-sub" style="margin-top:16px">Language model</h3>
+    <div class="form" style="max-width:760px">${field("Connect through", `<select data-cfg="llm.provider"><option value="anthropic"${gw ? "" : " selected"}>Anthropic API, with your key</option><option value="gateway"${gw ? " selected" : ""}>Company gateway (same API)</option></select>`)}
+      ${field("Model", `<select data-cfg="llm.model">${Object.entries(MODELS).map(([m, l]) => `<option value="${m}"${CFG.llm.model === m ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
+      ${gw ? txt("llm.url", "Gateway address (Messages API)", "https://ai-gateway.example.com/v1/messages") + txt("llm.header", "Header name", "e.g. api-key") + txt("llm.headerValue", "Header value", "", "password") : txt("keys.claude", "Anthropic API key", "sk-ant-…", "password")}
+      <div class="fld" style="justify-content:flex-end"><button class="btn" data-llmtest type="button">Test the connection</button></div></div>
+    <p class="help">${gw ? "Text goes to your gateway only." : "The key stays in this browser; text goes only to api.anthropic.com, directly from this computer."} Without a model, the style check and “Fix wording” still work.</p>
+    <h3 class="ttp-sub" style="margin-top:18px">House style guide</h3>
+    <textarea class="paper" style="min-height:190px" data-st="guide" aria-label="House style guide">${esc(STYLE.guide)}</textarea>
+    <div class="form" style="max-width:760px;margin-top:8px">${field("Words and phrases to avoid (one per line)", `<textarea rows="5" data-st="avoid">${esc(STYLE.avoid.join("\n"))}</textarea>`)}${field("Preferred terms (one per line: write this → as this)", `<textarea rows="5" data-st="prefer">${esc(STYLE.prefer.map(([a, b]) => a + " → " + b).join("\n"))}</textarea>`)}
+      ${field("Longest sentence (words)", `<input type="number" min="10" max="80" data-st="maxWords" value="${STYLE.maxWords}">`)}</div>
+    <h3 class="ttp-sub" style="margin-top:18px">Each kind of report</h3>
+    <div class="seg" role="group" aria-label="Report type" style="flex-wrap:wrap">${Object.entries(TYPES).map(([t, l]) => `<button data-stt="${t}" aria-pressed="${k === t}">${esc(l)}</button>`).join("")}</div>
+    <div class="form" style="max-width:760px;margin-top:8px">${field("Required headings (one per line, in order)", `<textarea rows="3" data-st="headings">${esc(cfg.headings.join("\n"))}</textarea>`)}${field("Must end with", `<input data-st="endsWith" value="${esc(cfg.endsWith)}">`)}</div>
+    <p class="help">Examples (${cfg.examples.length}). The model copies their structure, headings and tone. Add two or three of your best real reports of this kind; from Reports, “Use as a style example” adds a saved one.</p>
+    ${cfg.examples.map(e => `<details class="draft"><summary>${esc(e.title)}${e.builtin ? " (built in)" : ""}<span class="s">${e.by ? esc(e.by) + " · " : ""}${e.at ? esc(ago(e.at)) : ""}</span></summary><pre class="exbox">${esc(e.text)}</pre><div class="actions"><button class="btn small danger" data-exdel="${esc(e.id)}">Remove</button></div></details>`).join("")}
+    <textarea class="paper" style="min-height:120px" id="exNew" placeholder="Paste an example ${esc(TYPES[k])} written the way the team wants it"></textarea><div class="actions"><button class="btn" data-exadd>Add as an example</button></div>
+    <h3 class="ttp-sub" style="margin-top:18px">Try it</h3><textarea class="paper" style="min-height:140px" id="styTry" data-style="${k}" placeholder="Paste any draft ${esc(TYPES[k])} to check it or rewrite it in the house style"></textarea>${styleBar("styTry", k)}
+    <div class="actions" style="margin-top:14px"><button class="btn danger" data-styreset>Go back to the PULSE defaults</button></div>`; }
 function thresholds(){ return `<h2>Thresholds</h2><h3 class="help" style="margin-top:14px">Earthquakes</h3><div class="form">${num("quake.globalMag", "Alarm anywhere at magnitude", .1)}${num("quake.nearMag", "Near-site alarm at magnitude", .1)}${num("quake.nearKm", "Near-site distance (km)", 10)}${num("quake.listMag", "List down to magnitude", .5)}
       ${field("Sites counted", `<select data-cfg="quake.scope"><option value="live"${CFG.quake.scope === "live" ? " selected" : ""}>Live sites and offices</option><option value="livebuild"${CFG.quake.scope === "livebuild" ? " selected" : ""}>Also sites under construction</option></select>`)}</div>
     <h3 class="help" style="margin-top:18px">Air quality (US AQI)</h3><div class="form">${num("aqi.monitor", "Monitor from")}${num("aqi.manager", "Manager trigger from")}${num("aqi.intel", "Escalate from")}</div>
@@ -76,12 +99,18 @@ export function bind(p, rerender){ const after = () => { saveCfg(); };
     try{ await acledConnect($("#acU").value.trim(), $("#acP").value); audit("ACLED connected"); toast("ACLED connected", "Protest and riot events load within a minute.", 0); runSource(SOURCES.find(x => x.id === "acled")); rerender(); }
     catch(err){ toast("Could not connect ACLED", err.message, 3); b.textContent = "Connect"; } };
   p.onchange = e => { const t = e.target;
+    if (t.dataset.st){ const f = t.dataset.st, k = UI.styleType || "sitrep", lines = v => v.split(/\n/).map(x => x.trim()).filter(Boolean);
+      if (f === "guide") STYLE.guide = t.value.trim(); else if (f === "avoid") STYLE.avoid = lines(t.value); else if (f === "maxWords") STYLE.maxWords = Math.max(10, +t.value || 30);
+      else if (f === "prefer") STYLE.prefer = lines(t.value).map(l => l.split(/\s*(?:→|->|=>)\s*/)).filter(x => x.length === 2 && x[0] && x[1]);
+      else if (f === "headings") STYLE.types[k].headings = lines(t.value); else if (f === "endsWith") STYLE.types[k].endsWith = t.value.trim();
+      saveStyle(); toast("Saved", "", 0, null, 1500); paintBars(p); return; }
     if (t.dataset.cfg){ const path = t.dataset.cfg.split("."), last = path.pop(); let o = CFG; path.forEach(k => o = o[k] = o[k] || {}); o[last] = t.type === "checkbox" ? t.checked : t.type === "number" ? parseFloat(t.value) : t.value.trim(); after();
+      if (t.dataset.cfg === "llm.provider"){ rerender(); return; }
       if (t.dataset.cfg === "cadence"){ let n = 0; EVENTS.forEach(ev => { if (applyCadence(ev, "Settings")) n++; }); saveEvents(); rerender(); if (n) toast("Cadence applied", `${n} open escalation${n === 1 ? "" : "s"} updated.`, 0); return; } toast("Saved", "", 0, null, 1500); return; }
     const list = (attr, arr) => { const v = t.dataset[attr]; return t.checked ? [...new Set(arr.concat(v))] : arr.filter(x => x !== v); };
     if (t.dataset.jma){ CFG.agency.jmaPrefs = list("jma", CFG.agency.jmaPrefs); after(); } if (t.dataset.kma){ CFG.agency.kmaAreas = list("kma", CFG.agency.kmaAreas); after(); } if (t.dataset.unr){ CFG.unrest.countries = list("unr", CFG.unrest.countries); after(); }
     if (t.dataset.agon){ CFG.agency.off = Object.assign({}, CFG.agency.off, { [t.dataset.agon]: !t.checked }); after(); } };
-  p.onclick = async e => { const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx],[data-spulse],[data-acledoff],[data-sclear]"); if (!t) return; const d = t.dataset;
+  p.onclick = async e => { const t = e.target.closest("[data-ssec],[data-stest],[data-stest1],[data-sexport],[data-sreset],[data-capadd],[data-capdel],[data-sbackup],[data-srestore],[data-saudit],[data-theme],[data-sttpclear],[data-sxlsx],[data-spulse],[data-acledoff],[data-sclear],[data-stt],[data-exadd],[data-exdel],[data-styreset],[data-llmtest]"); if (!t) return; const d = t.dataset;
     if (d.ssec){ UI.setSel = d.ssec; saveUI(); rerender(); return; }
     if (d.stest !== undefined){ t.disabled = true; t.textContent = "Testing…"; await Promise.all(SOURCES.map(runSource)); rerender(); return; }
     if (d.stest1){ await runSource(SOURCES.find(x => x.id === d.stest1)); rerender(); return; }
@@ -93,6 +122,11 @@ export function bind(p, rerender){ const after = () => { saveCfg(); };
     if (d.srestore !== undefined){ const i = document.createElement("input"); i.type = "file"; i.accept = ".json"; i.onchange = async () => { try{ const all = JSON.parse(await i.files[0].text()); if (!await confirmBox("Restore this backup?", "Everything in this browser's console is replaced by the backup, then the page reloads.", "Restore")) return;
         Object.keys(localStorage).filter(k => k.startsWith("ite2.")).forEach(k => localStorage.removeItem(k)); Object.entries(all).forEach(([k, v]) => { if (k.startsWith("ite2.")) localStorage.setItem(k, v); }); location.reload(); }catch(err){ toast("Not a backup file", err.message, 3); } }; i.click(); return; }
     if (d.saudit !== undefined){ download("ite-audit.csv", csv([["time_utc", "who", "action", "item", "detail"]].concat(auditLog().map(a => [new Date(a.t).toISOString(), a.by, a.action, a.what, a.detail]))), "text/csv"); return; }
+    if (d.stt){ UI.styleType = d.stt; saveUI(); rerender(); return; }
+    if (d.exadd !== undefined){ const v = ($("#exNew") || {}).value || ""; if (v.trim().length < 40){ toast("Paste a full example first", "", 2); return; } addExample(UI.styleType || "sitrep", v, "Pasted example", who()); audit("Style example added", TYPES[UI.styleType || "sitrep"]); rerender(); return; }
+    if (d.exdel){ removeExample(UI.styleType || "sitrep", d.exdel); rerender(); return; }
+    if (d.styreset !== undefined){ if (await confirmBox("Go back to the PULSE defaults?", "The style guide, word lists, headings and examples return to the defaults. Your own examples are removed.", "Go back")){ resetStyle(); audit("House style reset"); rerender(); } return; }
+    if (d.llmtest !== undefined){ t.textContent = "Testing…"; try{ const r = await llm({ system: "Reply with the single word OK.", messages: [{ role: "user", content: "Test" }], max: 10 }); toast("Language model connected", `Replied: ${r.slice(0, 40)}`, 0); }catch(err){ toast("Not connected", err.message, 3); } t.textContent = "Test the connection"; return; }
     if (d.sclear !== undefined){ dialog("Clear everything?", `<p class="prose">This removes every escalation, decision, report, note, setting and key this console holds in this browser. Export to Excel first if you may need any of it.</p>${field("Type CLEAR to confirm", `<input id="clT" autocomplete="off">`, true)}`,
         `<button class="btn" data-close>Cancel</button><button class="btn" id="clX">Export to Excel first</button><button class="btn danger" id="clGo">Clear everything</button>`);
       $("#clX").onclick = () => exportExcel(); $("#clGo").onclick = () => { if ($("#clT").value.trim() !== "CLEAR"){ $("#clT").focus(); return; } Object.keys(localStorage).filter(k => k.startsWith("ite2.")).forEach(k => localStorage.removeItem(k)); try{ indexedDB.deleteDatabase("ite2-files"); }catch(e){} location.reload(); }; return; }

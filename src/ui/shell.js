@@ -63,7 +63,8 @@ export function render(){ if (rendering) return; rendering = true; try{
 function drawMap(){ const [, mod, hasMap] = WS[UI.ws] || WS.watch;
   if (hasMap && mapReady()) draw(Object.assign({ onPick: key => { go("watch", { watchSel: key, watchCity: null }); }, onSite: code => go("sites", { siteSel: code }), ovKey: UI.ws + ":" + (UI.ws === "watch" ? UI.watchMode : "") }, mod.mapSpec ? mod.mapSpec() : {})); }
 on("map", drawMap);
-let raf = 0; const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
+// live data refreshes every view except the Settings pages that hold no live data (they would lose what is being typed)
+let raf = 0; const soon = () => { if (UI.ws === "settings" && UI.setSel && UI.setSel !== "sources"){ rail(); top(); return; } cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
 on("data", soon); on("sites", soon); on("ttp", soon); on("feeds", () => { top(); if (UI.ws === "settings") soon(); });
 on("route", () => { render(); invalidate(); $("#pane").scrollTop = 0; });
 

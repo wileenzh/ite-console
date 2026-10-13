@@ -6,6 +6,7 @@ import { priChip, when, dialog, closeDialog, toast, field, confirmBox } from "./
 import { escalateForm, notifyComposer, sopDialog } from "./forms.js";
 import { draftsForEvent } from "./drafts.js";
 import { checklistFor, ttpFor, ttpName } from "../ttp.js";
+import { styleBar, paintBars } from "./stylebar.js";
 
 export const count = () => { const o = openEvents(); return { n: o.length, over: o.filter(e => timers(e).state === "overdue").length, soon: o.filter(e => timers(e).state === "duesoon").length }; };
 const catLabel = c => (SOP_REF[c] || {}).label || c;
@@ -14,7 +15,7 @@ export function timerText(ev){ const t = timers(ev);
   const next = Math.min(t.d12, t.d24), which = t.d12 <= t.d24 ? "Manager update" : "Intel / SLT update";
   return next < 0 ? `<span class="late">${which} overdue ${esc(dur(-next))}</span>` : `${which} due in ${t.state === "duesoon" ? `<span class="soon">${esc(dur(next))}</span>` : esc(dur(next))}`; }
 
-export function render(p){ const ev = UI.eventSel && EVENTS.find(e => e.id === UI.eventSel); if (ev) return p.innerHTML = detail(ev);
+export function render(p){ const ev = UI.eventSel && EVENTS.find(e => e.id === UI.eventSel); if (ev){ p.innerHTML = detail(ev); paintBars(p); return; }
   const q = (UI.eventQ || "").trim().toLowerCase(), f = UI.eventF || "open", c = count(), match = e => !q || (e.title + " " + e.country + " " + catLabel(e.cat) + " " + e.sites.join(" ")).toLowerCase().includes(q);
   const open = openEvents().filter(match), closed = EVENTS.filter(e => e.status === "closed" && match(e)).sort((a, b) => b.closed.at - a.closed.at).slice(0, 100);
   const list = f === "overdue" ? open.filter(e => timers(e).state === "overdue") : f === "closed" ? closed : f === "all" ? open.concat(closed) : open;
@@ -56,7 +57,7 @@ function detail(ev){ const t = timers(ev), c = cad(ev), ck = checklistFor(ev.cat
     <div class="sec"><h3>Sites and welfare<span class="r">${ev.sites.length ? `${wv.filter(w => w.status).length} of ${ev.sites.length} checked${wv.some(w => w.status === "impacted") ? ` · <span class="late">${wv.filter(w => w.status === "impacted").length} impacted</span>` : ""}` : ""}</span></h3>
       ${ev.sites.length ? `<table class="tbl"><tr><th>Site</th><th>SOC phone</th><th>Welfare</th></tr>${welfare}</table>` : `<p class="help">No sites on this escalation. <button class="linkbtn" data-eedit>Add sites</button></p>`}</div>
     <div class="sec"><h3>Log</h3><ul class="log">${ev.log.slice().reverse().map(l => `<li><time>${esc(sgt(l.t))}</time><span>${esc(l.m)}${l.by && l.by !== "system" ? ` <span class="help">— ${esc(l.by)}</span>` : ""}</span></li>`).join("")}</ul>
-      ${!closed ? `<form class="note" data-enote><input placeholder="Add to the log" aria-label="Add to the log"><button class="btn small">Add</button></form>` : ""}</div>
+      ${!closed ? `<form class="note" data-enote><input id="enoteIn" placeholder="Add to the log" aria-label="Add to the log"><button class="btn small">Add</button></form>${styleBar("enoteIn", "note")}` : ""}</div>
     <div class="actions">${closed ? `<button class="btn" data-ereopen>Reopen</button>` : `<button class="btn" data-eclose>Close the escalation</button>`}</div></div>`; }
 
 export function mapSpec(){ const ev = UI.eventSel && EVENTS.find(e => e.id === UI.eventSel), list = ev ? [ev] : openEvents();
@@ -86,14 +87,14 @@ export function bind(p, rerender){ p.onclick = async e => { const t = e.target.c
         onSent: dr => { ev.comms = (ev.comms || []).concat([{ at: Date.now(), by: (STATE_who()), label: dr.label }]); eventLog(ev, dr.label + " sent."); if (/leadership/i.test(dr.label) && timers(ev).state !== "awaiting") resetTimer(ev, "12"); rerender(); } }); return; }
     if (d.eedit !== undefined){ editEvent(ev, rerender); return; }
     if (d.eclose !== undefined){ const ck = checklistFor(ev.cat), open2 = ck ? ck.close.filter((x, i) => !(ev.checks || {})["close" + i]) : [];
-      dialog("Close the escalation", `<p class="prose">${esc(ev.title)}</p>${open2.length ? `<div class="warnbox"><b>Not yet ticked under “close when all are achieved”:</b><ul>${open2.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}<p class="help">A close-out report is saved to Reports.</p>`,
-        `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ecGo">Close it</button>`); $("#ecGo").onclick = () => { const sm = $("#ecSum").value.trim(); closeEvent(ev, sm); saveReport({ type: "Close-out", title: "Close-out — " + ev.title, text: closeOut(ev) }); closeDialog(); toast("Closed", "Close-out report saved to Reports.", 0); rerender(); }; return; }
+      dialog("Close the escalation", `<p class="prose">${esc(ev.title)}</p>${open2.length ? `<div class="warnbox"><b>Not yet ticked under “close when all are achieved”:</b><ul>${open2.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${field("Close-out summary", `<textarea id="ecSum" rows="4" placeholder="What happened, impact to sites and people, what was done"></textarea>`, true)}${styleBar("ecSum", "note")}<p class="help">A close-out report is saved to Reports.</p>`,
+        `<button class="btn" data-close>Cancel</button><button class="btn primary" id="ecGo">Close it</button>`); paintBars($("#dialog")); $("#ecGo").onclick = () => { const sm = $("#ecSum").value.trim(); closeEvent(ev, sm); saveReport({ type: "Close-out", title: "Close-out — " + ev.title, text: closeOut(ev) }); closeDialog(); toast("Closed", "Close-out report saved to Reports.", 0); rerender(); }; return; }
     if (d.ereopen !== undefined){ reopenEvent(ev); rerender(); } };
   p.onchange = e => { const t = e.target;
     if (t.dataset.eck){ const ev = EVENTS.find(x => x.id === UI.eventSel); if (ev){ setCheck(ev, t.dataset.eck, t.checked, t.dataset.ecl); rerender(); } return; }
     if (!t.dataset.ewel) return; const ev = EVENTS.find(x => x.id === UI.eventSel); if (!ev) return; if (!t.value){ delete ev.welfare[t.dataset.ewel]; saveEvents(); rerender(); return; }
     const code = t.dataset.ewel; if (t.value !== "impacted"){ setWelfare(ev, code, t.value); rerender(); return; }
-    dialog("Impact at " + code, field("What is the impact?", `<textarea id="wiNote" rows="3" placeholder="People, power, access, damage — and who reported it"></textarea>`, true), `<button class="btn" data-close>Cancel</button><button class="btn primary" id="wiGo">Record impact</button>`, { onClose: rerender });
+    dialog("Impact at " + code, field("What is the impact?", `<textarea id="wiNote" rows="3" placeholder="People, power, access, damage — and who reported it"></textarea>`, true) + styleBar("wiNote", "note"), `<button class="btn" data-close>Cancel</button><button class="btn primary" id="wiGo">Record impact</button>`, { onClose: rerender }); paintBars($("#dialog"));
     $("#wiGo").onclick = () => { setWelfare(ev, code, "impacted", $("#wiNote").value.trim()); closeDialog(); }; };
   p.oninput = e => { if (!e.target.matches("[data-eq]")) return; UI.eventQ = e.target.value; saveUI(); clearTimeout(p._t); p._t = setTimeout(() => { const pos = e.target.selectionStart; rerender(); const i = p.querySelector("[data-eq]"); if (i){ i.focus(); i.setSelectionRange(pos, pos); } }, 200); };
   p.onsubmit = e => { if (!e.target.matches("[data-enote]")) return; e.preventDefault(); const i = e.target.querySelector("input"), v = i.value.trim(); if (!v) return; const ev = EVENTS.find(x => x.id === UI.eventSel); if (ev){ eventLog(ev, v, "note"); rerender(); } }; }

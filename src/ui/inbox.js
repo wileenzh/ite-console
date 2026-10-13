@@ -4,6 +4,7 @@ import { INBOX, PRI, KINDS, openItems, dueAt, decide, signalBy, addManualItem } 
 import { UI, saveUI, go } from "./state.js";
 import { priChip, dueText, when, dialog, closeDialog, toast, field, tierWord } from "./kit.js";
 import { escalateForm, notifyComposer } from "./forms.js";
+import { styleBar } from "./stylebar.js";
 
 export const count = () => { const o = openItems(), now = Date.now(); return { n: o.length, late: o.filter(i => dueAt(i) < now).length, top: o[0] }; };
 const REASONS = ["Not near our sites", "No impact expected", "Already covered by an open escalation", "Duplicate", "Source error or false alarm"];
@@ -53,6 +54,6 @@ export function bind(p, rerender){ p.onclick = e => { const t = e.target.closest
   if (d.isel){ UI.inboxSel = d.isel; saveUI(); rerender(); return; } if (d.idec){ act(d.idec); return; } if (d.idone !== undefined){ UI.inboxShowDone = !UI.inboxShowDone; saveUI(); rerender(); return; }
   if (d.iwatch){ go("watch", { watchSel: d.iwatch, watchCity: null }); return; } if (d.iev){ go("events", { eventSel: d.iev }); return; }
   if (d.ireopen){ const it = INBOX.find(x => x.id === d.ireopen); if (it){ it.status = "open"; it.createdAt = Date.now(); it.log.push({ t: Date.now(), m: "Reopened" }); decideSave(); UI.inboxSel = it.id; rerender(); } return; }
-  if (d.iadd !== undefined){ dialog("Add an item to the Inbox", `<div class="form">${field("What needs a decision", `<input id="maT" placeholder="e.g. Call from site security: power outage at XSG11">`, true)}${field("Priority", `<select id="maP"><option>P1</option><option>P2</option><option selected>P3</option><option>P4</option></select>`)}${field("Details", `<textarea id="maX" rows="3"></textarea>`, true)}</div>`,
+  if (d.iadd !== undefined){ dialog("Add an item to the Inbox", `<div class="form">${field("What needs a decision", `<input id="maT" placeholder="e.g. Call from site security: power outage at XSG11">`, true)}${field("Priority", `<select id="maP"><option>P1</option><option>P2</option><option selected>P3</option><option>P4</option></select>`)}${field("Details", `<textarea id="maX" rows="3"></textarea>`, true)}${styleBar("maX", "note")}</div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn primary" id="maGo">Add</button>`); $("#maGo").onclick = () => { const t2 = $("#maT").value.trim(); if (!t2) return; const it = addManualItem({ title: t2, pri: $("#maP").value, text: $("#maX").value.trim() }); UI.inboxSel = it.id; closeDialog(); }; } }; }
 const decideSave = () => save("inbox", INBOX);

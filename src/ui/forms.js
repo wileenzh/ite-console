@@ -8,6 +8,8 @@ import { pickPoint, mapReady } from "./map.js";
 import { go } from "./state.js";
 import { ccFor } from "../sources/people.js";
 import { TTP, ttpName, cadenceFor } from "../ttp.js";
+import { styleBar, paintBars } from "./stylebar.js";
+const STYPE = { leadership: "leadership", welfare: "welfare", intel: "intel", stakeholders: "stakeholders" };
 
 const countryOfSites = codes => { const c = codes.map(x => (siteBy(x) || {}).country).filter(Boolean); return c.sort((a, b) => c.filter(v => v === b).length - c.filter(v => v === a).length)[0] || ""; };
 export function escalateForm(pre = {}, opts = {}){
@@ -48,9 +50,9 @@ export function sopDialog(cat){ const s = SOP_REF[cat] || {};
 
 export function notifyComposer(sig, opts = {}){ const ds = opts.drafts || draftsForSignal(sig);
   dialog(opts.title || "Notify", `<p class="help">Edit, then copy into the channel or open it in your email app. Nothing is sent from the console.</p>${ds.map((d, i) => `<details class="draft"${i ? "" : " open"}><summary>${esc(d.label)}<span class="s">${d.to ? "to " + esc(d.to) : ""}</span></summary>
-      <textarea data-dtext="${i}">${esc(d.text)}</textarea><div class="actions"><button class="btn small" data-dcopy="${i}">Copy</button>${d.to !== undefined ? `<a class="btn small" style="text-decoration:none" data-dmail="${i}" href="#">Email…</a>` : ""}${opts.onSent ? `<button class="btn small" data-dsent="${i}">Mark as sent</button>` : ""}</div></details>`).join("")}`,
+      <textarea data-dtext="${i}" id="dt${i}">${esc(d.text)}</textarea>${styleBar("dt" + i, STYPE[d.id] || "note")}<div class="actions"><button class="btn small" data-dcopy="${i}">Copy</button>${d.to !== undefined ? `<a class="btn small" style="text-decoration:none" data-dmail="${i}" href="#">Email…</a>` : ""}${opts.onSent ? `<button class="btn small" data-dsent="${i}">Mark as sent</button>` : ""}</div></details>`).join("")}`,
     `<button class="btn" data-close>Close</button>${opts.item ? `<button class="btn primary" id="ncDone">Mark the item notified</button>` : ""}`, { wide: true });
-  const text = i => $(`[data-dtext="${i}"]`).value;
+  paintBars($("#dialog")); const text = i => $(`[data-dtext="${i}"]`).value;
   $("#dialog").onclick = async e => { const t = e.target.closest("[data-dcopy],[data-dmail],[data-dsent]"); if (!t) return; const i = +(t.dataset.dcopy ?? t.dataset.dmail ?? t.dataset.dsent), d = Object.assign({}, ds[i], { text: text(i) });
     if (t.dataset.dcopy != null){ const ok = await copyText(d.text, asHtml(d.text)); t.textContent = ok ? "Copied" : "Copy failed"; audit("Copied message", d.label, sig ? sig.title : ""); }
     if (t.dataset.dmail != null){ e.preventDefault(); location.href = mailto(d); audit("Opened email", d.label, sig ? sig.title : ""); }
