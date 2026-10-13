@@ -9,12 +9,12 @@ export const DEFAULTS = {
   river: { warn: 2, bad: 4 },
   ranges: { cycloneWatchKm: 500, gdacsKm: 300, eonetKm: 300, volcanoCloseKm: 100, volcanoNearKm: 250, tsunamiKm: 1500 },
   // what opens an Inbox item without anyone asking (the SOP triggers)
-  rules: { quake: true, warnings: true, cyclone: true, volcano: true, air: true, gdacs: true, unrest: true, travel: true, conditions: true },
+  rules: { quake: true, warnings: true, cyclone: true, volcano: true, air: true, gdacs: true, unrest: true, travel: true, conditions: true, security: true },
   keys: { waqi: "", cwa: "", kma: "", claude: "" },
   // the language model every drafting feature uses: Anthropic directly with a key, or a company gateway that speaks the same API
-  llm: { provider: "anthropic", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "" },
+  llm: { provider: "anthropic", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "", redact: true },
   agency: { jmaPrefs: ["130000", "120000", "110000", "140000", "270000", "280000", "260000"], kmaAreas: ["seoul", "busan"],
-    bmkgAreas: "32.15.03.2004|Karawang (KIIC vicinity);32.75.03.1002|Bekasi (Perwira);31.71.01.1001|Central Jakarta (Gambir);31.73.02.1003|West Jakarta (Tomang)",
+    bmkgAreas: "32.15.03.2004|Karawang;32.75.03.1002|Bekasi;31.71.01.1001|Central Jakarta;31.73.02.1003|West Jakarta",
     sachetStates: "maharashtra,telangana,tamil_nadu,gujarat", off: {} },
   unrest: { countries: ["philippines", "indonesia", "burma", "thailand", "hongkong", "bangladesh", "pakistan"] },
   wxModels: "national",

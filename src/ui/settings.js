@@ -1,5 +1,5 @@
 // SETTINGS — sources and their health, what reaches the Inbox, thresholds, keys, areas, contacts, data.
-import { $, $$, esc, sgt, ago, download, csv, save, load, loadScript } from "../core.js";
+import { $, $$, esc, sgt, ago, download, csv, save, load, loadScript, loadVendor } from "../core.js";
 import { CFG, saveCfg, resetCfg, DEFAULTS } from "../config.js";
 import { STATE, who, auditLog, KINDS, SOP_REF, EVENTS, INBOX, REPORTS, HISTORY, SITES, REN, saveEvents, applyCadence, audit } from "../model.js";
 import { QARCH } from "../sources/quakes.js";
@@ -11,6 +11,7 @@ import { toast, confirmBox, field, dialog, closeDialog } from "./kit.js";
 import { readPulseFile, applyPulse } from "../sites-import.js";
 import { STYLE, TYPES, saveStyle, resetStyle, addExample, removeExample } from "../style.js";
 import { MODELS, llm } from "../llm.js";
+import { HOSTS } from "../security.js";
 import { styleBar, paintBars } from "./stylebar.js";
 import { UNREST_COUNTRIES, acledAuth, acledConnect, acledDisconnect } from "../sources/people.js";
 import { setBase } from "./map.js";
@@ -30,7 +31,7 @@ function sources(){ const groups = [...new Set(SOURCES.map(x => x.group))], ok =
       return `<tr><td><b>${esc(x.name)}</b><div class="help">${esc(x.provider)}</div></td><td>${esc(x.what)}</td><td>${esc(x.key)}</td><td>${x.every >= 3600e3 ? x.every / 3600e3 + " h" : x.every >= 60e3 ? x.every / 60e3 + " min" : x.every / 1e3 + " s"}</td>
         <td><span class="dot ${st}"></span>${f.off ? esc(f.err || "off") : f.ok ? `working · ${f.n != null ? f.n + " records · " : ""}${esc(ago(f.at))}` : f.ok === false ? `<span class="late">${esc(f.err)}</span>` : "waiting"}</td>
         <td>${x.group === "Official warnings" ? `<label class="chk"><input type="checkbox" data-agon="${x.id}"${(CFG.agency.off || {})[x.id] ? "" : " checked"}> on</label>` : ""}<button class="linkbtn" data-stest1="${x.id}">Test</button></td></tr>`; }).join("")}</table>`).join("")}`; }
-function rules(){ const R = [["quake", "Earthquakes", "estimated shaking MMI IV or more at a site, a near-site or global alarm, or a tsunami flag in range"], ["warnings", "Official warnings", "second tier (severe) or higher covering a city or site"],
+function rules(){ const R = [["security", "Cameras and access control (prototype)", "a camera rule at manager level or above (restricted zone, object left, tailgating, person down), or a door forced or held open"], ["quake", "Earthquakes", "estimated shaking MMI IV or more at a site, a near-site or global alarm, or a tsunami flag in range"], ["warnings", "Official warnings", "second tier (severe) or higher covering a city or site"],
     ["cyclone", "Tropical cyclones", "a site inside the storm-force wind circle or the 70 % probability circle of the forecast"], ["volcano", "Volcanoes", "a site within " + CFG.ranges.volcanoCloseKm + " km of an erupting volcano"],
     ["gdacs", "Floods, fires and droughts", "a GDACS orange or red alert within range of a site, or a wildfire within 25 km"], ["unrest", "Unrest and news", "violent unrest in a site country, a demonstration alert naming a city, or datacenter news"],
     ["travel", "Travel advisories", "an advisory raised to level 3 or 4 in a site country"], ["conditions", "City conditions", "weather, the 48-hour forecast, air quality or river flow at manager level in a city with sites"]];
@@ -40,8 +41,8 @@ function rules(){ const R = [["quake", "Earthquakes", "estimated shaking MMI IV 
     <div style="display:flex;flex-direction:column;gap:10px;max-width:760px;margin-top:12px">${R.map(([k, l, d]) => `<label class="chk"><input type="checkbox" data-cfg="rules.${k}"${CFG.rules[k] !== false ? " checked" : ""}><span><b>${esc(l)}</b><br><span class="help">${esc(d)}</span></span></label>`).join("")}</div>`; }
 function procedures(){ const cats = Object.entries(SOP_REF);
   return `<h2>Procedures</h2><p class="help">${esc(ttpName())}${TTP.meta.date ? " dated " + esc(TTP.meta.date) : ""}${TTP.meta.owner ? ", " + esc(TTP.meta.owner) : ""}${TTP.builtin ? " — built in, from the PULSE Master Tracker." : `, read from ${esc(TTP.file)} ${esc(ago(TTP.at))} and used in this browser instead of the built-in version.`}</p>
-    <div class="actions"><button class="btn" data-spulse>Update from a PULSE file</button>${TTP.builtin ? "" : `<button class="btn" data-sttpclear>Go back to the built-in TTP</button>`}</div>
-    <p class="help">A PULSE file can also bring in the PSOC watch desk contacts and, if you tick them, its keys. Its site list and site contacts are not used: the estate here is fictional.</p>
+    <div class="actions"><button class="btn" data-spulse>Read desk contacts or keys from a PULSE file</button>${TTP.builtin ? "" : `<button class="btn" data-sttpclear>Go back to the built-in TTP</button>`}</div>
+    <p class="help">A new TTP version is built into the console by an administrator (tools/extract-ttp.mjs) and released, so the console never runs code from a file someone opens. A PULSE file can still bring in the PSOC watch desk contacts and, if you tick them, its keys; its site list and site contacts are not used.</p>
     <div class="form" style="max-width:640px">${field("Update timers", `<select data-cfg="cadence"><option value="ttp"${CFG.cadence !== "fixed" ? " selected" : ""}>Follow the REN TTP for each category</option><option value="fixed"${CFG.cadence === "fixed" ? " selected" : ""}>Fixed: Manager every 12 h, Intel / SLT every 24 h</option></select>`, true)}</div>
     <table class="tbl" style="margin-top:12px;max-width:760px"><tr><th>Category</th><th>Manager update</th><th>Intel / SLT update</th><th>Source</th></tr>${cats.map(([k, v]) => { const c = cadenceFor(k); return `<tr><td>${esc(v.label)}</td><td>${k === "protest" ? "as it develops" : "every " + c.m + " h"}</td><td>${k === "protest" ? "as it develops" : "every " + c.i + " h"}</td><td class="help">${v.ttp ? esc(c.src === "fixed" ? "fixed" : ttpName()) : "placeholder"}</td></tr>`; }).join("")}</table>
 `; }
@@ -52,6 +53,7 @@ function writing(){ const k = UI.styleType || "sitrep", cfg = STYLE.types[k], gw
       ${field("Model", `<select data-cfg="llm.model">${Object.entries(MODELS).map(([m, l]) => `<option value="${m}"${CFG.llm.model === m ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
       ${gw ? txt("llm.url", "Gateway address (Messages API)", "https://ai-gateway.example.com/v1/messages") + txt("llm.header", "Header name", "e.g. api-key") + txt("llm.headerValue", "Header value", "", "password") : txt("keys.claude", "Anthropic API key", "sk-ant-…", "password")}
       <div class="fld" style="justify-content:flex-end"><button class="btn" data-llmtest type="button">Test the connection</button></div></div>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" data-cfg="llm.redact"${CFG.llm.redact !== false ? " checked" : ""}> Replace site codes and names with placeholders (SITE-1, SITE-2 …) before anything is sent, and put them back in the answer</label>
     <p class="help">${gw ? "Text goes to your gateway only." : "The key stays in this browser; text goes only to api.anthropic.com, directly from this computer."} Without a model, the style check and “Fix wording” still work.</p>
     <h3 class="ttp-sub" style="margin-top:18px">House style guide</h3>
     <textarea class="paper" style="min-height:190px" data-st="guide" aria-label="House style guide">${esc(STYLE.guide)}</textarea>
@@ -86,7 +88,9 @@ function areas(){ const chk = (attr, list, sel) => `<div class="checks">${list.m
     <table class="tbl" style="max-width:860px"><tr><th>Country code</th><th>Authority</th><th>Feed address</th><th></th></tr>${(CFG.capFeeds || []).map((f, i) => `<tr><td>${esc(f.cc)}</td><td>${esc(f.authority)}</td><td>${esc(f.url)}</td><td><button class="linkbtn" data-capdel="${i}">Remove</button></td></tr>`).join("")}
       <tr><td><input class="search" id="capCC" placeholder="NZ" style="width:60px"></td><td><input class="search" id="capA" placeholder="MetService"></td><td><input class="search" id="capU" placeholder="https://…" style="width:100%"></td><td><button class="btn small" data-capadd>Add</button></td></tr></table>`; }
 function contacts(){ return `<h2>Contacts</h2><p class="help">Used in the messages the console writes. Settings › Procedures › Update from a PULSE file can fill the watch desk.</p><div class="form" style="margin-top:12px">${txt("psoc.desk", "Watch desk phone")}${txt("psoc.mobile", "Watch desk mobile")}${txt("psoc.email", "Watch desk email")}${txt("psoc.leaders", "Leadership update recipients", "a@company.com; b@company.com")}${txt("psoc.intelChannel", "Intelligence Channel (email address of the channel)")}</div>`; }
-function connection(){ return `<h2>Connection</h2><p class="help">Some agencies block browsers from reading their data. A relay (relay.js) or the PSOC server fetches those for the console. The desktop app has one built in.</p><div class="form" style="margin-top:12px">${txt("relay", "Relay address", "https://relay.example.com")}${txt("server", "PSOC server address (shared data comes in stage 2)", "https://psoc.example.com")}</div>`; }
+function connection(){ return `<h2>Connection</h2><p class="help">Some agencies block browsers from reading their data. A relay (relay.js) or the PSOC server fetches those for the console. The desktop app has one built in.</p><div class="form" style="margin-top:12px">${txt("relay", "Relay address", "https://relay.example.com")}${txt("server", "PSOC server address (shared data comes in stage 2)", "https://psoc.example.com")}</div>
+    <h3 class="ttp-sub" style="margin-top:18px">Where this console may send requests</h3><p class="help">Enforced by the browser's content security policy: any other address is refused, including one an injected script tries. A relay, PSOC server, model gateway or CAP feed you set here is added on the next reload.</p>
+    <table class="tbl"><tr><th>Purpose</th><th>Addresses</th></tr>${Object.entries(HOSTS).map(([g, h]) => `<tr><td>${esc({ hazards: "Global hazards", agencies: "National agencies", conditions: "Weather and air", people: "Unrest, news and travel", tools: "Address search, language model, detector model", tiles: "Map tiles", video: "Live TV streams" }[g] || g)}</td><td class="help">${h.map(x => esc(x.replace("https://", ""))).join(", ")}</td></tr>`).join("")}</table>`; }
 function data(){ const A = auditLog().slice(0, 300), theme = document.documentElement.dataset.theme || "night";
   let bytes = 0; try{ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k.startsWith("ite2.")) bytes += (k.length + (localStorage.getItem(k) || "").length) * 2; } }catch(e){}
   return `<h2>Data and audit</h2><div class="actions"><button class="btn primary" data-sxlsx>Export everything to Excel</button><button class="btn" data-sbackup>Download a backup</button><button class="btn" data-srestore>Restore from a backup</button><button class="btn" data-saudit>Export the audit trail</button><button class="btn danger" data-sclear>Clear everything</button></div>
@@ -135,8 +139,7 @@ export function bind(p, rerender){ const after = () => { saveCfg(); };
     if (d.sttpclear !== undefined){ if (await confirmBox("Go back to the built-in TTP?", "The procedures and update cadence return to the built-in REN TTP v2.2.", "Go back")){ clearTTP(); EVENTS.forEach(ev => applyCadence(ev, "built-in TTP")); saveEvents(); audit("REN TTP reset to built-in"); rerender(); } return; }
     if (d.spulse !== undefined){ const i = document.createElement("input"); i.type = "file"; i.accept = ".html,.htm"; i.onchange = async () => { const f = i.files[0]; if (!f) return;
         try{ const fd = await readPulseFile(f), mask = v => v.slice(0, 4) + "…" + v.slice(-3);
-          dialog("Import from " + f.name, `<p class="help">Read in this browser only. Its site list and site contacts are not used.</p>
-            ${fd.ttp ? `<label class="chk"><input type="checkbox" id="piTtp" checked> REN TTP${fd.ttp.meta && fd.ttp.meta.version ? " v" + esc(fd.ttp.meta.version) : ""}${fd.ttp.meta && fd.ttp.meta.date ? ", " + esc(fd.ttp.meta.date) : ""} — ${Object.keys(fd.ttp.ttp || {}).length} categories</label>` : fd.ttpErr ? `<p class="help">The REN TTP could not be read: ${esc(fd.ttpErr)}.</p>` : ""}
+          dialog("Import from " + f.name, `<p class="help">Read in this browser only; no code from the file runs. Its site list and site contacts are not used.</p>
             ${fd.watch ? `<label class="chk"><input type="checkbox" id="piWatch" checked> PSOC watch desk contacts</label>` : ""}
             ${Object.keys(fd.keys).length ? `<h3 class="ttp-sub" style="margin-top:12px">Keys in the file — off unless you are allowed to use them here</h3>${Object.entries(fd.keys).map(([k, v]) => `<label class="chk"><input type="checkbox" id="piKey_${k}"> ${k.toUpperCase()} ${esc(mask(v))}</label>`).join("")}` : ""}`,
             `<button class="btn" data-close>Cancel</button><button class="btn primary" id="piGo">Import</button>`);
@@ -146,7 +149,7 @@ export function bind(p, rerender){ const after = () => { saveCfg(); };
     if (d.theme){ document.documentElement.dataset.theme = d.theme; save("theme", d.theme); rerender(); setBase(); } }; }
 
 // one workbook with everything the console holds: escalations and their logs, decisions, reports, history, earthquakes, sites, audit
-async function exportExcel(){ await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"); const X = window.XLSX, wb = X.utils.book_new(), T = t => t ? sgt(t) : "";
+async function exportExcel(){ await loadVendor("xlsx"); const X = window.XLSX, wb = X.utils.book_new(), T = t => t ? sgt(t) : "";
   const add = (name, rows) => X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{ note: "none" }]), name);
   add("Escalations", EVENTS.map(e => ({ title: e.title, category: (SOP_REF[e.cat] || {}).label || e.cat, severity: e.sev, country: e.country, status: e.status, event_notice: REN[e.ren], opened_sgt: T(e.created), closed_sgt: e.closed ? T(e.closed.at) : "", closed_by: e.closed ? e.closed.by : "", summary: e.closed ? e.closed.summary : "", sites: e.sites.join(", "), welfare: Object.entries(e.welfare || {}).map(([k, v]) => k + " " + v.status).join("; "), messages_sent: (e.comms || []).length })));
   add("Escalation log", EVENTS.flatMap(e => e.log.map(l => ({ escalation: e.title, time_sgt: T(l.t), by: l.by, entry: l.m }))));

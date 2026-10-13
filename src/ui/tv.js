@@ -1,8 +1,8 @@
 // Live TV in Watch: CNA, NHK WORLD, DW News and Al Jazeera English, played straight from each broadcaster's
 // public stream. The player is kept between screen refreshes so a data update never interrupts it.
-import { esc, loadScript, load, save } from "../core.js";
+import { esc, loadVendor, VENDOR, load, save } from "../core.js";
 
-const HLS_JS = "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js";
+const HLS = () => VENDOR.hls || { src: "", sri: "" }, HLS_ABS = () => new URL(HLS().src, location.href).href;
 export const CHANNELS = {
   cna: { n: "CNA", yt: "https://www.youtube.com/embed/live_stream?channel=UC83jt4dlz1Gjl58fzQrrKZg&autoplay=1&mute=1&playsinline=1&rel=0", u: ["https://d2e1asnsl7br7b.cloudfront.net/7782e205e72f43aeb4a48ec97f66ebbe/index.m3u8", "https://mediacorp-videosbclive.akamaized.net/dd724cfb0e8e4cdc921bbc4ac94614bf/ap-southeast-1/6057994443001/profile_1/chunklist.m3u8"], page: "https://www.youtube.com/watch?v=XWq5kBlakcQ" },
   nhk: { n: "NHK WORLD", u: ["https://nhkwlive-ojp.akamaized.net/hls/live/2003459/nhkwlive-ojp-en/index.m3u8"], page: "https://www3.nhk.or.jp/nhkworld/en/live/" },
@@ -24,7 +24,7 @@ function youtube(){ const c = CHANNELS[ch]; stopStream(); const f = box.querySel
 // a second window for the video wall or another screen: the same stream, nothing else
 function popOut(){ const c = CHANNELS[ch] || CHANNELS.cna, w = window.open("", "ite-tv", "width=960,height=560"); if (!w){ msg("The browser blocked the pop-out window; allow pop-ups for this page."); return; }
   w.document.write(`<!doctype html><meta charset="utf-8"><title>${c.n} — ITE live TV</title><style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%}</style><video id="v" controls autoplay muted playsinline></video>
-    <script src="${HLS_JS}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`); w.document.close(); }
+    <script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`); w.document.close(); }
 function stopStream(){ const yf = box && box.querySelector(".tvframe iframe"); if (yf) yf.remove(); if (hls){ try{ hls.destroy(); }catch(e){} hls = null; } video.removeAttribute("src"); try{ video.load(); }catch(e){} }
 async function play(){ const c = CHANNELS[ch] || CHANNELS.cna; stopStream(); state = ch;
   box.querySelectorAll("[data-tvch]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tvch === ch));
@@ -33,7 +33,7 @@ async function play(){ const c = CHANNELS[ch] || CHANNELS.cna; stopStream(); sta
   const url = c.u[Math.max(0, urlI)]; msg(`Connecting to ${esc(c.n)}…`);
   const fail = () => { if (state !== ch) return; urlI++; play(); };
   if (video.canPlayType("application/vnd.apple.mpegurl")){ video.src = url; video.onerror = fail; video.play().catch(() => {}); return; }
-  try{ await loadScript(HLS_JS); }catch(e){ msg(`The video player could not load (cdnjs blocked). <a href="${esc(c.page)}" target="_blank" rel="noopener">Watch on the broadcaster's site</a>.`); return; }
+  try{ await loadVendor("hls"); }catch(e){ msg(`The video player could not load. <a href="${esc(c.page)}" target="_blank" rel="noopener">Watch on the broadcaster's site</a>.`); return; }
   if (!window.Hls || !window.Hls.isSupported()){ msg("This browser can't play live streams."); return; }
   hls = new window.Hls({ lowLatencyMode: false, manifestLoadingTimeOut: 12000 }); hls.on(window.Hls.Events.ERROR, (e, d) => { if (d && d.fatal) fail(); });
   hls.loadSource(url); hls.attachMedia(video); video.play().catch(() => {}); }

@@ -7,6 +7,13 @@
     "watch": "node tools/build.mjs --watch"
   },
   "devDependencies": {
-    "esbuild": "0.24.2"
+    "@fontsource/ibm-plex-sans": "^5.1.0",
+    "@fontsource/ibm-plex-sans-condensed": "^5.1.0",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.22.0",
+    "esbuild": "0.24.2",
+    "hls.js": "^1.5.13",
+    "leaflet": "^1.9.4",
+    "xlsx": "^0.18.5"
   }
 }

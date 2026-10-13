@@ -4,6 +4,7 @@ import { STATE, KINDS, CITIES, REGIONS, INBOX, METRO, HISTORY, isLiveKey, siteBy
 import { briefFor } from "./brief.js";
 import { mountTV } from "./tv.js";
 import { summaryHtml } from "./summary.js";
+import { detById } from "../sim/cameras.js";
 import { emit, load, save } from "../core.js";
 import { MODEL_NAME, outlook, outlookCached } from "../sources/conditions.js";
 import { CFG } from "../config.js";
@@ -69,6 +70,7 @@ function detail(s){ const e = s.extra || {}, item = INBOX.find(i => i.key === "s
     ${qs ? `<div class="sec"><h3>Welfare at sites</h3><p class="help">Tick sites where personnel felt shaking or reported damage; the welfare update wording follows.</p>
       <table class="tbl"><tr><th>Site</th><th>Shaking felt</th><th>Damage</th></tr>${s.sites.slice(0, 20).map(x => `<tr><td>${esc(x.code)}</td><td><input type="checkbox" data-qshake="${esc(x.code)}"${(qs.shaking || []).includes(x.code) ? " checked" : ""}></td><td><input type="checkbox" data-qdmg="${esc(x.code)}"${(qs.damage || []).includes(x.code) ? " checked" : ""}></td></tr>`).join("")}</table></div>` : ""}
     ${/^gdelt/.test(s.src) ? `<p class="help">News coverage found by GDELT, classified from the headline: not an official or verified report. Open the article and corroborate before acting. Article counts reflect news volume, not crowd size.</p>` : s.src === "acled" ? `<p class="help">ACLED researched event, published weekly; it describes what happened, not what is planned.</p>` : ""}
+    ${s.extra && s.extra.detId && detById(s.extra.detId) ? `<div class="sec"><h3>Picture strip</h3><div class="strip big">${detById(s.extra.detId).strip.map(u => `<img src="${u}" alt="camera frame">`).join("")}</div><p class="help">Simulated camera. <button class="linkbtn" data-ws="cameras">Open Cameras</button></p></div>` : ""}
     ${s.kind === "cyclone" ? stormTiming(s) : ""}
     <div class="sec"><h3>Notes</h3>${(NOTES[s.key] || []).map(n => `<p class="prose"><span class="help">${esc(sgt(n.t))} · ${esc(n.by)}</span><br>${esc(n.m)}</p>`).join("")}<form class="note" data-wnote><input placeholder="Add a note to this report" aria-label="Add a note"><button class="btn small">Add</button></form></div>
     <div class="sec"><h3>Sites ${s.sites.length ? `(${s.sites.length})` : ""}</h3>${s.kind === "cyclone" && s.sites.length ? `<p class="help">Timing for each site is above.</p>` : siteRows ? `<table class="tbl"><tr><th>Site</th><th>City</th><th>Distance</th><th></th></tr>${siteRows}</table>` : `<p class="help">No tracked site in range.${s.near ? ` Nearest: ${esc(s.near.code)}, ${Math.round(s.near.km)} km.` : ""}</p>`}</div></div>`; }

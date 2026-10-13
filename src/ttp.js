@@ -1,5 +1,6 @@
 // The REN TTP (triggers, thresholds and procedures). TTP v2.2 from the PULSE Master Tracker is built in;
-// a newer version can be read from a PULSE file and replaces it in this browser.
+// a newer version is built in by running tools/extract-ttp.mjs on the new PULSE file and releasing. The console itself
+// never runs code from an imported file.
 import { load, save, esc, emit } from "./core.js";
 import { CFG } from "./config.js";
 import SOP from "./data/sop.json";
@@ -48,17 +49,3 @@ export function setTTP(raw, file){ const c = clean(raw); if (!Object.keys(c.cats
 export function clearTTP(){ TTP = Object.assign(clean(BUILTIN), { at: null, file: "built in", builtin: true }); save("ttp", null); apply(); emit("ttp"); }
 export const checklistFor = cat => { const t = ttpFor(cat); if (!t) return null;
   return { close: t.close.map(plain), psoc: t.psoc.map(plain), cons: t.cons.map(plain), ren: t.ren.crit.map(plain) }; };
-
-// Read the TTP out of a PULSE Master Tracker. The file's own code builds it, so it is run in a sealed
-// frame with no access to this page or its storage, and only the resulting text comes back.
-export function extractTTP(trackerHtml){ return new Promise((res, rej) => {
-  const i = trackerHtml.indexOf('id="psoc-ttp-v'), a = i < 0 ? -1 : trackerHtml.indexOf("var TTP_META", i); if (a < 0) return res(null);
-  const code = trackerHtml.slice(a, trackerHtml.indexOf("</script>", a));
-  const f = document.createElement("iframe"); f.setAttribute("sandbox", "allow-scripts"); f.style.display = "none";
-  const done = (v, e) => { window.removeEventListener("message", on); clearTimeout(t); f.remove(); e ? rej(e) : res(v); };
-  const on = e => { if (e.source !== f.contentWindow) return; const d = e.data || {}; if (d.ttp) try{ done(JSON.parse(d.ttp)); }catch(x){ done(null, new Error("unreadable TTP")); } else done(null, new Error(d.err || "TTP not found")); };
-  const t = setTimeout(() => done(null, new Error("reading the TTP timed out")), 8000);
-  window.addEventListener("message", on);
-  f.srcdoc = `<script>onmessage=function(e){var s=e.data,b=0,r=null;while((b=s.indexOf("})();",b+1))>0){try{r=new Function(s.slice(0,b+5)+";return {meta:TTP_META,order:TTP_ORDER,ttp:TTP};")();break;}catch(x){}}
-    parent.postMessage(r?{ttp:JSON.stringify(r)}:{err:"TTP not found"},"*");};<\/script>`;
-  f.onload = () => f.contentWindow.postMessage(code, "*"); document.body.appendChild(f); }); }

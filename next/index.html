@@ -5,13 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ITE — PSOC console</title>
-<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 18:57 UTC.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 19:27 UTC.">
+<meta name="robots" content="noindex, nofollow">
+<script>/* the map library, self-hosted; checked against its build-time hash except when opened from a file (browsers cannot check file:// loads) */
+(function(){ var f = location.protocol === "file:"; document.write('<link rel="stylesheet" href="vendor/leaflet.css"' + (f ? "" : ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"') + '><script src="vendor/leaflet.js"' + (f ? "" : ' integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"') + '><\/script>'); })();</script>
 <script>try{ var t = localStorage.getItem("ite2.theme"); if (t) document.documentElement.dataset.theme = JSON.parse(t); }catch(e){}</script>
-<style>/* ITE — design tokens
+<style>@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url(vendor/plex-sans-400.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:url(vendor/plex-sans-500.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url(vendor/plex-sans-600.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans Condensed";font-style:normal;font-weight:500;font-display:swap;src:url(vendor/plex-cond-500.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(vendor/plex-cond-600.woff2) format("woff2")}
+/* ITE — design tokens
    Night (default, the watch floor) and Day. Severity is the only loud colour: the four tiers run from sea green
    through amber and orange to red, so anything coloured on screen means "this level of concern". Interaction is
    signal blue. Panels are flat; borders mean containment; floating things (dialogs, toasts) get the only shadow. */
@@ -134,6 +138,14 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
 .stylebar .sb-sum{font-weight:600}.stylebar .sb-sum.ok{color:var(--t0)}.stylebar .sb-sum.bad{color:var(--t2)}
 .stylebar ul{flex-basis:100%;margin:2px 0 0;padding-left:18px;color:var(--muted)}.stylebar li.error{color:var(--text)}.stylebar li.info{color:var(--muted)}.stylebar .sb-note{flex-basis:100%;margin:2px 0 0;color:var(--muted)}
 .exbox{white-space:pre-wrap;font:12.5px/1.5 var(--font);margin:0 11px 8px;max-height:260px;overflow:auto;color:var(--muted)}
+.camwrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:0 16px 16px;min-height:0}.camgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+.camtile{margin:0;border:1px solid var(--rule);border-radius:var(--r2);overflow:hidden;background:#111}.camslot canvas{display:block;width:100%;height:auto}.camtile figcaption{padding:6px 9px;font-size:12px;background:var(--panel);color:var(--text)}
+.camside{border-left:1px solid var(--rule);padding-left:14px;overflow:auto;max-height:calc(100vh - 210px)}.det{border-bottom:1px solid var(--rule);padding:8px 0}.det .dh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.det .dh .bar{width:4px;align-self:stretch;border-radius:2px}
+.det .dh .bar.t1{background:var(--t1)}.det .dh .bar.t2{background:var(--t2)}.det .dh .bar.t3{background:var(--t3)}.prose.small{font-size:12.5px;margin:4px 0}
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin:6px 0}.strip img{width:100%;border-radius:3px;display:block}.strip.big{grid-template-columns:repeat(3,1fr)}
+.acc{list-style:none;margin:0;padding:0;font-size:12.5px}.acc li{display:grid;grid-template-columns:62px 1fr;gap:0 8px;padding:4px 0;border-bottom:1px solid var(--rule)}.acc li .help{grid-column:2}.acc li.s1 span:first-of-type{color:var(--t1)}.acc li.s2 span:first-of-type{color:var(--t2)}.acc li.s3 span:first-of-type{color:var(--t3);font-weight:600}
+.afcanvas{width:100%;border-radius:var(--r2);cursor:crosshair}
+@media (max-width:1100px){.camwrap{grid-template-columns:1fr}.camside{border-left:0;padding-left:0;max-height:none}}@media (max-width:700px){.camgrid{grid-template-columns:1fr}}
 .warnbox{border-left:3px solid var(--t2);background:color-mix(in srgb,var(--t2) 10%,transparent);padding:8px 12px;margin:8px 0;border-radius:0 var(--r2) var(--r2) 0}
 .ttp-h{font:600 13px var(--cond);color:var(--text);margin:16px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}.ttp-sub{font:600 12px var(--cond);color:var(--muted);margin:6px 0 2px}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -267,6 +279,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
   };
+
+  // <define:__VENDOR__>
+  var define_VENDOR_default = { leafletJs: { src: "vendor/leaflet.js", sri: "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" }, leafletCss: { src: "vendor/leaflet.css", sri: "sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" }, xlsx: { src: "vendor/xlsx.full.min.js", sri: "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" }, hls: { src: "vendor/hls.min.js", sri: "sha384-w6Gb3fXHb5e1LUYa/hYA5Q41bEDglN5ZPCG7Jvnoo8/X90oGnlPqBlBJCe38mEMm" }, tf: { src: "vendor/tf.min.js", sri: "sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre" }, cocossd: { src: "vendor/coco-ssd.min.js", sri: "sha384-7qLdgfEQyO9ZQi9ArRHigK+IBto4XPk468jAqc+fnsXaZIcMAhQeLwzggRK7aESl" }, plex400: { src: "vendor/plex-sans-400.woff2", sri: "sha384-kXtb2XURIjUoCj0gfpCl/sCHq2x2r5bv8Z3PzOr6rcx5Z11L14Bgt1z77FcbqGQz" }, plex500: { src: "vendor/plex-sans-500.woff2", sri: "sha384-rB/9yVl1Cgx3FuebIzdDvELOBzOAekpwS4xfuISqFkV9sVOiYS+MtdqHl3bJ1CWD" }, plex600: { src: "vendor/plex-sans-600.woff2", sri: "sha384-0jkpKgdbOG/upawIhzepKdIzX1ha7iK4QebhIk1jjf3MF+oNWBti5HT8CCncyy1E" }, cond500: { src: "vendor/plex-cond-500.woff2", sri: "sha384-ZJF5UXZJz96NTq2o8qUwKohbGB1ZId+fGf//8b8PYNDkrxOdQtHuHRriJUW99Ri3" }, cond600: { src: "vendor/plex-cond-600.woff2", sri: "sha384-T6YzeJ2VsMKUnHvNbKw0FgBTZoW7o56+DuKvXPi3iYSG0FDJPtHA8XLJlbGC2bmH" } };
 
   // src/core.js
   var $ = (s, el = document) => el.querySelector(s);
@@ -457,11 +472,18 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     setTimeout(() => URL.revokeObjectURL(a.href), 2e3);
   }
   var csv = (rows) => rows.map((r) => r.map((v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\n");
-  function loadScript(src) {
+  var VENDOR = typeof define_VENDOR_default !== "undefined" ? define_VENDOR_default : {};
+  function loadVendor(key) {
+    const v = VENDOR[key];
+    if (!v) return Promise.reject(new Error("library not packaged: " + key));
+    return loadScript(v.src, v.sri);
+  }
+  function loadScript(src, sri) {
     return new Promise((ok, bad) => {
-      if ([...document.scripts].some((s) => s.src === src)) return ok();
+      if ([...document.scripts].some((s) => s.src === src || s.getAttribute("src") === src)) return ok();
       const x = document.createElement("script");
       x.src = src;
+      if (sri && location.protocol !== "file:") x.integrity = sri;
       x.onload = ok;
       x.onerror = () => bad(new Error("could not load " + src));
       document.head.appendChild(x);
@@ -477,14 +499,14 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     river: { warn: 2, bad: 4 },
     ranges: { cycloneWatchKm: 500, gdacsKm: 300, eonetKm: 300, volcanoCloseKm: 100, volcanoNearKm: 250, tsunamiKm: 1500 },
     // what opens an Inbox item without anyone asking (the SOP triggers)
-    rules: { quake: true, warnings: true, cyclone: true, volcano: true, air: true, gdacs: true, unrest: true, travel: true, conditions: true },
+    rules: { quake: true, warnings: true, cyclone: true, volcano: true, air: true, gdacs: true, unrest: true, travel: true, conditions: true, security: true },
     keys: { waqi: "", cwa: "", kma: "", claude: "" },
     // the language model every drafting feature uses: Anthropic directly with a key, or a company gateway that speaks the same API
-    llm: { provider: "anthropic", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "" },
+    llm: { provider: "anthropic", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "", redact: true },
     agency: {
       jmaPrefs: ["130000", "120000", "110000", "140000", "270000", "280000", "260000"],
       kmaAreas: ["seoul", "busan"],
-      bmkgAreas: "32.15.03.2004|Karawang (KIIC vicinity);32.75.03.1002|Bekasi (Perwira);31.71.01.1001|Central Jakarta (Gambir);31.73.02.1003|West Jakarta (Tomang)",
+      bmkgAreas: "32.15.03.2004|Karawang;32.75.03.1002|Bekasi;31.71.01.1001|Central Jakarta;31.73.02.1003|West Jakarta",
       sachetStates: "maharashtra,telangana,tamil_nadu,gujarat",
       off: {}
     },
@@ -660,38 +682,6 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     if (!t2) return null;
     return { close: t2.close.map(plain), psoc: t2.psoc.map(plain), cons: t2.cons.map(plain), ren: t2.ren.crit.map(plain) };
   };
-  function extractTTP(trackerHtml) {
-    return new Promise((res, rej) => {
-      const i = trackerHtml.indexOf('id="psoc-ttp-v'), a = i < 0 ? -1 : trackerHtml.indexOf("var TTP_META", i);
-      if (a < 0) return res(null);
-      const code = trackerHtml.slice(a, trackerHtml.indexOf("<\/script>", a));
-      const f = document.createElement("iframe");
-      f.setAttribute("sandbox", "allow-scripts");
-      f.style.display = "none";
-      const done = (v, e) => {
-        window.removeEventListener("message", on2);
-        clearTimeout(t2);
-        f.remove();
-        e ? rej(e) : res(v);
-      };
-      const on2 = (e) => {
-        if (e.source !== f.contentWindow) return;
-        const d = e.data || {};
-        if (d.ttp) try {
-          done(JSON.parse(d.ttp));
-        } catch (x) {
-          done(null, new Error("unreadable TTP"));
-        }
-        else done(null, new Error(d.err || "TTP not found"));
-      };
-      const t2 = setTimeout(() => done(null, new Error("reading the TTP timed out")), 8e3);
-      window.addEventListener("message", on2);
-      f.srcdoc = `<script>onmessage=function(e){var s=e.data,b=0,r=null;while((b=s.indexOf("})();",b+1))>0){try{r=new Function(s.slice(0,b+5)+";return {meta:TTP_META,order:TTP_ORDER,ttp:TTP};")();break;}catch(x){}}
-    parent.postMessage(r?{ttp:JSON.stringify(r)}:{err:"TTP not found"},"*");};<\/script>`;
-      f.onload = () => f.contentWindow.postMessage(code, "*");
-      document.body.appendChild(f);
-    });
-  }
 
   // src/model.js
   var CITIES = cities_default;
@@ -779,7 +769,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     unrest: { label: "Unrest", cat: "protest" },
     news: { label: "News", cat: "operational_security" },
     travel: { label: "Travel advisories", cat: "interstate_conflict" },
-    conditions: { label: "City conditions", cat: "weather" }
+    conditions: { label: "City conditions", cat: "weather" },
+    security: { label: "Cameras & access", cat: "operational_security" }
   };
   var HAZ_CAT = {
     TSUNAMI: "coastal_flooding",
@@ -844,10 +835,10 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
     return null;
   }
   function conditions(city) {
-    const out = {}, W = CFG.wx, F = CFG.fc, A = CFG.aqi, w = STATE.city.wx[city], a = airFor(city), r = STATE.city.river[city];
+    const out = {}, W2 = CFG.wx, F = CFG.fc, A = CFG.aqi, w = STATE.city.wx[city], a = airFor(city), r = STATE.city.river[city];
     if (w && w.current) {
-      const u = w.current, wt = u.wind_speed_10m >= W.windBad ? 2 : u.wind_speed_10m >= W.windWarn ? 1 : 0, rt = u.precipitation >= W.rainBad ? 2 : u.precipitation >= W.rainWarn ? 1 : 0;
-      const ht = u.temperature_2m >= W.hotBad || u.temperature_2m <= W.coldBad ? 2 : u.temperature_2m >= W.hotWarn || u.temperature_2m <= W.coldWarn ? 1 : 0, tier = Math.max(wt, rt, ht);
+      const u = w.current, wt = u.wind_speed_10m >= W2.windBad ? 2 : u.wind_speed_10m >= W2.windWarn ? 1 : 0, rt = u.precipitation >= W2.rainBad ? 2 : u.precipitation >= W2.rainWarn ? 1 : 0;
+      const ht = u.temperature_2m >= W2.hotBad || u.temperature_2m <= W2.coldBad ? 2 : u.temperature_2m >= W2.hotWarn || u.temperature_2m <= W2.coldWarn ? 1 : 0, tier = Math.max(wt, rt, ht);
       out.weather = { tier, value: Math.round(u.temperature_2m) + "°", text: tier ? wt === tier ? `wind ${Math.round(u.wind_speed_10m)} km/h` : rt === tier ? `rain ${u.precipitation.toFixed(1)} mm/h` : `temperature ${Math.round(u.temperature_2m)}°C` : wmo(u.weather_code), model: w.model, raw: u };
     }
     if (w && w.daily) {
@@ -3116,12 +3107,12 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       });
       const cur = "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code", daily = "temperature_2m_max,precipitation_sum,wind_gusts_10m_max,weather_code";
       let ok = 0;
-      await Promise.all(Object.entries(groups).map(async ([model, cs]) => {
+      await Promise.all(Object.entries(groups).map(async ([model2, cs]) => {
         const q = `${coords(cs)}&current=${cur}&daily=${daily}&forecast_days=3&timezone=auto`;
-        let res = null, auto = model === "AUTO";
+        let res = null, auto = model2 === "AUTO";
         try {
           if (auto) throw 0;
-          res = asArr(await getJSON(`https://api.open-meteo.com/v1/forecast?${q}&models=${model}`));
+          res = asArr(await getJSON(`https://api.open-meteo.com/v1/forecast?${q}&models=${model2}`));
           if (!res[0] || !res[0].current || res[0].current.temperature_2m == null) throw 0;
         } catch (e) {
           try {
@@ -3134,7 +3125,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
         if (!res) return;
         ok++;
         res.forEach((r, i) => {
-          STATE.city.wx[cs[i].name] = Object.assign(r, { model: auto ? "AUTO" : model });
+          STATE.city.wx[cs[i].name] = Object.assign(r, { model: auto ? "AUTO" : model2 });
         });
       }));
       if (!ok) throw new Error("no weather model responded");
@@ -3266,7 +3257,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   };
   function initMap() {
     if (map || typeof L === "undefined") {
-      if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>This network blocks cdnjs.cloudflare.com. Everything else works.</div>`;
+      if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>The map library did not load. Everything else works.</div>`;
       return;
     }
     map = L.map("map", { zoomControl: true, worldCopyJump: true, attributionControl: true, preferCanvas: false }).setView([15, 115], 4);
@@ -3545,7 +3536,8 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   }
 
   // src/ui/tv.js
-  var HLS_JS = "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js";
+  var HLS = () => VENDOR.hls || { src: "", sri: "" };
+  var HLS_ABS = () => new URL(HLS().src, location.href).href;
   var CHANNELS = {
     cna: { n: "CNA", yt: "https://www.youtube.com/embed/live_stream?channel=UC83jt4dlz1Gjl58fzQrrKZg&autoplay=1&mute=1&playsinline=1&rel=0", u: ["https://d2e1asnsl7br7b.cloudfront.net/7782e205e72f43aeb4a48ec97f66ebbe/index.m3u8", "https://mediacorp-videosbclive.akamaized.net/dd724cfb0e8e4cdc921bbc4ac94614bf/ap-southeast-1/6057994443001/profile_1/chunklist.m3u8"], page: "https://www.youtube.com/watch?v=XWq5kBlakcQ" },
     nhk: { n: "NHK WORLD", u: ["https://nhkwlive-ojp.akamaized.net/hls/live/2003459/nhkwlive-ojp-en/index.m3u8"], page: "https://www3.nhk.or.jp/nhkworld/en/live/" },
@@ -3609,7 +3601,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       return;
     }
     w.document.write(`<!doctype html><meta charset="utf-8"><title>${c.n} — ITE live TV</title><style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%}</style><video id="v" controls autoplay muted playsinline></video>
-    <script src="${HLS_JS}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`);
+    <script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`);
     w.document.close();
   }
   function stopStream() {
@@ -3654,9 +3646,9 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       return;
     }
     try {
-      await loadScript(HLS_JS);
+      await loadVendor("hls");
     } catch (e) {
-      msg(`The video player could not load (cdnjs blocked). <a href="${esc(c.page)}" target="_blank" rel="noopener">Watch on the broadcaster's site</a>.`);
+      msg(`The video player could not load. <a href="${esc(c.page)}" target="_blank" rel="noopener">Watch on the broadcaster's site</a>.`);
       return;
     }
     if (!window.Hls || !window.Hls.isSupported()) {
@@ -3716,6 +3708,663 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       <section><h3>Seismic activity, last 24 h</h3><div class="spark" title="Earthquakes per hour; colour shows the strongest that hour">${hours2.map(([n, m]) => `<i class="t${m >= CFG.quake.globalMag ? 3 : m >= CFG.quake.nearMag ? 2 : m >= 4 ? 1 : 0}" style="height:${(n / hmax * 100).toFixed(0)}%" title="${n} quake${n === 1 ? "" : "s"}${n ? ", strongest M" + m.toFixed(1) : ""}"></i>`).join("")}</div>
         <div class="help" style="display:flex;justify-content:space-between"><span>${esc(sgt(now - 864e5).split(", ").pop())}</span><span>now</span></div></section></div></div>`;
   }
+
+  // src/vision.js
+  var RULES = {
+    intrusion: ["Person in a restricted zone", 2],
+    loiter: ["Loitering", 1],
+    running: ["Running", 1],
+    down: ["Person down", 3],
+    crowd: ["Crowd forming", 1],
+    object: ["Object left behind", 2],
+    tailgate: ["Tailgating at a door", 2],
+    forced: ["Door forced open", 3],
+    held: ["Door held open", 2]
+  };
+  var DEF = { loiterSec: 30, runSpeed: 0.2, downSec: 4, crowdN: 6, objectSec: 20, tailgateSec: 4 };
+  var PARAMS = Object.assign({}, DEF, load("visionParams", {}));
+  var saveParams = () => save("visionParams", PARAMS);
+  var inPoly = (x, y, poly) => {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if (yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  var Analyzer = class {
+    // zones: [{ name, kind: "restricted" | "loiter" | "crowd" | "door", poly: [[x, y] 0–1 …] }]
+    constructor(W2, H2, zones = []) {
+      this.W = W2;
+      this.H = H2;
+      this.zones = zones;
+      this.tracks = /* @__PURE__ */ new Map();
+      this.fired = /* @__PURE__ */ new Set();
+      this.grants = [];
+      this.crowdAt = {};
+      this.next = 1;
+    }
+    grant(t2) {
+      this.grants.push({ t: t2, people: /* @__PURE__ */ new Set(), done: false });
+      this.grants = this.grants.filter((g) => t2 - g.t < 3e4);
+    }
+    // dets: [{ id?, cls: "person" | "bag", box: [x, y, w, h], score }] in pixels; t in ms
+    step(t2, dets) {
+      const out = [], W2 = this.W, H2 = this.H, P = PARAMS;
+      dets.forEach((d) => {
+        const fx = (d.box[0] + d.box[2] / 2) / W2, fy = (d.box[1] + d.box[3]) / H2;
+        let tr = d.id != null ? this.tracks.get(d.id) : null;
+        if (!tr && d.id == null) {
+          let best = null;
+          this.tracks.forEach((x) => {
+            if (x.cls !== d.cls || x.last === t2) return;
+            const p = x.pts.at(-1), dist = Math.hypot(p.x - fx, p.y - fy);
+            if (dist < 0.09 && (!best || dist < best.dist)) best = { x, dist };
+          });
+          tr = best && best.x;
+        }
+        if (!tr) {
+          const id = d.id != null ? d.id : (d.cls === "person" ? "P" : "B") + this.next++;
+          tr = { id, cls: d.cls, pts: [], first: t2, downSince: null };
+          this.tracks.set(id, tr);
+        }
+        tr.last = t2;
+        tr.box = d.box;
+        tr.pts.push({ t: t2, x: fx, y: fy, w: d.box[2], h: d.box[3] });
+        tr.pts = tr.pts.filter((p) => t2 - p.t < 9e4);
+      });
+      this.tracks.forEach((tr, id) => {
+        if (t2 - tr.last > 5e3) this.tracks.delete(id);
+      });
+      const live = [...this.tracks.values()].filter((x) => x.last === t2), people = live.filter((x) => x.cls === "person"), fire = (rule, tr, text, key) => {
+        const k = rule + ":" + (key || tr.id);
+        if (this.fired.has(k)) return;
+        this.fired.add(k);
+        out.push({ rule, label: RULES[rule][0], tier: RULES[rule][1], track: tr ? tr.id : null, box: tr ? tr.box : null, text });
+      };
+      const zones = (k) => this.zones.filter((z) => z.kind === k);
+      people.forEach((tr) => {
+        const p = tr.pts.at(-1), age = (t2 - tr.first) / 1e3;
+        zones("restricted").forEach((z) => {
+          if (inPoly(p.x, p.y, z.poly)) fire("intrusion", tr, `A person is inside ${z.name}.`, tr.id + z.name);
+        });
+        const lz = zones("loiter");
+        if (age >= P.loiterSec && (!lz.length || lz.some((z) => inPoly(p.x, p.y, z.poly)))) {
+          const win = tr.pts.filter((q) => t2 - q.t <= P.loiterSec * 1e3), cx = win.reduce((a, q) => a + q.x, 0) / win.length, cy = win.reduce((a, q) => a + q.y, 0) / win.length;
+          if (win.every((q) => Math.hypot(q.x - cx, q.y - cy) < 0.06)) fire("loiter", tr, `A person has stayed in one spot for over ${P.loiterSec} seconds.`);
+        }
+        const back = tr.pts.filter((q) => t2 - q.t <= 1500);
+        if (back.length >= 2) {
+          const a = back[0], b = back.at(-1), dt = (b.t - a.t) / 1e3;
+          if (dt > 0.4 && Math.hypot(b.x - a.x, b.y - a.y) / dt > P.runSpeed) fire("running", tr, "A person is moving at running pace.");
+        }
+        if (p.w > p.h * 1.3) {
+          tr.downSince = tr.downSince || t2;
+          if ((t2 - tr.downSince) / 1e3 >= P.downSec) fire("down", tr, `A person has been on the ground for over ${P.downSec} seconds.`);
+        } else tr.downSince = null;
+        zones("door").forEach((z) => {
+          if (inPoly(p.x, p.y, z.poly)) this.grants.forEach((g) => {
+            if (t2 - g.t <= P.tailgateSec * 1e3) g.people.add(tr.id);
+          });
+        });
+      });
+      this.grants.forEach((g, i) => {
+        if (!g.done && g.people.size >= 2) {
+          g.done = true;
+          const tr = this.tracks.get([...g.people].at(-1));
+          fire("tailgate", tr, `${g.people.size} people went through the door on one badge.`, "g" + g.t);
+        }
+      });
+      (zones("crowd").length ? zones("crowd") : [{ name: "the view", poly: [[0, 0], [1, 0], [1, 1], [0, 1]] }]).forEach((z) => {
+        const n = people.filter((tr) => {
+          const p = tr.pts.at(-1);
+          return inPoly(p.x, p.y, z.poly);
+        }).length;
+        if (n >= P.crowdN && (!this.crowdAt[z.name] || t2 - this.crowdAt[z.name] > 12e4)) {
+          this.crowdAt[z.name] = t2;
+          fire("crowd", people[0], `${n} people are gathered in ${z.name}.`, "c" + t2);
+        }
+      });
+      live.filter((x) => x.cls === "bag").forEach((tr) => {
+        const age = (t2 - tr.first) / 1e3, p = tr.pts.at(-1);
+        if (age < P.objectSec) return;
+        const still = tr.pts.filter((q) => t2 - q.t <= P.objectSec * 1e3).every((q) => Math.hypot(q.x - p.x, q.y - p.y) < 0.02), alone = !people.some((o) => {
+          const q = o.pts.at(-1);
+          return Math.hypot(q.x - p.x, q.y - p.y) < 0.1;
+        });
+        if (still && alone) fire("object", tr, `An object has been left unattended for over ${P.objectSec} seconds.`);
+      });
+      return out;
+    }
+  };
+  var model = null;
+  async function loadDetector() {
+    if (model) return model;
+    if (!("regeneratorRuntime" in window)) window.regeneratorRuntime = void 0;
+    await loadVendor("tf");
+    await loadVendor("cocossd");
+    model = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
+    return model;
+  }
+  var BAGS = /* @__PURE__ */ new Set(["backpack", "handbag", "suitcase"]);
+  async function detect(img) {
+    const preds = await (await loadDetector()).detect(img, 30, 0.45);
+    return preds.filter((p) => p.class === "person" || BAGS.has(p.class)).map((p) => ({ cls: p.class === "person" ? "person" : "bag", box: p.bbox, score: p.score }));
+  }
+
+  // src/integrations/lenel.js
+  var DOORS = [
+    { device: "TOK83 Main Entrance Reader 01", site: "TOK83", cam: "CAM-01" },
+    { device: "TOK83 Perimeter Gate N", site: "TOK83", cam: "CAM-02" },
+    { device: "SIG97 Loading Dock Door 02", site: "SIG97", cam: "CAM-03" },
+    { device: "SIG97 Lobby Turnstile 03", site: "SIG97", cam: "CAM-04" },
+    { device: "SIG97 Server Hall B Reader 11", site: "SIG97", cam: null }
+  ];
+  var TYPES = { granted: ["Access Granted", 0], denied: ["Access Denied", 1], forced: ["Door Forced Open", 3], held: ["Door Held Open", 2], offline: ["Reader Offline", 2], commloss: ["Panel Communication Lost", 2], restored: ["Communications Restored", 0] };
+  var masked = () => "Badge ••" + String(1e3 + Math.floor(Math.random() * 8999));
+  var SimulatedOnGuard = class {
+    constructor() {
+      this.name = "Lenel OnGuard (simulated)";
+      this.on = () => {
+      };
+      this.timer = null;
+      this.n = 0;
+    }
+    connect(onEvent) {
+      this.on = onEvent;
+      if (this.timer) return;
+      this.timer = setInterval(() => this.tick(), 4e3);
+    }
+    disconnect() {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    emit(kind, door, extra = {}) {
+      const [type, severity] = TYPES[kind];
+      const e = Object.assign({ id: "og" + Date.now().toString(36) + this.n++, time: Date.now(), type, kind, device: door.device, site: door.site, cam: door.cam, badge: kind === "granted" || kind === "denied" ? masked() : "", severity }, extra);
+      e.text = `${e.type} at ${e.device}${e.badge ? ` (${e.badge})` : ""}.`;
+      this.on(e);
+      return e;
+    }
+    // routine traffic: mostly granted, the odd denied; faults rarely
+    tick() {
+      const r = Math.random(), door = DOORS[Math.floor(Math.random() * DOORS.length)];
+      if (r < 0.55) this.emit("granted", door);
+      else if (r < 0.62) this.emit("denied", door);
+      else if (r < 0.625) {
+        this.emit("offline", DOORS[4]);
+        setTimeout(() => this.emit("restored", DOORS[4]), 45e3);
+      }
+    }
+    door(cam) {
+      return DOORS.find((d) => d.cam === cam) || DOORS[0];
+    }
+  };
+
+  // src/sim/cameras.js
+  var W = 640;
+  var H = 360;
+  var CAMS = [
+    { id: "CAM-01", site: "TOK83", name: "Main entrance", type: "entrance", zones: [{ name: "the doorway", kind: "door", poly: [[0.41, 0.4], [0.59, 0.4], [0.62, 0.58], [0.38, 0.58]] }] },
+    { id: "CAM-02", site: "TOK83", name: "Perimeter fence, north", type: "fence", zones: [{ name: "the perimeter strip", kind: "restricted", poly: [[0, 0.48], [1, 0.4], [1, 0.66], [0, 0.74]] }, { name: "the outer gate", kind: "loiter", poly: [[0.55, 0.08], [0.9, 0.06], [0.9, 0.34], [0.55, 0.38]] }] },
+    { id: "CAM-03", site: "SIG97", name: "Loading dock", type: "dock", zones: [] },
+    { id: "CAM-04", site: "SIG97", name: "Lobby", type: "lobby", zones: [{ name: "the lobby floor", kind: "crowd", poly: [[0.22, 0.42], [0.78, 0.42], [0.9, 0.98], [0.1, 0.98]] }] }
+  ];
+  var SCENARIOS = {
+    tailgate: ["Tailgating at the main entrance", "CAM-01"],
+    forced: ["Door forced open at the main entrance", "CAM-01"],
+    intrusion: ["Someone climbs into the perimeter strip", "CAM-02"],
+    loiter: ["Someone waits at the outer gate", "CAM-02"],
+    object: ["A bag left at the loading dock", "CAM-03"],
+    running: ["Someone runs across the loading dock", "CAM-03"],
+    down: ["A person falls at the loading dock", "CAM-03"],
+    crowd: ["A crowd gathers in the lobby", "CAM-04"]
+  };
+  var CLOTHES = ["#4a5563", "#3d4f66", "#55603f", "#6b5a4a", "#4f4a5e", "#5e6b70", "#704f4f"];
+  var uid = 1;
+  var sgtHour = () => ((/* @__PURE__ */ new Date()).getUTCHours() + 8) % 24;
+  var night = () => {
+    const h = sgtHour();
+    return h < 7 || h >= 19;
+  };
+  var Scene = class {
+    constructor(cam, onDet2) {
+      this.cam = cam;
+      this.onDet = onDet2;
+      this.canvas = document.createElement("canvas");
+      this.canvas.width = W;
+      this.canvas.height = H;
+      this.ctx = this.canvas.getContext("2d");
+      this.agents = [];
+      this.analyzer = new Analyzer(W, H, cam.zones);
+      this.frames = [];
+      this.flags = [];
+      this.spawnIn = 2 + Math.random() * 4;
+      this.lastFrame = 0;
+    }
+    // a person follows a path of points; a point may hold { wait, fall, drop, loiter }
+    person(path, speed = 46, opts = {}) {
+      const a = Object.assign({ id: "P" + uid++, cls: "person", x: path[0][0] * W, y: path[0][1] * H, path: path.slice(1).map((p) => ({ x: p[0] * W, y: p[1] * H, ...p[2] || {} })), speed, wait: 0, down: false, color: CLOTHES[uid % CLOTHES.length] }, opts);
+      this.agents.push(a);
+      return a;
+    }
+    bag(x, y, ttl) {
+      this.agents.push({ id: "B" + uid++, cls: "bag", x, y, path: [], speed: 0, wait: ttl, still: true });
+    }
+    routine() {
+      const T = this.cam.type, r = Math.random();
+      if (T === "entrance") r < 0.5 ? this.person([[-0.05, 0.9], [0.5, 0.62], [0.5, 0.5, { gone: true }]], 42) : this.person([[0.5, 0.5], [0.5, 0.62], [1.05, 0.88]], 42);
+      if (T === "fence") this.person(r < 0.5 ? [[-0.05, 0.24], [1.05, 0.14]] : [[1.05, 0.16], [-0.05, 0.27]], 40);
+      if (T === "dock") this.person(r < 0.5 ? [[-0.05, 0.78], [1.05, 0.72]] : [[1.05, 0.86], [-0.05, 0.8]], 44);
+      if (T === "lobby") this.person(r < 0.5 ? [[-0.05, 0.7], [0.5, 0.66], [1.05, 0.62]] : [[0.5, 0.4], [0.5, 0.7], [-0.05, 0.9]], 40);
+    }
+    update(dt) {
+      if ((this.spawnIn -= dt) <= 0) {
+        this.routine();
+        this.spawnIn = 7 + Math.random() * 9;
+      }
+      this.agents.forEach((a) => {
+        if (a.wait > 0) {
+          a.wait -= dt;
+          if (a.loiter) {
+            a.x += (Math.random() - 0.5) * 6 * dt;
+            a.y += (Math.random() - 0.5) * 3 * dt;
+          }
+          if (a.wait <= 0) {
+            a.loiter = false;
+            if (a.getUp) a.down = false;
+            if (a.still) a.gone = true;
+          }
+          return;
+        }
+        const p = a.path[0];
+        if (!p) {
+          a.gone = true;
+          return;
+        }
+        const dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy), step = a.speed * dt * (0.55 + 0.75 * a.y / H);
+        if (d <= step) {
+          a.x = p.x;
+          a.y = p.y;
+          a.path.shift();
+          if (p.gone) a.gone = true;
+          if (p.wait) {
+            a.wait = p.wait;
+            a.loiter = !!p.loiter;
+          }
+          if (p.fall) {
+            a.down = true;
+            a.getUp = true;
+          }
+          if (p.drop) {
+            this.bag(a.x + 14, a.y, p.drop);
+            a.carry = false;
+          }
+          if (p.grant) p.grant();
+        } else {
+          a.x += dx / d * step;
+          a.y += dy / d * step;
+        }
+      });
+      this.agents = this.agents.filter((a) => !a.gone && a.x > -60 && a.x < W + 60);
+    }
+    boxes() {
+      return this.agents.map((a) => {
+        const s = 0.55 + 0.75 * a.y / H, j = () => (Math.random() - 0.5) * 2;
+        if (a.cls === "bag") return { id: a.id, cls: "bag", box: [a.x - 8 * s + j(), a.y - 13 * s + j(), 16 * s, 13 * s], score: 0.9 };
+        return a.down ? { id: a.id, cls: "person", box: [a.x - 36 * s + j(), a.y - 22 * s + j(), 72 * s, 22 * s], score: 0.88 } : { id: a.id, cls: "person", box: [a.x - 14 * s + j(), a.y - 78 * s + j(), 28 * s, 78 * s], score: 0.93 };
+      });
+    }
+    analyse(t2) {
+      const dets = this.boxes();
+      this.lastDets = dets;
+      this.analyzer.step(t2, dets).forEach((ev) => {
+        this.flags.push({ until: t2 + 6e3, box: ev.box, label: ev.label });
+        this.onDet(this, ev, t2);
+      });
+    }
+    draw(t2) {
+      const c = this.ctx, T = this.cam.type, dark = night();
+      c.save();
+      const g = c.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#3a3f44");
+      g.addColorStop(1, "#24282c");
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
+      c.strokeStyle = "rgba(255,255,255,.06)";
+      for (let y = 140; y < H; y += 26) {
+        c.beginPath();
+        c.moveTo(0, y);
+        c.lineTo(W, y);
+        c.stroke();
+      }
+      if (T === "entrance") {
+        c.fillStyle = "#4b5157";
+        c.fillRect(0, 0, W, 150);
+        c.fillStyle = "#1d2a33";
+        c.fillRect(262, 40, 116, 112);
+        c.strokeStyle = "#8aa0ad";
+        c.lineWidth = 2;
+        c.strokeRect(262, 40, 116, 112);
+        c.beginPath();
+        c.moveTo(320, 40);
+        c.lineTo(320, 152);
+        c.stroke();
+        c.fillStyle = "#222";
+        c.fillRect(388, 96, 12, 18);
+        c.fillStyle = "#3fa34d";
+        c.fillRect(391, 99, 6, 4);
+        c.fillStyle = "#cfd6db";
+        c.font = "11px sans-serif";
+        c.fillText("RECEPTION", 288, 32);
+      }
+      if (T === "fence") {
+        c.fillStyle = "#2f3438";
+        c.fillRect(0, 0, W, 150);
+        c.fillStyle = "#4b5157";
+        c.beginPath();
+        c.moveTo(0, 268);
+        c.lineTo(W, 240);
+        c.lineTo(W, H);
+        c.lineTo(0, H);
+        c.fill();
+        c.strokeStyle = "#9aa5ad";
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(0, 172);
+        c.lineTo(W, 144);
+        c.stroke();
+        for (let x = 0; x <= W; x += 40) {
+          const y = 172 - x * 28 / W;
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x, y - 46);
+          c.stroke();
+        }
+        c.beginPath();
+        c.moveTo(0, 126);
+        c.lineTo(W, 98);
+        c.stroke();
+        c.strokeStyle = "rgba(154,165,173,.35)";
+        for (let x = 0; x < W; x += 10) {
+          const y = 172 - x * 28 / W;
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x + 10, y - 46);
+          c.stroke();
+        }
+      }
+      if (T === "dock") {
+        c.fillStyle = "#1f2326";
+        c.fillRect(0, 0, W, 170);
+        c.fillStyle = "#c8a032";
+        for (let x = 0; x < W; x += 36) {
+          c.fillRect(x, 170, 18, 6);
+        }
+        c.fillStyle = "#2a3035";
+        [40, 250, 460].forEach((x) => {
+          c.fillRect(x, 30, 150, 134);
+          c.strokeStyle = "#5c666e";
+          c.strokeRect(x, 30, 150, 134);
+          for (let y = 44; y < 164; y += 12) {
+            c.beginPath();
+            c.moveTo(x, y);
+            c.lineTo(x + 150, y);
+            c.stroke();
+          }
+        });
+      }
+      if (T === "lobby") {
+        c.fillStyle = "#454b50";
+        c.fillRect(0, 0, W, 130);
+        c.fillStyle = "#5b544a";
+        c.fillRect(230, 108, 180, 34);
+        c.fillStyle = "#cfd6db";
+        c.font = "11px sans-serif";
+        c.fillText("LIFTS", 560, 40);
+        c.strokeStyle = "#8aa0ad";
+        c.strokeRect(540, 50, 70, 80);
+      }
+      this.agents.slice().sort((a, b) => a.y - b.y).forEach((a) => {
+        const s = 0.55 + 0.75 * a.y / H;
+        c.fillStyle = "rgba(0,0,0,.35)";
+        c.beginPath();
+        c.ellipse(a.x, a.y, 12 * s, 4 * s, 0, 0, 7);
+        c.fill();
+        if (a.cls === "bag") {
+          c.fillStyle = "#2b2b2b";
+          c.fillRect(a.x - 8 * s, a.y - 13 * s, 16 * s, 13 * s);
+          c.strokeStyle = "#555";
+          c.strokeRect(a.x - 8 * s, a.y - 13 * s, 16 * s, 13 * s);
+          return;
+        }
+        if (a.down) {
+          c.fillStyle = a.color;
+          c.beginPath();
+          c.roundRect(a.x - 30 * s, a.y - 16 * s, 52 * s, 14 * s, 6 * s);
+          c.fill();
+          c.fillStyle = "#b9b3aa";
+          c.beginPath();
+          c.arc(a.x + 28 * s, a.y - 10 * s, 7 * s, 0, 7);
+          c.fill();
+          return;
+        }
+        c.fillStyle = a.color;
+        c.beginPath();
+        c.roundRect(a.x - 10 * s, a.y - 62 * s, 20 * s, 40 * s, 7 * s);
+        c.fill();
+        c.fillRect(a.x - 8 * s, a.y - 24 * s, 6 * s, 24 * s);
+        c.fillRect(a.x + 2 * s, a.y - 24 * s, 6 * s, 24 * s);
+        c.fillStyle = "#b9b3aa";
+        c.beginPath();
+        c.arc(a.x, a.y - 70 * s, 8 * s, 0, 7);
+        c.fill();
+        if (a.carry) {
+          c.fillStyle = "#2b2b2b";
+          c.fillRect(a.x + 10 * s, a.y - 40 * s, 12 * s, 11 * s);
+        }
+      });
+      if (dark) {
+        c.globalCompositeOperation = "saturation";
+        c.fillStyle = "#000";
+        c.fillRect(0, 0, W, H);
+        c.globalCompositeOperation = "source-over";
+        c.fillStyle = "rgba(0,10,20,.35)";
+        c.fillRect(0, 0, W, H);
+      }
+      this.cam.zones.forEach((z) => {
+        c.setLineDash([6, 5]);
+        c.lineWidth = 1.5;
+        c.strokeStyle = z.kind === "restricted" ? "rgba(231,76,60,.9)" : z.kind === "door" ? "rgba(90,169,230,.9)" : "rgba(216,178,74,.85)";
+        c.beginPath();
+        z.poly.forEach(([x, y], i) => i ? c.lineTo(x * W, y * H) : c.moveTo(x * W, y * H));
+        c.closePath();
+        c.stroke();
+        c.setLineDash([]);
+      });
+      (this.lastDets || []).forEach((d) => {
+        c.strokeStyle = d.cls === "bag" ? "rgba(240,180,60,.95)" : "rgba(90,210,230,.9)";
+        c.lineWidth = 1.2;
+        c.strokeRect(...d.box);
+      });
+      this.flags = this.flags.filter((f) => f.until > t2);
+      this.flags.forEach((f) => {
+        if (!f.box) return;
+        c.strokeStyle = "#ff4d4d";
+        c.lineWidth = 2.5;
+        c.strokeRect(f.box[0] - 3, f.box[1] - 3, f.box[2] + 6, f.box[3] + 6);
+        c.fillStyle = "#ff4d4d";
+        c.font = "bold 12px sans-serif";
+        c.fillText(f.label.toUpperCase(), Math.max(4, f.box[0] - 3), Math.max(14, f.box[1] - 8));
+      });
+      c.fillStyle = "rgba(0,0,0,.55)";
+      c.fillRect(0, 0, W, 20);
+      c.fillStyle = "#e8edf0";
+      c.font = "12px monospace";
+      const ts = new Date(t2 + 8 * 36e5).toISOString().slice(0, 19).replace("T", " ");
+      c.fillText(`${this.cam.id}  ${this.cam.site} ${this.cam.name.toUpperCase()}  ${ts} SGT${dark ? "  IR" : ""}`, 6, 14);
+      c.fillStyle = "#ff5a5a";
+      c.fillText("● SIMULATED", W - 100, 14);
+      c.restore();
+    }
+    capture(t2) {
+      if (t2 - this.lastFrame < 1e3) return;
+      this.lastFrame = t2;
+      const s = document.createElement("canvas");
+      s.width = 320;
+      s.height = 180;
+      s.getContext("2d").drawImage(this.canvas, 0, 0, 320, 180);
+      this.frames.push({ t: t2, url: s.toDataURL("image/jpeg", 0.62) });
+      this.frames = this.frames.slice(-8);
+    }
+  };
+  var ENGINE = { running: false, scenes: [], detections: [], access: [], onguard: new SimulatedOnGuard(), visible: false };
+  var DET = [];
+  var ACC = [];
+  var denied = {};
+  function siteOf(code) {
+    return siteBy(code) || {};
+  }
+  function publish() {
+    const now = Date.now();
+    const sig = DET.filter((d) => now - d.t < 2 * 36e5).map((d) => {
+      const s = siteOf(d.cam.site);
+      return {
+        id: "cam:" + d.id,
+        src: "cameras",
+        kind: "security",
+        rule: "security",
+        cat: "operational_security",
+        title: `${d.cam.site} ${d.cam.name}: ${d.label}`,
+        tier: d.tier,
+        lat: s.lat,
+        lon: s.lon,
+        t: d.t,
+        text: `${d.text} ${d.cam.id}, simulated camera.`,
+        sites: [{ code: d.cam.site, km: 0 }],
+        citySites: false,
+        extra: { detId: d.id, cam: d.cam.id, simulated: true }
+      };
+    });
+    const acc = ACC.filter((e) => now - e.time < 2 * 36e5 && e.signal).map((e) => {
+      const s = siteOf(e.site);
+      return {
+        id: "og:" + e.id,
+        src: "lenel",
+        kind: "security",
+        rule: "security",
+        cat: "operational_security",
+        title: `${e.site}: ${e.type} — ${e.device.replace(e.site + " ", "")}`,
+        tier: e.signal,
+        lat: s.lat,
+        lon: s.lon,
+        t: e.time,
+        text: e.text + " Simulated OnGuard event.",
+        sites: [{ code: e.site, km: 0 }],
+        citySites: false,
+        extra: { access: e.id, simulated: true }
+      };
+    });
+    setSignals("cameras", sig);
+    setSignals("lenel", acc);
+    emit("cameras");
+  }
+  function onDet(scene, ev, t2) {
+    const d = { id: "d" + t2.toString(36) + uid++, cam: scene.cam, rule: ev.rule, label: ev.label, tier: ev.tier, text: ev.text, t: t2, strip: scene.frames.slice(-5).map((f) => f.url) };
+    DET.unshift(d);
+    DET.splice(40);
+    setTimeout(() => {
+      scene.capture(Date.now() + 1e3);
+      const f = scene.frames.at(-1);
+      if (f) d.strip.push(f.url);
+      emit("cameras");
+    }, 1100);
+    publish();
+  }
+  function onAccess(e) {
+    ACC.unshift(e);
+    ACC.splice(80);
+    const sc = ENGINE.scenes.find((s) => s.cam.id === e.cam);
+    if (e.kind === "granted" && sc) sc.analyzer.grant(Date.now());
+    if (e.kind === "forced") e.signal = 3;
+    if (e.kind === "held") e.signal = 2;
+    if (e.kind === "offline" || e.kind === "commloss") e.signal = 1;
+    if (e.kind === "denied") {
+      const k = e.device, list = denied[k] = (denied[k] || []).filter((x) => Date.now() - x < 12e4);
+      list.push(Date.now());
+      if (list.length === 3) {
+        e.signal = 1;
+        e.type = "Access denied 3 times in 2 minutes";
+        e.text = `Access denied 3 times in 2 minutes at ${e.device}.`;
+      }
+    }
+    if (e.signal) publish();
+    else emit("cameras");
+  }
+  ENGINE.detections = DET;
+  ENGINE.access = ACC;
+  function runScenario(k) {
+    const [, camId] = SCENARIOS[k], sc = ENGINE.scenes.find((s) => s.cam.id === camId);
+    if (!sc) return;
+    const og = ENGINE.onguard, door = og.door(camId);
+    if (k === "tailgate") {
+      sc.person([[-0.05, 0.92], [0.5, 0.62, { grant: () => og.emit("granted", door) }], [0.5, 0.48], [0.5, 0.45, { gone: true }]], 52);
+      setTimeout(() => sc.person([[-0.05, 0.95], [0.5, 0.64], [0.5, 0.48], [0.5, 0.45, { gone: true }]], 60), 900);
+    }
+    if (k === "forced") {
+      og.emit("forced", door);
+      sc.person([[1.05, 0.9], [0.5, 0.6], [0.5, 0.47, { gone: true }]], 70);
+      setTimeout(() => og.emit("held", door), 3e4);
+    }
+    if (k === "intrusion") sc.person([[-0.05, 0.22], [0.3, 0.2], [0.34, 0.38], [0.36, 0.56, { wait: 14 }], [0.6, 0.54], [0.62, 0.36], [1.05, 0.14]], 40);
+    if (k === "loiter") sc.person([[1.05, 0.14], [0.72, 0.2, { wait: PARAMS_LOITER() + 15, loiter: true }], [-0.05, 0.27]], 40);
+    if (k === "object") sc.person([[-0.05, 0.8], [0.62, 0.76, { drop: 70 }], [1.05, 0.72]], 44, { carry: true });
+    if (k === "running") sc.person([[-0.05, 0.86], [1.05, 0.78]], 230);
+    if (k === "down") sc.person([[-0.05, 0.84], [0.45, 0.8, { fall: true, wait: 24 }], [1.05, 0.76]], 44);
+    if (k === "crowd") for (let i = 0; i < 8; i++) {
+      const tx2 = 0.3 + Math.random() * 0.4, ty = 0.55 + Math.random() * 0.3;
+      setTimeout(() => sc.person([[i % 2 ? -0.05 : 1.05, 0.6 + Math.random() * 0.3], [tx2, ty, { wait: 34 - i }], [i % 2 ? 1.05 : -0.05, 0.9]], 50), i * 700);
+    }
+  }
+  var PARAMS_LOITER = () => PARAMS.loiterSec;
+  var tick = 0;
+  var autoAt = 0;
+  function loop() {
+    const t2 = Date.now(), dt = Math.min(0.25, (t2 - (loop.last || t2)) / 1e3);
+    loop.last = t2;
+    ENGINE.scenes.forEach((s) => {
+      s.update(dt);
+      if (t2 - (s.lastAn || 0) >= 250) {
+        s.lastAn = t2;
+        s.analyse(t2);
+      }
+      if (ENGINE.visible || t2 - (s.lastDraw || 0) >= 500) {
+        s.lastDraw = t2;
+        s.draw(t2);
+        s.capture(t2);
+      }
+    });
+    if (ENGINE.auto && t2 > autoAt) {
+      if (autoAt) runScenario(Object.keys(SCENARIOS)[Math.floor(Math.random() * 8)]);
+      autoAt = t2 + (150 + Math.random() * 120) * 1e3;
+    }
+  }
+  function startSim() {
+    if (ENGINE.running) return;
+    ENGINE.running = true;
+    ENGINE.auto = load("camAuto", true);
+    if (!ENGINE.scenes.length) ENGINE.scenes = CAMS.map((c) => new Scene(c, onDet));
+    ENGINE.onguard.connect(onAccess);
+    tick = setInterval(loop, 100);
+    save("camRun", true);
+  }
+  function stopSim() {
+    ENGINE.running = false;
+    clearInterval(tick);
+    ENGINE.onguard.disconnect();
+    save("camRun", false);
+  }
+  var detById = (id) => DET.find((d) => d.id === id);
 
   // src/ui/drafts.js
   var catLabel = (c) => (SOP_REF[c] || {}).label || c;
@@ -3794,6 +4443,90 @@ PSOC`
     return text.split(/\n{2,}/).map((p) => `<p>${e(p).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")}</p>`).join("");
   }
 
+  // src/security.js
+  var HOSTS = {
+    hazards: ["https://earthquake.usgs.gov", "https://www.seismicportal.eu", "https://www.gdacs.org", "https://eonet.gsfc.nasa.gov", "https://volcano.si.edu", "https://www.tsunami.gov", "https://severeweather.wmo.int"],
+    agencies: [
+      "https://www.jma.go.jp",
+      "https://apihub.kma.go.kr",
+      "https://opendata.cwa.gov.tw",
+      "https://data.weather.gov.hk",
+      "https://api.data.gov.sg",
+      "https://api-open.data.gov.sg",
+      "https://api.data.gov.my",
+      "https://api.bmkg.go.id",
+      "https://www.bmkg.go.id",
+      "https://www.tmd.go.th",
+      "https://tmd.go.th",
+      "https://sachet.ndma.gov.in",
+      "https://publicinfobanjir.water.gov.my"
+    ],
+    conditions: ["https://api.open-meteo.com", "https://air-quality-api.open-meteo.com", "https://flood-api.open-meteo.com", "https://api.waqi.info"],
+    people: [
+      "https://api.gdeltproject.org",
+      "https://acleddata.com",
+      "https://cadataapi.state.gov",
+      "https://data.international.gc.ca",
+      "https://www.auswaertiges-amt.de",
+      "https://www.smartraveller.gov.au",
+      "https://*.usembassy.gov",
+      "https://hk.usconsulate.gov",
+      "https://china.usembassy-china.org.cn",
+      "https://www.ait.org.tw"
+    ],
+    tools: ["https://photon.komoot.io", "https://nominatim.openstreetmap.org", "https://api.anthropic.com", "https://storage.googleapis.com"],
+    tiles: ["https://server.arcgisonline.com"],
+    video: ["https://d2e1asnsl7br7b.cloudfront.net", "https://mediacorp-videosbclive.akamaized.net", "https://nhkwlive-ojp.akamaized.net", "https://dwamdstream102.akamaized.net", "https://*.getaj.net", "https://*.thehlive.com"]
+  };
+  var origin = (u) => {
+    try {
+      return new URL(u).origin;
+    } catch (e) {
+      return null;
+    }
+  };
+  function policy() {
+    const dyn = [CFG.relay, CFG.server, CFG.llm && CFG.llm.provider === "gateway" ? CFG.llm.url : "", ...(CFG.capFeeds || []).map((f) => f.url)].map(origin).filter(Boolean);
+    const connect = [.../* @__PURE__ */ new Set([...Object.values(HOSTS).flat(), ...dyn])].join(" ");
+    return [
+      `default-src 'self'`,
+      `script-src 'self' 'unsafe-inline' file:`,
+      `style-src 'self' 'unsafe-inline' file:`,
+      `font-src 'self' file: data:`,
+      `img-src 'self' file: data: blob: ${HOSTS.tiles.join(" ")}`,
+      `connect-src 'self' file: ${connect}`,
+      `media-src 'self' blob: ${HOSTS.video.join(" ")}`,
+      `frame-src https://www.youtube.com`,
+      `worker-src 'self' blob:`,
+      `object-src 'none'`,
+      `base-uri 'none'`,
+      `form-action 'none'`
+    ].join("; ");
+  }
+  function applyCSP() {
+    if (document.querySelector('meta[http-equiv="Content-Security-Policy"]')) return;
+    const m = document.createElement("meta");
+    m.httpEquiv = "Content-Security-Policy";
+    m.content = policy();
+    document.head.prepend(m);
+  }
+  var reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function redactor() {
+    if (CFG.llm && CFG.llm.redact === false) return { hide: (t2) => t2, show: (t2) => t2, n: () => 0 };
+    const names = SITES.flatMap((s) => [s.code, s.name]).filter((x) => x && x.length > 2).sort((a, b) => b.length - a.length), map2 = /* @__PURE__ */ new Map(), back = /* @__PURE__ */ new Map();
+    const re = names.length ? new RegExp(`(?<![\\w-])(${names.map(reEsc).join("|")})(?![\\w-])`, "g") : null;
+    const hide = (t2) => typeof t2 !== "string" || !re ? t2 : t2.replace(re, (m) => {
+      if (!map2.has(m)) {
+        const p = `SITE-${map2.size + 1}`;
+        map2.set(m, p);
+        back.set(p, m);
+      }
+      return map2.get(m);
+    });
+    const show = (t2) => typeof t2 !== "string" ? t2 : t2.replace(/SITE-\d+/g, (p) => back.get(p) || p);
+    return { hide, show, n: () => map2.size };
+  }
+
   // src/llm.js
   var MODELS = { "claude-sonnet-5-5": "Claude Sonnet 5.5 — fast, good for most drafting", "claude-opus-5-5": "Claude Opus 5.5 — slower, strongest at following a strict style" };
   var llmReady = () => CFG.llm.provider === "gateway" ? !!CFG.llm.url : !!CFG.keys.claude;
@@ -3805,19 +4538,21 @@ PSOC`
     if (gw) {
       if (CFG.llm.header && CFG.llm.headerValue) headers[CFG.llm.header] = CFG.llm.headerValue;
     } else Object.assign(headers, { "x-api-key": CFG.keys.claude, "anthropic-dangerous-direct-browser-access": "true" });
+    const R = redactor(), hideMsg = (m) => ({ role: m.role, content: typeof m.content === "string" ? R.hide(m.content) : m.content.map((b) => b.type === "text" ? Object.assign({}, b, { text: R.hide(b.text) }) : b) });
+    const body = { model: CFG.llm.model || "claude-sonnet-5-5", max_tokens: max, system: R.hide(system2), messages: messages.map(hideMsg) };
     let r;
     try {
-      r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ model: CFG.llm.model || "claude-sonnet-5-5", max_tokens: max, system: system2, messages }) });
+      r = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
     } catch (e) {
       throw new Error(gw ? "the gateway could not be reached from this browser" : "api.anthropic.com could not be reached from this network");
     }
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? "the key was rejected" : j.error && j.error.message || "HTTP " + r.status);
-    return (j.content || []).map((b) => b.text || "").join("").trim();
+    return R.show((j.content || []).map((b) => b.text || "").join("").trim());
   }
 
   // src/style.js
-  var TYPES = { sitrep: "SITREP", handover: "Shift handover", leadership: "Leadership update", welfare: "Welfare update", intel: "Intelligence Channel post", stakeholders: "Site stakeholders email", closeout: "Close-out report", note: "Log note or summary" };
+  var TYPES2 = { sitrep: "SITREP", handover: "Shift handover", leadership: "Leadership update", welfare: "Welfare update", intel: "Intelligence Channel post", stakeholders: "Site stakeholders email", closeout: "Close-out report", note: "Log note or summary" };
   var GUIDE = `Write as PSOC, in the third person: "PSOC has identified", "PSOC is monitoring". Never "I" or "we".
 Lead with what happened, where and when; then the impact to personnel, sites and operations; then what PSOC is doing.
 State facts only. Mark anything not yet confirmed "(unconfirmed)", or "(confirm)" where a value is still needed. No speculation and no alarming adjectives.
@@ -3915,8 +4650,8 @@ Monitoring is ongoing.`;
 HOUSE STYLE — follow it for anything you draft:
 ${STYLE.guide}
 Avoid: ${STYLE.avoid.join(", ")}.`;
-  var reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  var wordRe = (w) => /^[\w ]+$/.test(w) ? new RegExp(`\\b${reEsc(w)}\\b`, "gi") : new RegExp(reEsc(w), "gi");
+  var reEsc2 = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  var wordRe = (w) => /^[\w ]+$/.test(w) ? new RegExp(`\\b${reEsc2(w)}\\b`, "gi") : new RegExp(reEsc2(w), "gi");
   function lint(text, type) {
     const t2 = String(text || ""), cfg = STYLE.types[type] || {}, out = [], add = (level, msg2, fix) => out.push({ level, msg: msg2, fix: !!fix });
     STYLE.avoid.forEach((w) => {
@@ -3934,7 +4669,7 @@ Avoid: ${STYLE.avoid.join(", ")}.`;
     const long = t2.replace(/\n+/g, " . ").split(/(?<=[.?!])\s+/).filter((sn) => sn.split(/\s+/).filter(Boolean).length > STYLE.maxWords);
     if (long.length) add("warn", `${long.length} sentence${long.length === 1 ? "" : "s"} over ${STYLE.maxWords} words: “${long[0].split(/\s+/).slice(0, 8).join(" ")}…”`);
     (cfg.headings || []).forEach((h) => {
-      if (!new RegExp(`^\\s*${reEsc(h)}\\b`, "im").test(t2)) add("error", `Missing heading “${h}”`);
+      if (!new RegExp(`^\\s*${reEsc2(h)}\\b`, "im").test(t2)) add("error", `Missing heading “${h}”`);
     });
     if (cfg.endsWith && !t2.trim().endsWith(cfg.endsWith)) add("error", `End with “${cfg.endsWith}”`, true);
     const ph = t2.match(/\[[^\]\n]{2,40}\]/g);
@@ -3971,7 +4706,7 @@ Sentences under ${STYLE.maxWords} words.
 <preferred_terms>${STYLE.prefer.map(([a, b]) => `${b} (not ${a})`).join("; ")}</preferred_terms>
 ${cfg.headings && cfg.headings.length ? `<required_headings>${cfg.headings.join(" | ")}</required_headings>
 ` : ""}${cfg.endsWith ? `<must_end_with>${cfg.endsWith}</must_end_with>
-` : ""}${exs.length ? `<examples type="${TYPES[type]}">
+` : ""}${exs.length ? `<examples type="${TYPES2[type]}">
 ${exs.map((e) => `<example>
 ${e.text}
 </example>`).join("\n")}
@@ -3979,7 +4714,7 @@ ${e.text}
   }
   async function rewrite(text, type) {
     if (!llmReady()) throw new Error("connect a language model in Settings › Writing style");
-    let out = await llm({ system: system(type), messages: [{ role: "user", content: `Rewrite this ${TYPES[type] || "text"} in the house style.
+    let out = await llm({ system: system(type), messages: [{ role: "user", content: `Rewrite this ${TYPES2[type] || "text"} in the house style.
 <draft>
 ${text}
 </draft>` }], max: 2500 });
@@ -3987,7 +4722,7 @@ ${text}
     let issues = lint(out, type).filter((i) => i.level === "error");
     if (issues.length) {
       out = fixLocal(await llm({ system: system(type), messages: [
-        { role: "user", content: `Rewrite this ${TYPES[type] || "text"} in the house style.
+        { role: "user", content: `Rewrite this ${TYPES2[type] || "text"} in the house style.
 <draft>
 ${text}
 </draft>` },
@@ -4302,6 +5037,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     ${qs ? `<div class="sec"><h3>Welfare at sites</h3><p class="help">Tick sites where personnel felt shaking or reported damage; the welfare update wording follows.</p>
       <table class="tbl"><tr><th>Site</th><th>Shaking felt</th><th>Damage</th></tr>${s.sites.slice(0, 20).map((x) => `<tr><td>${esc(x.code)}</td><td><input type="checkbox" data-qshake="${esc(x.code)}"${(qs.shaking || []).includes(x.code) ? " checked" : ""}></td><td><input type="checkbox" data-qdmg="${esc(x.code)}"${(qs.damage || []).includes(x.code) ? " checked" : ""}></td></tr>`).join("")}</table></div>` : ""}
     ${/^gdelt/.test(s.src) ? `<p class="help">News coverage found by GDELT, classified from the headline: not an official or verified report. Open the article and corroborate before acting. Article counts reflect news volume, not crowd size.</p>` : s.src === "acled" ? `<p class="help">ACLED researched event, published weekly; it describes what happened, not what is planned.</p>` : ""}
+    ${s.extra && s.extra.detId && detById(s.extra.detId) ? `<div class="sec"><h3>Picture strip</h3><div class="strip big">${detById(s.extra.detId).strip.map((u) => `<img src="${u}" alt="camera frame">`).join("")}</div><p class="help">Simulated camera. <button class="linkbtn" data-ws="cameras">Open Cameras</button></p></div>` : ""}
     ${s.kind === "cyclone" ? stormTiming(s) : ""}
     <div class="sec"><h3>Notes</h3>${(NOTES[s.key] || []).map((n) => `<p class="prose"><span class="help">${esc(sgt(n.t))} · ${esc(n.by)}</span><br>${esc(n.m)}</p>`).join("")}<form class="note" data-wnote><input placeholder="Add a note to this report" aria-label="Add a note"><button class="btn small">Add</button></form></div>
     <div class="sec"><h3>Sites ${s.sites.length ? `(${s.sites.length})` : ""}</h3>${s.kind === "cyclone" && s.sites.length ? `<p class="help">Timing for each site is above.</p>` : siteRows ? `<table class="tbl"><tr><th>Site</th><th>City</th><th>Distance</th><th></th></tr>${siteRows}</table>` : `<p class="help">No tracked site in range.${s.near ? ` Nearest: ${esc(s.near.code)}, ${Math.round(s.near.km)} km.` : ""}</p>`}</div></div>`;
@@ -4362,10 +5098,10 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     <div class="sec"><h3>Sites in ${esc(name)} (${sites.length})</h3>${Object.keys(byCls).length ? `<p class="help">${Object.entries(byCls).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${esc(k.replace("CLASS ", "Class "))} ${v}`).join(" · ")}</p>` : ""}<p class="help">${sites.map((x) => `<button class="linkbtn" data-site="${esc(x.code)}">${esc(x.code)}</button>`).join(", ") || "None."}</p></div></div>`;
   }
   function outlookHtml(d) {
-    const D0 = d.daily || {}, D = new Proxy(D0, { get: (o, k) => o[k] || [] }), F = CFG.fc, W = CFG.wx, t2 = (v, warn, bad) => v >= bad ? 3 : v >= warn ? 2 : 0, r = (v) => v == null ? "—" : Math.round(v);
+    const D0 = d.daily || {}, D = new Proxy(D0, { get: (o, k) => o[k] || [] }), F = CFG.fc, W2 = CFG.wx, t2 = (v, warn, bad) => v >= bad ? 3 : v >= warn ? 2 : 0, r = (v) => v == null ? "—" : Math.round(v);
     return `<table class="tbl"><tr><th>Day</th><th>Weather</th><th>High / low</th><th>Rain</th><th>Chance</th><th>Gusts</th></tr>${D.time.map((day, i) => {
       const hi = D.temperature_2m_max[i], rain = D.precipitation_sum[i], g = D.wind_gusts_10m_max[i];
-      return `<tr><td>${esc((/* @__PURE__ */ new Date(day + "T00:00:00")).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</td><td>${D.weather_code[i] != null ? esc(wmo(D.weather_code[i])) : "—"}</td><td><span class="tierword t${t2(hi, W.hotWarn, W.hotBad)}">${r(hi)}°</span> / ${r(D.temperature_2m_min[i])}°</td><td><span class="tierword t${t2(rain, F.rainWarn, F.rainBad)}">${rain != null ? rain.toFixed(1) : "—"} mm</span></td><td>${D.precipitation_probability_max[i] ?? "—"} %</td><td><span class="tierword t${t2(g, F.gustWarn, F.gustBad)}">${g != null ? Math.round(g) : "—"} km/h</span></td></tr>`;
+      return `<tr><td>${esc((/* @__PURE__ */ new Date(day + "T00:00:00")).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</td><td>${D.weather_code[i] != null ? esc(wmo(D.weather_code[i])) : "—"}</td><td><span class="tierword t${t2(hi, W2.hotWarn, W2.hotBad)}">${r(hi)}°</span> / ${r(D.temperature_2m_min[i])}°</td><td><span class="tierword t${t2(rain, F.rainWarn, F.rainBad)}">${rain != null ? rain.toFixed(1) : "—"} mm</span></td><td>${D.precipitation_probability_max[i] ?? "—"} %</td><td><span class="tierword t${t2(g, F.gustWarn, F.gustBad)}">${g != null ? Math.round(g) : "—"} km/h</span></td></tr>`;
     }).join("")}</table>
     <p class="help">Open-Meteo, ${d.auto ? "best available model" : "national model"}. Coloured by the same thresholds as the city board.</p>`;
   }
@@ -5240,7 +5976,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
       if (d.rex !== void 0) {
         const r = REPORTS.find((x) => x.id === sel), k = styleType(sel, r);
         addExample(k, text(), r.title, r.by);
-        toast("Added as a style example", `${TYPES[k]}: the language model follows it from now on.`, 0);
+        toast("Added as a style example", `${TYPES2[k]}: the language model follows it from now on.`, 0);
         return;
       }
     };
@@ -5303,14 +6039,9 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
         const a = /waqiToken:\s*"([^"]+)"/.exec(dec(aq));
         if (a) found2.keys.waqi = a[1];
       }
-      if (mods.tracker) try {
-        found2.ttp = await extractTTP(dec(mods.tracker));
-      } catch (e) {
-        found2.ttpErr = e.message;
-      }
     } catch (e) {
     }
-    if (!found2.ttp && !found2.watch && !Object.keys(found2.keys).length) throw new Error("nothing usable found — is this a PULSE dashboard file?");
+    if (!found2.watch && !Object.keys(found2.keys).length) throw new Error("nothing usable found — is this a PULSE dashboard file?");
     return found2;
   }
   function applyPulse(found2, pick) {
@@ -5374,6 +6105,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     p.innerHTML = `<div class="ph"><h1>Sites</h1><button class="btn small" data-sadd>Add a site</button>
       <div class="sum">${SITES.length} sites, ${live} live, ${SITES.filter(isOffice).length} offices. <b>The estate is fictional</b>: codes, classes and contacts follow PULSE's conventions at made-up positions in each metro. Hazards, warnings and every other feed are real.</div></div>
     <form class="filters" data-geo><input class="search" type="search" id="geoQ" placeholder="Find an address: nearest sites and threats" style="flex:1;min-width:200px"><button class="btn small">Find</button></form>
+    <p class="help" style="padding:0 16px">What you type is sent to OpenStreetMap's search services. Do not search a real site's address.</p>
     <div class="filters"><input class="search" type="search" placeholder="Code, city, country or class" value="${esc(UI.siteQ || "")}" data-sq style="width:220px">
       <select class="search" data-scls style="width:auto">${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}"${(UI.siteCls || "all") === k ? " selected" : ""}>${l}</option>`).join("")}</select>
       <select class="search" data-sst style="width:auto">${Object.entries(STATUSES).map(([k, l]) => `<option value="${k}"${(UI.siteSt || "live") === k ? " selected" : ""}>${l}</option>`).join("")}</select><span class="help">${list.length} shown</span></div>
@@ -5627,6 +6359,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
   }
   function rules() {
     const R = [
+      ["security", "Cameras and access control (prototype)", "a camera rule at manager level or above (restricted zone, object left, tailgating, person down), or a door forced or held open"],
       ["quake", "Earthquakes", "estimated shaking MMI IV or more at a site, a near-site or global alarm, or a tsunami flag in range"],
       ["warnings", "Official warnings", "second tier (severe) or higher covering a city or site"],
       ["cyclone", "Tropical cyclones", "a site inside the storm-force wind circle or the 70 % probability circle of the forecast"],
@@ -5644,8 +6377,8 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
   function procedures() {
     const cats = Object.entries(SOP_REF);
     return `<h2>Procedures</h2><p class="help">${esc(ttpName())}${TTP.meta.date ? " dated " + esc(TTP.meta.date) : ""}${TTP.meta.owner ? ", " + esc(TTP.meta.owner) : ""}${TTP.builtin ? " — built in, from the PULSE Master Tracker." : `, read from ${esc(TTP.file)} ${esc(ago(TTP.at))} and used in this browser instead of the built-in version.`}</p>
-    <div class="actions"><button class="btn" data-spulse>Update from a PULSE file</button>${TTP.builtin ? "" : `<button class="btn" data-sttpclear>Go back to the built-in TTP</button>`}</div>
-    <p class="help">A PULSE file can also bring in the PSOC watch desk contacts and, if you tick them, its keys. Its site list and site contacts are not used: the estate here is fictional.</p>
+    <div class="actions"><button class="btn" data-spulse>Read desk contacts or keys from a PULSE file</button>${TTP.builtin ? "" : `<button class="btn" data-sttpclear>Go back to the built-in TTP</button>`}</div>
+    <p class="help">A new TTP version is built into the console by an administrator (tools/extract-ttp.mjs) and released, so the console never runs code from a file someone opens. A PULSE file can still bring in the PSOC watch desk contacts and, if you tick them, its keys; its site list and site contacts are not used.</p>
     <div class="form" style="max-width:640px">${field("Update timers", `<select data-cfg="cadence"><option value="ttp"${CFG.cadence !== "fixed" ? " selected" : ""}>Follow the REN TTP for each category</option><option value="fixed"${CFG.cadence === "fixed" ? " selected" : ""}>Fixed: Manager every 12 h, Intel / SLT every 24 h</option></select>`, true)}</div>
     <table class="tbl" style="margin-top:12px;max-width:760px"><tr><th>Category</th><th>Manager update</th><th>Intel / SLT update</th><th>Source</th></tr>${cats.map(([k, v]) => {
       const c = cadenceFor(k);
@@ -5661,18 +6394,19 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
       ${field("Model", `<select data-cfg="llm.model">${Object.entries(MODELS).map(([m, l]) => `<option value="${m}"${CFG.llm.model === m ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`)}
       ${gw ? txt("llm.url", "Gateway address (Messages API)", "https://ai-gateway.example.com/v1/messages") + txt("llm.header", "Header name", "e.g. api-key") + txt("llm.headerValue", "Header value", "", "password") : txt("keys.claude", "Anthropic API key", "sk-ant-…", "password")}
       <div class="fld" style="justify-content:flex-end"><button class="btn" data-llmtest type="button">Test the connection</button></div></div>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" data-cfg="llm.redact"${CFG.llm.redact !== false ? " checked" : ""}> Replace site codes and names with placeholders (SITE-1, SITE-2 …) before anything is sent, and put them back in the answer</label>
     <p class="help">${gw ? "Text goes to your gateway only." : "The key stays in this browser; text goes only to api.anthropic.com, directly from this computer."} Without a model, the style check and “Fix wording” still work.</p>
     <h3 class="ttp-sub" style="margin-top:18px">House style guide</h3>
     <textarea class="paper" style="min-height:190px" data-st="guide" aria-label="House style guide">${esc(STYLE.guide)}</textarea>
     <div class="form" style="max-width:760px;margin-top:8px">${field("Words and phrases to avoid (one per line)", `<textarea rows="5" data-st="avoid">${esc(STYLE.avoid.join("\n"))}</textarea>`)}${field("Preferred terms (one per line: write this → as this)", `<textarea rows="5" data-st="prefer">${esc(STYLE.prefer.map(([a, b]) => a + " → " + b).join("\n"))}</textarea>`)}
       ${field("Longest sentence (words)", `<input type="number" min="10" max="80" data-st="maxWords" value="${STYLE.maxWords}">`)}</div>
     <h3 class="ttp-sub" style="margin-top:18px">Each kind of report</h3>
-    <div class="seg" role="group" aria-label="Report type" style="flex-wrap:wrap">${Object.entries(TYPES).map(([t2, l]) => `<button data-stt="${t2}" aria-pressed="${k === t2}">${esc(l)}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Report type" style="flex-wrap:wrap">${Object.entries(TYPES2).map(([t2, l]) => `<button data-stt="${t2}" aria-pressed="${k === t2}">${esc(l)}</button>`).join("")}</div>
     <div class="form" style="max-width:760px;margin-top:8px">${field("Required headings (one per line, in order)", `<textarea rows="3" data-st="headings">${esc(cfg.headings.join("\n"))}</textarea>`)}${field("Must end with", `<input data-st="endsWith" value="${esc(cfg.endsWith)}">`)}</div>
     <p class="help">Examples (${cfg.examples.length}). The model copies their structure, headings and tone. Add two or three of your best real reports of this kind; from Reports, “Use as a style example” adds a saved one.</p>
     ${cfg.examples.map((e) => `<details class="draft"><summary>${esc(e.title)}${e.builtin ? " (built in)" : ""}<span class="s">${e.by ? esc(e.by) + " · " : ""}${e.at ? esc(ago(e.at)) : ""}</span></summary><pre class="exbox">${esc(e.text)}</pre><div class="actions"><button class="btn small danger" data-exdel="${esc(e.id)}">Remove</button></div></details>`).join("")}
-    <textarea class="paper" style="min-height:120px" id="exNew" placeholder="Paste an example ${esc(TYPES[k])} written the way the team wants it"></textarea><div class="actions"><button class="btn" data-exadd>Add as an example</button></div>
-    <h3 class="ttp-sub" style="margin-top:18px">Try it</h3><textarea class="paper" style="min-height:140px" id="styTry" data-style="${k}" placeholder="Paste any draft ${esc(TYPES[k])} to check it or rewrite it in the house style"></textarea>${styleBar("styTry", k)}
+    <textarea class="paper" style="min-height:120px" id="exNew" placeholder="Paste an example ${esc(TYPES2[k])} written the way the team wants it"></textarea><div class="actions"><button class="btn" data-exadd>Add as an example</button></div>
+    <h3 class="ttp-sub" style="margin-top:18px">Try it</h3><textarea class="paper" style="min-height:140px" id="styTry" data-style="${k}" placeholder="Paste any draft ${esc(TYPES2[k])} to check it or rewrite it in the house style"></textarea>${styleBar("styTry", k)}
     <div class="actions" style="margin-top:14px"><button class="btn danger" data-styreset>Go back to the PULSE defaults</button></div>`;
   }
   function thresholds() {
@@ -5707,7 +6441,9 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     return `<h2>Contacts</h2><p class="help">Used in the messages the console writes. Settings › Procedures › Update from a PULSE file can fill the watch desk.</p><div class="form" style="margin-top:12px">${txt("psoc.desk", "Watch desk phone")}${txt("psoc.mobile", "Watch desk mobile")}${txt("psoc.email", "Watch desk email")}${txt("psoc.leaders", "Leadership update recipients", "a@company.com; b@company.com")}${txt("psoc.intelChannel", "Intelligence Channel (email address of the channel)")}</div>`;
   }
   function connection() {
-    return `<h2>Connection</h2><p class="help">Some agencies block browsers from reading their data. A relay (relay.js) or the PSOC server fetches those for the console. The desktop app has one built in.</p><div class="form" style="margin-top:12px">${txt("relay", "Relay address", "https://relay.example.com")}${txt("server", "PSOC server address (shared data comes in stage 2)", "https://psoc.example.com")}</div>`;
+    return `<h2>Connection</h2><p class="help">Some agencies block browsers from reading their data. A relay (relay.js) or the PSOC server fetches those for the console. The desktop app has one built in.</p><div class="form" style="margin-top:12px">${txt("relay", "Relay address", "https://relay.example.com")}${txt("server", "PSOC server address (shared data comes in stage 2)", "https://psoc.example.com")}</div>
+    <h3 class="ttp-sub" style="margin-top:18px">Where this console may send requests</h3><p class="help">Enforced by the browser's content security policy: any other address is refused, including one an injected script tries. A relay, PSOC server, model gateway or CAP feed you set here is added on the next reload.</p>
+    <table class="tbl"><tr><th>Purpose</th><th>Addresses</th></tr>${Object.entries(HOSTS).map(([g, h]) => `<tr><td>${esc({ hazards: "Global hazards", agencies: "National agencies", conditions: "Weather and air", people: "Unrest, news and travel", tools: "Address search, language model, detector model", tiles: "Map tiles", video: "Live TV streams" }[g] || g)}</td><td class="help">${h.map((x) => esc(x.replace("https://", ""))).join(", ")}</td></tr>`).join("")}</table>`;
   }
   function data() {
     const A = auditLog().slice(0, 300), theme = document.documentElement.dataset.theme || "night";
@@ -5904,7 +6640,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
           return;
         }
         addExample(UI.styleType || "sitrep", v, "Pasted example", who());
-        audit("Style example added", TYPES[UI.styleType || "sitrep"]);
+        audit("Style example added", TYPES2[UI.styleType || "sitrep"]);
         rerender();
         return;
       }
@@ -5991,8 +6727,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
             const fd = await readPulseFile(f), mask = (v) => v.slice(0, 4) + "…" + v.slice(-3);
             dialog(
               "Import from " + f.name,
-              `<p class="help">Read in this browser only. Its site list and site contacts are not used.</p>
-            ${fd.ttp ? `<label class="chk"><input type="checkbox" id="piTtp" checked> REN TTP${fd.ttp.meta && fd.ttp.meta.version ? " v" + esc(fd.ttp.meta.version) : ""}${fd.ttp.meta && fd.ttp.meta.date ? ", " + esc(fd.ttp.meta.date) : ""} — ${Object.keys(fd.ttp.ttp || {}).length} categories</label>` : fd.ttpErr ? `<p class="help">The REN TTP could not be read: ${esc(fd.ttpErr)}.</p>` : ""}
+              `<p class="help">Read in this browser only; no code from the file runs. Its site list and site contacts are not used.</p>
             ${fd.watch ? `<label class="chk"><input type="checkbox" id="piWatch" checked> PSOC watch desk contacts</label>` : ""}
             ${Object.keys(fd.keys).length ? `<h3 class="ttp-sub" style="margin-top:12px">Keys in the file — off unless you are allowed to use them here</h3>${Object.entries(fd.keys).map(([k, v]) => `<label class="chk"><input type="checkbox" id="piKey_${k}"> ${k.toUpperCase()} ${esc(mask(v))}</label>`).join("")}` : ""}`,
               `<button class="btn" data-close>Cancel</button><button class="btn primary" id="piGo">Import</button>`
@@ -6020,7 +6755,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     };
   }
   async function exportExcel() {
-    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    await loadVendor("xlsx");
     const X = window.XLSX, wb = X.utils.book_new(), T = (t2) => t2 ? sgt(t2) : "";
     const add = (name, rows) => X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows.length ? rows : [{ note: "none" }]), name);
     add("Escalations", EVENTS.map((e) => ({ title: e.title, category: (SOP_REF[e.cat] || {}).label || e.cat, severity: e.sev, country: e.country, status: e.status, event_notice: REN[e.ren], opened_sgt: T(e.created), closed_sgt: e.closed ? T(e.closed.at) : "", closed_by: e.closed ? e.closed.by : "", summary: e.closed ? e.closed.summary : "", sites: e.sites.join(", "), welfare: Object.entries(e.welfare || {}).map(([k, v]) => k + " " + v.status).join("; "), messages_sent: (e.comms || []).length })));
@@ -6034,6 +6769,264 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     X.writeFile(wb, `ite-export-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace(":", "")}.xlsx`);
     audit("Exported everything to Excel");
   }
+
+  // src/ui/cameras.js
+  var cameras_exports = {};
+  __export(cameras_exports, {
+    bind: () => bind7,
+    count: () => count4,
+    detById: () => detById,
+    leave: () => leave,
+    render: () => render7
+  });
+  var count4 = () => {
+    const h = Date.now() - 36e5;
+    return ENGINE.detections.filter((d) => d.t > h && d.tier >= 2).length;
+  };
+  var ZONE_WORD = { restricted: "restricted", door: "door", loiter: "watch for loitering", crowd: "crowd count" };
+  function render7(p) {
+    if (!ENGINE.running && load("camRun", true) !== false) startSim();
+    ENGINE.visible = true;
+    p.innerHTML = `<div class="ph"><h1>Cameras</h1><div class="seg" role="group" aria-label="Simulation"><button data-camrun="on" aria-pressed="${ENGINE.running}">Running</button><button data-camrun="off" aria-pressed="${!ENGINE.running}">Paused</button></div>
+      <div class="sum"><b>Prototype.</b> Four simulated cameras and a simulated Lenel OnGuard door feed at the fictional sites TOK83 and SIG97 — no live feed is connected. The behaviour rules, picture strips, Inbox items and Claude descriptions are the real thing. Behaviour only: no face recognition, no identity.</div></div>
+    <div class="filters"><select class="search" id="camScen" style="width:auto" aria-label="Scenario">${Object.entries(SCENARIOS).map(([k, [l]]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select><button class="btn small primary" data-camgo>Run this scenario</button>
+      <label class="chk" style="font-size:12.5px;color:var(--muted)"><input type="checkbox" data-camauto${ENGINE.auto ? " checked" : ""}> A random scenario every few minutes</label>
+      <button class="btn small" data-camfile>Analyse footage</button><button class="btn small" data-camrules>Rules</button></div>
+    <div class="camwrap"><div class="camgrid">${CAMS.map((c) => `<figure class="camtile"><div class="camslot" data-slot="${c.id}"></div><figcaption><b>${esc(c.id)}</b> ${esc(c.site)} ${esc(c.name)}${c.zones.length ? ` · <span class="help">${c.zones.map((z) => esc(z.name) + " (" + ZONE_WORD[z.kind] + ")").join(", ")}</span>` : ""}</figcaption></figure>`).join("")}</div>
+      <aside class="camside" id="camside">${side()}</aside></div>`;
+    ENGINE.scenes.forEach((s) => {
+      const slot = p.querySelector(`[data-slot="${s.cam.id}"]`);
+      if (slot) slot.appendChild(s.canvas);
+    });
+  }
+  function strip(d, big) {
+    return `<div class="strip${big ? " big" : ""}">${d.strip.map((u, i) => `<img src="${u}" alt="${esc(d.cam.id)} frame ${i + 1} of ${d.strip.length}">`).join("")}</div>`;
+  }
+  function side() {
+    const dets = ENGINE.detections.slice(0, 14), acc = ENGINE.access.slice(0, 18);
+    return `<h3 class="ttp-sub">Flagged by the rules (${ENGINE.detections.length})</h3>${dets.map((d) => {
+      const it = INBOX.find((i) => i.key === "sig:cam:" + d.id);
+      return `<div class="det"><div class="dh"><span class="bar t${d.tier}"></span><b>${esc(d.label)}</b><span class="help">${esc(d.cam.id)} · ${esc(d.cam.site)} ${esc(d.cam.name)} · ${esc(ago(d.t))}</span></div>${strip(d)}
+        <div class="actions"><button class="linkbtn" data-camopen="${esc(d.id)}">Open</button>${it ? `<button class="linkbtn" data-caminbox="${esc(it.id)}">${it.status === "open" ? "Decide in the Inbox" : "In the Inbox: " + esc(it.decision || it.status)}</button>` : ""}${llmReady() ? `<button class="linkbtn" data-camdesc="${esc(d.id)}">Describe with Claude</button>` : ""}</div>${d.desc ? `<p class="prose small">${esc(d.desc)}</p>` : ""}</div>`;
+    }).join("") || `<p class="help">Nothing flagged yet. Run a scenario, or wait for one.</p>`}
+    <h3 class="ttp-sub" style="margin-top:14px">Lenel OnGuard door events (simulated)</h3><ul class="acc">${acc.map((e) => `<li class="s${e.signal || 0}"><time>${esc(sgt(e.time).split(", ").pop())}</time><span>${esc(e.type)}</span><span class="help">${esc(e.device)}${e.badge ? " · " + esc(e.badge) : ""}</span></li>`).join("") || `<li class="help">Waiting for events…</li>`}</ul>`;
+  }
+  on("cameras", () => {
+    if (UI.ws !== "cameras") return;
+    const s = $("#camside");
+    if (s && !s.contains(document.activeElement)) s.innerHTML = side();
+  });
+  function openDet(d) {
+    dialog(
+      `${d.label} — ${d.cam.id} ${d.cam.site} ${d.cam.name}`,
+      `<p class="prose">${esc(d.text)} Flagged ${esc(sgt(d.t))} SGT.</p>${strip(d, true)}<p class="help">One frame a second around the moment the rule was met. Simulated footage.</p>
+    <div id="descBox">${d.desc ? `<p class="prose">${esc(d.desc)}</p><p class="help">Described by ${esc(d.descBy || "Claude")}. Check it against the frames.</p>` : ""}</div>`,
+      `${llmReady() ? `<button class="btn" id="dDesc">Describe with Claude</button>` : ""}<button class="btn" data-close>Close</button>`,
+      { wide: true }
+    );
+    if ($("#dDesc")) $("#dDesc").onclick = () => describe(d, $("#dDesc"));
+  }
+  async function describe(d, btn) {
+    if (!await confirmBox("Send the picture strip to the language model?", `${d.strip.length} frames go to ${esc(llmName())}. In this prototype they are simulated. With real cameras this needs approval under the camera privacy policy.`, "Send")) return;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Looking…";
+    }
+    try {
+      const imgs = d.strip.map((u) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: u.split(",")[1] } }));
+      d.desc = await llm({
+        system: "You review CCTV picture strips for a physical security operations center. Describe only behaviour: movement, posture, objects, and position relative to doors, fences and marked zones. Never describe faces or identifying features, and never guess identity, age, gender or ethnicity. Be brief and factual.",
+        messages: [{ role: "user", content: imgs.concat([{ type: "text", text: `Consecutive frames about one second apart from ${d.cam.id}, ${d.cam.name}. The rule "${d.label}" was met: ${d.text} In 3 to 5 sentences: what happens, whether it matches the rule, your confidence (low, medium or high), and one next step for the PSOC officer.` }]) }],
+        max: 500
+      });
+      d.descBy = llmName();
+      audit("Camera strip described", d.cam.id + " " + d.label);
+    } catch (e) {
+      toast("Could not describe the strip", e.message, 2);
+    }
+    const box2 = $("#descBox");
+    if (box2 && d.desc) box2.innerHTML = `<p class="prose">${esc(d.desc)}</p><p class="help">Described by ${esc(d.descBy)}. Check it against the frames.</p>`;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Describe with Claude";
+    }
+    const s = $("#camside");
+    if (s) s.innerHTML = side();
+  }
+  function analyseDialog() {
+    dialog("Analyse footage", `<p class="prose">Choose a video clip or a set of pictures. Every second of the clip is checked for people and bags by a detector that runs in this browser, then the behaviour rules run. Nothing is uploaded.</p>
+    <input type="file" id="afFile" accept="video/*,image/*" multiple><div id="afStage" style="margin-top:10px"></div>`, `<button class="btn" data-close>Close</button>`, { wide: true });
+    $("#afFile").onchange = async (e) => {
+      const files = [...e.target.files];
+      if (!files.length) return;
+      const stage = $("#afStage"), cv2 = document.createElement("canvas"), x = cv2.getContext("2d"), zone = [];
+      const frames = [], isVid = files[0].type.startsWith("video/");
+      if (isVid) {
+        const v = document.createElement("video");
+        v.muted = true;
+        v.src = URL.createObjectURL(files[0]);
+        await new Promise((ok, bad) => {
+          v.onloadedmetadata = ok;
+          v.onerror = () => bad(new Error("this video format can't be read here"));
+        });
+        const n = Math.min(90, Math.floor(v.duration));
+        for (let i = 0; i <= n; i++) frames.push(async () => {
+          v.currentTime = i;
+          await new Promise((r) => v.onseeked = r);
+          return v;
+        });
+        cv2.width = 640;
+        cv2.height = Math.round(640 * v.videoHeight / v.videoWidth) || 360;
+      } else {
+        const imgs = await Promise.all(files.map((f) => new Promise((ok) => {
+          const im = new Image();
+          im.onload = () => ok(im);
+          im.src = URL.createObjectURL(f);
+        })));
+        imgs.forEach((im) => frames.push(async () => im));
+        cv2.width = 640;
+        cv2.height = Math.round(640 * imgs[0].naturalHeight / imgs[0].naturalWidth) || 360;
+      }
+      const paint2 = async (i) => {
+        const src = await frames[i]();
+        x.drawImage(src, 0, 0, cv2.width, cv2.height);
+      };
+      await paint2(0);
+      stage.innerHTML = `<p class="help">Optional: click points on the picture to mark a restricted area, then Analyse. ${frames.length} frame${frames.length === 1 ? "" : "s"} to check.</p>`;
+      cv2.className = "afcanvas";
+      stage.appendChild(cv2);
+      const drawZone = () => {
+        if (zone.length < 2) return;
+        x.strokeStyle = "#e74c3c";
+        x.setLineDash([6, 5]);
+        x.lineWidth = 2;
+        x.beginPath();
+        zone.forEach(([a, b], i) => i ? x.lineTo(a * cv2.width, b * cv2.height) : x.moveTo(a * cv2.width, b * cv2.height));
+        x.closePath();
+        x.stroke();
+        x.setLineDash([]);
+      };
+      cv2.onclick = async (ev) => {
+        const r = cv2.getBoundingClientRect();
+        zone.push([(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height]);
+        await paint2(0);
+        drawZone();
+      };
+      stage.insertAdjacentHTML("beforeend", `<div class="actions"><button class="btn primary" id="afGo">Analyse</button><button class="btn" id="afClear">Clear the area</button></div><div id="afOut"></div>`);
+      $("#afClear").onclick = async () => {
+        zone.length = 0;
+        await paint2(0);
+      };
+      $("#afGo").onclick = async () => {
+        const out = $("#afOut"), btn = $("#afGo");
+        btn.disabled = true;
+        out.innerHTML = `<p class="help">Loading the detector…</p>`;
+        try {
+          await loadDetector();
+        } catch (err) {
+          out.innerHTML = `<p class="prose">The detector could not load here (${esc(err.message)}). It needs the model files from storage.googleapis.com, or a copy on the PSOC server. The simulated cameras still work.</p>`;
+          btn.disabled = false;
+          return;
+        }
+        const an = new Analyzer(cv2.width, cv2.height, zone.length > 2 ? [{ name: "the marked area", kind: "restricted", poly: zone.slice() }] : []), shots = [], found2 = [];
+        for (let i = 0; i < frames.length; i++) {
+          await paint2(i);
+          const dets = await detect(cv2);
+          x.lineWidth = 2;
+          dets.forEach((dd) => {
+            x.strokeStyle = dd.cls === "bag" ? "#f0b43c" : "#5ad2e6";
+            x.strokeRect(...dd.box);
+          });
+          drawZone();
+          const s = document.createElement("canvas");
+          s.width = 320;
+          s.height = Math.round(320 * cv2.height / cv2.width);
+          s.getContext("2d").drawImage(cv2, 0, 0, s.width, s.height);
+          shots.push(s.toDataURL("image/jpeg", 0.62));
+          an.step(i * 1e3, dets).forEach((ev) => found2.push(Object.assign({}, ev, { at: i, strip: shots.slice(-5) })));
+          out.innerHTML = `<p class="help">Checked ${i + 1} of ${frames.length} seconds · ${dets.filter((d) => d.cls === "person").length} people in view · ${found2.length} flagged</p>`;
+        }
+        out.innerHTML = found2.length ? found2.map((f, k) => `<div class="det"><div class="dh"><span class="bar t${f.tier}"></span><b>${esc(f.label)}</b><span class="help">at ${f.at} s</span></div><p class="prose small">${esc(f.text)}</p><div class="strip">${f.strip.map((u) => `<img src="${u}" alt="frame">`).join("")}</div><div class="actions"><button class="linkbtn" data-afadd="${k}">Add to the Inbox</button></div></div>`).join("") : `<p class="prose">Nothing met a rule in ${frames.length} seconds of footage. ${an.tracks.size ? "" : "No people were detected."}</p>`;
+        out.onclick = (ev2) => {
+          const b = ev2.target.closest("[data-afadd]");
+          if (!b) return;
+          const f = found2[+b.dataset.afadd];
+          addManualItem({ title: `Uploaded footage: ${f.label} at ${f.at} s`, tier: f.tier, pri: f.tier >= 3 ? "P1" : f.tier === 2 ? "P2" : "P3", kind: "security", text: f.text + ` From ${files[0].name}.` });
+          b.textContent = "Added";
+          b.disabled = true;
+        };
+        audit("Footage analysed", files[0].name, `${frames.length} s, ${found2.length} flagged`);
+        btn.disabled = false;
+      };
+    };
+  }
+  function rulesDialog() {
+    const P = PARAMS;
+    dialog(
+      "Camera rules",
+      `<div class="form">${field("Loitering after (seconds)", `<input type="number" id="rp1" value="${P.loiterSec}" min="10">`)}${field("Running pace (frame widths a second)", `<input type="number" step="0.02" id="rp2" value="${P.runSpeed}">`)}
+    ${field("Person down after (seconds)", `<input type="number" id="rp3" value="${P.downSec}" min="1">`)}${field("Crowd from (people)", `<input type="number" id="rp4" value="${P.crowdN}" min="3">`)}
+    ${field("Object left after (seconds)", `<input type="number" id="rp5" value="${P.objectSec}" min="5">`)}${field("Tailgating window after a badge (seconds)", `<input type="number" id="rp6" value="${P.tailgateSec}" min="1">`)}</div>
+    <p class="help">Levels: ${Object.values(RULES).map(([l, t2]) => `${esc(l)} — ${["normal", "monitor", "manager trigger", "escalate"][t2]}`).join("; ")}. Manager trigger and above reach the Inbox.</p>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn primary" id="rpGo">Save</button>`
+    );
+    $("#rpGo").onclick = () => {
+      Object.assign(PARAMS, { loiterSec: +$("#rp1").value || 30, runSpeed: +$("#rp2").value || 0.2, downSec: +$("#rp3").value || 4, crowdN: +$("#rp4").value || 6, objectSec: +$("#rp5").value || 20, tailgateSec: +$("#rp6").value || 4 });
+      saveParams();
+      closeDialog();
+      toast("Rules saved", "", 0);
+    };
+  }
+  function bind7(p, rerender) {
+    p.onclick = async (e) => {
+      const t2 = e.target.closest("[data-camrun],[data-camgo],[data-camfile],[data-camrules],[data-camopen],[data-caminbox],[data-camdesc]");
+      if (!t2) return;
+      const d = t2.dataset;
+      if (d.camrun) {
+        d.camrun === "on" ? startSim() : stopSim();
+        rerender();
+        return;
+      }
+      if (d.camgo !== void 0) {
+        if (!ENGINE.running) startSim();
+        const k = $("#camScen").value;
+        runScenario(k);
+        toast("Scenario started", SCENARIOS[k][0], 0);
+        audit("Camera scenario run", SCENARIOS[k][0]);
+        return;
+      }
+      if (d.camfile !== void 0) {
+        analyseDialog();
+        return;
+      }
+      if (d.camrules !== void 0) {
+        rulesDialog();
+        return;
+      }
+      if (d.camopen) {
+        const x = detById(d.camopen);
+        if (x) openDet(x);
+        return;
+      }
+      if (d.caminbox) {
+        go("inbox", { inboxSel: d.caminbox });
+        return;
+      }
+      if (d.camdesc) {
+        const x = detById(d.camdesc);
+        if (x) describe(x, t2);
+      }
+    };
+    p.onchange = (e) => {
+      if (e.target.matches("[data-camauto]")) {
+        ENGINE.auto = e.target.checked;
+        save("camAuto", ENGINE.auto);
+      }
+    };
+  }
+  var leave = () => {
+    ENGINE.visible = false;
+  };
 
   // src/ui/copilot.js
   var chat = [];
@@ -6138,6 +7131,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     ["Messages", "Write the messages opens the leadership update, the Intelligence Channel post and the site stakeholders email, written from the event. Edit, copy (it pastes with paragraphs and links into Teams and Outlook) or open in your email app, then Mark as sent. Nothing is sent by the console itself."],
     ["Reports", "The shift handover and the SITREP are written from what the console holds. Edit freely, then copy, save, download or print. Rewrite from live data starts again. With an Anthropic key, Tighten with Claude improves the wording without changing facts. Closing an escalation saves its close-out report here."],
     ["House style", "Every text box whose words leave the console — reports, message drafts, close-out summaries, log and impact notes — is checked against the house style as you type: words to avoid, preferred terms, first person, 12-hour times, long sentences, required headings and endings. Fix wording corrects what can be corrected without a model. With a language model connected (Settings › Writing style), Rewrite in house style turns a draft into the style of your example reports, keeps every fact, and flags any figure or site code that was not in your draft. Add your best real reports as examples, or use “Use as a style example” on a saved report."],
+    ["Cameras (prototype)", "Four simulated cameras and a simulated Lenel OnGuard door feed at the fictional sites TOK83 and SIG97 show how cameras and access control fit into ITE without a live feed. Behaviour rules flag a person in a restricted zone, loitering, running, a person down, a crowd, an object left behind and tailgating; door forced or held open comes from OnGuard. Each flag keeps a picture strip, and those at manager level reach the Inbox. Run a scenario to see one, use Describe with Claude to have the strip described (behaviour only, after you agree to send it), or Analyse footage to run the same rules on a clip of your own, detected in this browser. Nothing identifies a person."],
     ["Copilot", "Ask Copilot questions about the live picture: what is active, what to do next, or to draft the SITREP. It uses your own Anthropic API key from Settings › Keys and only the facts in the console."],
     ["Sites", "The estate with its contacts and what is affecting each site. Filter by class and status. Find an address shows the nearest sites and live threats within 150 km, and can add it as a site. Add a site by hand for an exercise or a temporary location; it is kept in this browser."],
     ["The estate", "The sites are fictional on purpose: codes, classes (A, B, C, Edge, offices) and contacts follow PULSE's conventions, placed at made-up positions in each metro. Everything else is real: hazards, warnings, protests, weather, air, rivers and the REN TTP. Real site lists and site contacts are never loaded into this console."],
@@ -6145,7 +7139,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     ["Earthquake alarm", "A full-screen alarm and siren for a quake at or above the global magnitude, or at or above the near-site magnitude within range of a site (Settings › Thresholds). Acknowledge and decide takes you to its Inbox item. The earthquake map shows the official USGS ShakeMap contours once USGS publishes them, and modelled rings until then."],
     ["Sources and relay", "Settings › Sources lists every source, what it gives and whether it is working. Some agencies block browsers; set a relay or the PSOC server under Settings › Connection and they are fetched through it. Keys for KMA, Taiwan CWA and WAQI go under Settings › Keys."],
     ["Your data", "Everything stays in this browser. Settings › Data downloads a backup, restores one, exports everything to Excel, and shows how much browser storage is used."],
-    ["Keys", "1 to 6 open the workspaces. In the Inbox: J and K move, E N M D decide. ? opens this guide. Escape closes a dialog."]
+    ["Keys", "1 to 7 open the workspaces (6 is Cameras, 7 Settings). In the Inbox: J and K move, E N M D decide. ? opens this guide. Escape closes a dialog."]
   ];
   function openGuide() {
     dialog("Guide", `<input class="search" id="gq" type="search" placeholder="Search the guide" style="width:100%;margin-bottom:10px" autofocus><div id="gl"></div>`, `<button class="btn" data-close>Close</button>`, { wide: true });
@@ -6158,7 +7152,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
   }
 
   // src/ui/shell.js
-  var WS = { watch: ["Watch", watch_exports, true, "1"], inbox: ["Inbox", inbox_exports, true, "2"], events: ["Events", events_exports, true, "3"], reports: ["Reports", reports_exports, false, "4"], sites: ["Sites", sites_exports, true, "5"], settings: ["Settings", settings_exports, false, "6"] };
+  var WS = { watch: ["Watch", watch_exports, true, "1"], inbox: ["Inbox", inbox_exports, true, "2"], events: ["Events", events_exports, true, "3"], reports: ["Reports", reports_exports, false, "4"], sites: ["Sites", sites_exports, true, "5"], cameras: ["Cameras", cameras_exports, false, "6"], settings: ["Settings", settings_exports, false, "7"] };
   function rail() {
     const ib = count2(), ev = count3(), w = count();
     const node = (n, tier) => `<span class="node${n ? "" : " zero"}${tier ? " t" + tier : ""}">${n}</span>`;
@@ -6168,7 +7162,10 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     ${stage("inbox", ib.n, ib.late ? 3 : ib.n ? 2 : 0, true, `${ib.n} to decide${ib.late ? `, ${ib.late} late` : ""}`)}
     ${stage("events", ev.n, ev.over ? 3 : ev.soon ? 2 : ev.n ? 1 : 0, true, `${ev.n} open escalations${ev.over ? `, ${ev.over} overdue` : ""}`)}
     ${stage("reports", "", 0, true, "Handover, SITREP and saved reports").replace('<span class="node zero"></span>', `<span class="node zero">≡</span>`)}
-    <div class="gap"></div>${stage("sites", "", 0, false, "Sites and contacts").replace('<span class="node zero"></span>', `<span class="node zero">◎</span>`)}${stage("settings", "", 0, false, "Settings").replace('<span class="node zero"></span>', `<span class="node zero">⚙</span>`)}
+    <div class="gap"></div>${stage("sites", "", 0, false, "Sites and contacts").replace('<span class="node zero"></span>', `<span class="node zero">◎</span>`)}${(() => {
+      const n = count4();
+      return n ? stage("cameras", n, 2, false, `${n} camera or door alerts in the last hour (prototype)`) : stage("cameras", "", 0, false, "Cameras and access control (prototype)").replace('<span class="node zero"></span>', `<span class="node zero">▣</span>`);
+    })()}${stage("settings", "", 0, false, "Settings").replace('<span class="node zero"></span>', `<span class="node zero">⚙</span>`)}
     <button class="stage" data-guide title="Guide (?)"><span class="node zero">?</span>Guide</button>
     <button class="me" data-me title="Signed in as ${esc(who())}">${esc(who().split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase())}</button>`;
   }
@@ -6201,7 +7198,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     <div class="clocks"><b id="clk">${clock(Date.now())}</b><small>SGT</small><small id="clku">${(/* @__PURE__ */ new Date()).toISOString().slice(11, 16)} UTC</small></div>`;
   }
   var rendering = false;
-  function render7() {
+  function render8() {
     if (rendering) return;
     rendering = true;
     try {
@@ -6215,9 +7212,10 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
         const st2 = pane.querySelector(".scroll");
         if (st2) st2.scrollTop = sc;
         pane.scrollTop = pst;
-        mod.bind(pane, render7);
+        mod.bind(pane, render8);
       }
       if (UI.ws !== "watch") mountTV(null);
+      if (UI.ws !== "cameras") leave();
       drawMap();
     } catch (e) {
       console.error(e);
@@ -6241,7 +7239,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
       return;
     }
     cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(render7);
+    raf = requestAnimationFrame(render8);
   };
   on("data", soon);
   on("sites", soon);
@@ -6251,7 +7249,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     if (UI.ws === "settings") soon();
   });
   on("route", () => {
-    render7();
+    render8();
     invalidate();
     $("#pane").scrollTop = 0;
   });
@@ -6406,7 +7404,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
       const r = keys(e);
       if (r) {
         e.preventDefault();
-        if (r === true) render7();
+        if (r === true) render8();
       }
     }
   });
@@ -6477,7 +7475,7 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
     const boot = () => {
       $("#app").hidden = false;
       initMap();
-      render7();
+      render8();
       invalidate();
       setInterval(() => {
         const c = $("#clk");
@@ -6499,10 +7497,12 @@ Fix only those. Keep everything else, and keep every fact exactly. Output only t
   // src/main.js
   var brought = [...migrateFromCurrentConsole() || [], ...migrateData(loadRaw)];
   setRelay(CFG.relay || CFG.server);
+  applyCSP();
   rebuildMetros();
   recompute();
   start();
   startSchedule();
+  if (load("camRun", false) === true) startSim();
   if (brought.length) setTimeout(() => toast("Brought over from the current console", brought.join(", ") + ". The current console is unchanged.", 0, null, 12e3), 800);
   window.ITE = { STATE, SOURCES, CFG, runSource, map: leafletMap };
 })();

@@ -1,10 +1,9 @@
-// Sites added by hand, and reading a PULSE file. The estate is fictional, so a PULSE file brings in only the
-// REN TTP (when newer than the one built in), the PSOC watch desk contacts and, if ticked, its keys —
-// never its site list or site contacts. Everything read stays in this browser.
+// Sites added by hand, and reading a PULSE file. The estate is fictional, so a PULSE file brings in only the PSOC
+// watch desk contacts and, if ticked, its keys — never its site list or site contacts, and no code from the file runs.
 import { load, save } from "./core.js";
 import { SITES, EVENTS, saveEvents, applyCadence, setSites, audit } from "./model.js";
 import { CFG, saveCfg } from "./config.js";
-import { extractTTP, setTTP, ttpName } from "./ttp.js";
+import { setTTP, ttpName } from "./ttp.js";
 
 /* sites added by hand: kept in this browser on top of the fictional estate */
 export const manualSites = () => load("manualSites", []);
@@ -18,8 +17,8 @@ export async function readPulseFile(file){ const txt = await file.text(), found 
   try{ const dec = b => new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0))), mods = {}; txt.replace(/^\s*([a-z]+): "([A-Za-z0-9+/=]{1000,})"/gm, (m, k, b) => { mods[k] = b; return m; });
     if (mods.watch){ const w = dec(mods.watch), c = /CWA_KEY\s*=\s*'([^']+)'/.exec(w), k = /KMA_KEY\s*=\s*'([^']+)'/.exec(w); if (c && !/YOUR/.test(c[1])) found.keys.cwa = c[1]; if (k && !/YOUR/.test(k[1])) found.keys.kma = k[1]; }
     const aq = mods.airquality || mods.weather; if (aq){ const a = /waqiToken:\s*"([^"]+)"/.exec(dec(aq)); if (a) found.keys.waqi = a[1]; }
-    if (mods.tracker) try{ found.ttp = await extractTTP(dec(mods.tracker)); }catch(e){ found.ttpErr = e.message; } }catch(e){}
-  if (!found.ttp && !found.watch && !Object.keys(found.keys).length) throw new Error("nothing usable found — is this a PULSE dashboard file?");
+  }catch(e){}
+  if (!found.watch && !Object.keys(found.keys).length) throw new Error("nothing usable found — is this a PULSE dashboard file?");
   return found; }
 export function applyPulse(found, pick){ const done = [];
   if (pick.ttp && found.ttp){ const n = setTTP(found.ttp, found.file); let moved = 0; EVENTS.forEach(ev => { if (applyCadence(ev, "REN TTP updated")) moved++; }); if (moved) saveEvents();

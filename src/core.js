@@ -81,4 +81,7 @@ export async function copyText(text, html){
 }
 export function download(name, text, type = "text/plain"){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 export const csv = rows => rows.map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\n");
-export function loadScript(src){ return new Promise((ok, bad) => { if ([...document.scripts].some(s => s.src === src)) return ok(); const x = document.createElement("script"); x.src = src; x.onload = ok; x.onerror = () => bad(new Error("could not load " + src)); document.head.appendChild(x); }); }
+// libraries are self-hosted in vendor/ and checked against the hash recorded at build time (see tools/build.mjs)
+export const VENDOR = typeof __VENDOR__ !== "undefined" ? __VENDOR__ : {};
+export function loadVendor(key){ const v = VENDOR[key]; if (!v) return Promise.reject(new Error("library not packaged: " + key)); return loadScript(v.src, v.sri); }
+export function loadScript(src, sri){ return new Promise((ok, bad) => { if ([...document.scripts].some(s => s.src === src || s.getAttribute("src") === src)) return ok(); const x = document.createElement("script"); x.src = src; if (sri && location.protocol !== "file:") x.integrity = sri; x.onload = ok; x.onerror = () => bad(new Error("could not load " + src)); document.head.appendChild(x); }); }

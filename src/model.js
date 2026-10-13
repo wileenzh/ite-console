@@ -58,6 +58,7 @@ export const KINDS = {
   quake: { label: "Earthquakes", cat: "earthquake" }, warning: { label: "Official warnings", cat: "weather" }, cyclone: { label: "Cyclones", cat: "weather" },
   volcano: { label: "Volcanoes", cat: "volcanic_hazard" }, disaster: { label: "Floods, fires & storms", cat: "flood" }, unrest: { label: "Unrest", cat: "protest" },
   news: { label: "News", cat: "operational_security" }, travel: { label: "Travel advisories", cat: "interstate_conflict" }, conditions: { label: "City conditions", cat: "weather" },
+  security: { label: "Cameras & access", cat: "operational_security" },
 };
 const HAZ_CAT = { TSUNAMI: "coastal_flooding", TYPHOON: "weather", STORM_SURGE: "coastal_flooding", FLOOD: "flood", RAIN: "flood", THUNDERSTORM: "weather", HEAT: "extreme_heat", COLD: "weather", WIND: "weather",
   LANDSLIDE: "soil_ground_stability", FIRE: "wildfires", VOLCANIC: "volcanic_hazard", EARTHQUAKE: "earthquake", SNOW: "weather", FOG: "transportation_hazard", WAVE: "coastal_flooding", AIR: "air_quality", WEATHER: "weather" };

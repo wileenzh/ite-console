@@ -13,11 +13,12 @@ import * as Events from "./events.js";
 import * as Reports from "./reports.js";
 import * as Sites from "./sites.js";
 import * as Settings from "./settings.js";
+import * as Cameras from "./cameras.js";
 import { mountTV } from "./tv.js";
 import { openCopilot } from "./copilot.js";
 import { openGuide } from "./guide.js";
 
-const WS = { watch: ["Watch", Watch, true, "1"], inbox: ["Inbox", Inbox, true, "2"], events: ["Events", Events, true, "3"], reports: ["Reports", Reports, false, "4"], sites: ["Sites", Sites, true, "5"], settings: ["Settings", Settings, false, "6"] };
+const WS = { watch: ["Watch", Watch, true, "1"], inbox: ["Inbox", Inbox, true, "2"], events: ["Events", Events, true, "3"], reports: ["Reports", Reports, false, "4"], sites: ["Sites", Sites, true, "5"], cameras: ["Cameras", Cameras, false, "6"], settings: ["Settings", Settings, false, "7"] };
 
 /* ---------- rail ---------- */
 function rail(){ const ib = Inbox.count(), ev = Events.count(), w = Watch.count();
@@ -28,7 +29,7 @@ function rail(){ const ib = Inbox.count(), ev = Events.count(), w = Watch.count(
     ${stage("inbox", ib.n, ib.late ? 3 : ib.n ? 2 : 0, true, `${ib.n} to decide${ib.late ? `, ${ib.late} late` : ""}`)}
     ${stage("events", ev.n, ev.over ? 3 : ev.soon ? 2 : ev.n ? 1 : 0, true, `${ev.n} open escalations${ev.over ? `, ${ev.over} overdue` : ""}`)}
     ${stage("reports", "", 0, true, "Handover, SITREP and saved reports").replace('<span class="node zero"></span>', `<span class="node zero">≡</span>`)}
-    <div class="gap"></div>${stage("sites", "", 0, false, "Sites and contacts").replace('<span class="node zero"></span>', `<span class="node zero">◎</span>`)}${stage("settings", "", 0, false, "Settings").replace('<span class="node zero"></span>', `<span class="node zero">⚙</span>`)}
+    <div class="gap"></div>${stage("sites", "", 0, false, "Sites and contacts").replace('<span class="node zero"></span>', `<span class="node zero">◎</span>`)}${(() => { const n = Cameras.count(); return n ? stage("cameras", n, 2, false, `${n} camera or door alerts in the last hour (prototype)`) : stage("cameras", "", 0, false, "Cameras and access control (prototype)").replace('<span class="node zero"></span>', `<span class="node zero">▣</span>`); })()}${stage("settings", "", 0, false, "Settings").replace('<span class="node zero"></span>', `<span class="node zero">⚙</span>`)}
     <button class="stage" data-guide title="Guide (?)"><span class="node zero">?</span>Guide</button>
     <button class="me" data-me title="Signed in as ${esc(who())}">${esc(who().split(/\s+/).map(x => x[0]).join("").slice(0, 2).toUpperCase())}</button>`; }
 
@@ -56,7 +57,7 @@ export function render(){ if (rendering) return; rendering = true; try{
   const [, mod, hasMap] = WS[UI.ws] || WS.watch, pane = $("#pane"), a = document.activeElement, typing = a && pane.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName);
   $("#work").classList.toggle("full", !hasMap); rail(); top();
   if (!typing){ const st = pane.querySelector(".scroll"), sc = st ? st.scrollTop : 0, pst = pane.scrollTop; mod.render(pane); const st2 = pane.querySelector(".scroll"); if (st2) st2.scrollTop = sc; pane.scrollTop = pst; mod.bind(pane, render); }
-  if (UI.ws !== "watch") mountTV(null);
+  if (UI.ws !== "watch") mountTV(null); if (UI.ws !== "cameras") Cameras.leave();
   drawMap(); }
   catch(e){ console.error(e); $("#pane").innerHTML = `<div class="empty"><b>This view hit an error.</b>${esc(e.message)}<br>The rest of the console still works.</div>`; }
   finally{ rendering = false; } }

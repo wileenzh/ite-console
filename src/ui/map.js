@@ -9,7 +9,7 @@ const BASES = { night: ESRI("Canvas/World_Dark_Gray_Base"), day: ESRI("Canvas/Wo
 const BASE_NAMES = { auto: "Plain (follows theme)", streets: "Streets", imagery: "Satellite", none: "No basemap" };
 // site class → marker style: A/B, C and C-PE, EDGE and other, OFFICE; hollow when not yet live
 export const classBand = c => { c = String(c || "").toUpperCase(); return c === "OFFICE" ? "o" : /^CLASS [AB]$|^[AB]$/.test(c) ? "ab" : /C-?PE|^CLASS C$|^C$/.test(c) ? "c" : "e"; };
-export function initMap(){ if (map || typeof L === "undefined"){ if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>This network blocks cdnjs.cloudflare.com. Everything else works.</div>`; return; }
+export function initMap(){ if (map || typeof L === "undefined"){ if (typeof L === "undefined") $("#map").innerHTML = `<div class="empty"><b>The map could not load</b>The map library did not load. Everything else works.</div>`; return; }
   map = L.map("map", { zoomControl: true, worldCopyJump: true, attributionControl: true, preferCanvas: false }).setView([15, 115], 4);
   setBase(); siteLayer = L.layerGroup().addTo(map); shakeLayer = L.layerGroup().addTo(map); layers = L.layerGroup().addTo(map);
   $("#mapcell").insertAdjacentHTML("beforeend", `<div class="maplegend">${TIER.map((t, i) => `<span><i style="background:var(--t${i})"></i>${esc(t.label)}</span>`).join("")}<span class="sep"></span>${[["ab", "A / B"], ["c", "C, C-PE"], ["e", "Edge"], ["o", "Office"]].map(([k, l]) => `<button class="lgcls" data-lgcls="${k}" aria-pressed="${!HIDE.has(k)}" title="Show or hide these sites on the map"><i class="sitedot ${k}"></i>${l}</button>`).join("")}<span id="shakeNote"></span></div>

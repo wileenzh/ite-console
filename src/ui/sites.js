@@ -26,6 +26,7 @@ export function render(p){ if (found) return p.innerHTML = place(found); const s
   p.innerHTML = `<div class="ph"><h1>Sites</h1><button class="btn small" data-sadd>Add a site</button>
       <div class="sum">${SITES.length} sites, ${live} live, ${SITES.filter(isOffice).length} offices. <b>The estate is fictional</b>: codes, classes and contacts follow PULSE's conventions at made-up positions in each metro. Hazards, warnings and every other feed are real.</div></div>
     <form class="filters" data-geo><input class="search" type="search" id="geoQ" placeholder="Find an address: nearest sites and threats" style="flex:1;min-width:200px"><button class="btn small">Find</button></form>
+    <p class="help" style="padding:0 16px">What you type is sent to OpenStreetMap's search services. Do not search a real site's address.</p>
     <div class="filters"><input class="search" type="search" placeholder="Code, city, country or class" value="${esc(UI.siteQ || "")}" data-sq style="width:220px">
       <select class="search" data-scls style="width:auto">${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}"${(UI.siteCls || "all") === k ? " selected" : ""}>${l}</option>`).join("")}</select>
       <select class="search" data-sst style="width:auto">${Object.entries(STATUSES).map(([k, l]) => `<option value="${k}"${(UI.siteSt || "live") === k ? " selected" : ""}>${l}</option>`).join("")}</select><span class="help">${list.length} shown</span></div>

@@ -121,6 +121,14 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
 .stylebar .sb-sum{font-weight:600}.stylebar .sb-sum.ok{color:var(--t0)}.stylebar .sb-sum.bad{color:var(--t2)}
 .stylebar ul{flex-basis:100%;margin:2px 0 0;padding-left:18px;color:var(--muted)}.stylebar li.error{color:var(--text)}.stylebar li.info{color:var(--muted)}.stylebar .sb-note{flex-basis:100%;margin:2px 0 0;color:var(--muted)}
 .exbox{white-space:pre-wrap;font:12.5px/1.5 var(--font);margin:0 11px 8px;max-height:260px;overflow:auto;color:var(--muted)}
+.camwrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:0 16px 16px;min-height:0}.camgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+.camtile{margin:0;border:1px solid var(--rule);border-radius:var(--r2);overflow:hidden;background:#111}.camslot canvas{display:block;width:100%;height:auto}.camtile figcaption{padding:6px 9px;font-size:12px;background:var(--panel);color:var(--text)}
+.camside{border-left:1px solid var(--rule);padding-left:14px;overflow:auto;max-height:calc(100vh - 210px)}.det{border-bottom:1px solid var(--rule);padding:8px 0}.det .dh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.det .dh .bar{width:4px;align-self:stretch;border-radius:2px}
+.det .dh .bar.t1{background:var(--t1)}.det .dh .bar.t2{background:var(--t2)}.det .dh .bar.t3{background:var(--t3)}.prose.small{font-size:12.5px;margin:4px 0}
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin:6px 0}.strip img{width:100%;border-radius:3px;display:block}.strip.big{grid-template-columns:repeat(3,1fr)}
+.acc{list-style:none;margin:0;padding:0;font-size:12.5px}.acc li{display:grid;grid-template-columns:62px 1fr;gap:0 8px;padding:4px 0;border-bottom:1px solid var(--rule)}.acc li .help{grid-column:2}.acc li.s1 span:first-of-type{color:var(--t1)}.acc li.s2 span:first-of-type{color:var(--t2)}.acc li.s3 span:first-of-type{color:var(--t3);font-weight:600}
+.afcanvas{width:100%;border-radius:var(--r2);cursor:crosshair}
+@media (max-width:1100px){.camwrap{grid-template-columns:1fr}.camside{border-left:0;padding-left:0;max-height:none}}@media (max-width:700px){.camgrid{grid-template-columns:1fr}}
 .warnbox{border-left:3px solid var(--t2);background:color-mix(in srgb,var(--t2) 10%,transparent);padding:8px 12px;margin:8px 0;border-radius:0 var(--r2) var(--r2) 0}
 .ttp-h{font:600 13px var(--cond);color:var(--text);margin:16px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}.ttp-sub{font:600 12px var(--cond);color:var(--muted);margin:6px 0 2px}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
