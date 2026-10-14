@@ -14514,6 +14514,119 @@ document.getElementById("panel").addEventListener("click", async e => { const t 
 .ogwt td.tot{background:color-mix(in srgb,#2F7BD9 12%,var(--panel));font-weight:700}.ogwsum{max-width:980px;margin-top:12px}.ogwsum p{margin:4px 0;line-height:1.55}`; document.head.appendChild(st); }
 
 
+
+/* =====================================================================
+   SITE BAR AND BASE MAPS (14 Oct)
+   A bar above the hazard map: find a site, city, country or address,
+   filter the sites shown by class, status and country, choose the base
+   map, and reset the view. The same base maps are offered on the
+   Vision Command Centre map.
+   ===================================================================== */
+const ESRI_S = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+const BASE_EXTRA = {
+  "esri-natgeo": { label: "Esri National Geographic", url: ESRI_S + "NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}", max: 16, attr: "Tiles © Esri — National Geographic" },
+  "esri-street": { label: "Esri streets", url: ESRI_S + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", attr: "Tiles © Esri" },
+  "esri-dark": { label: "Esri dark grey", url: ESRI_S + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", labels: ESRI_S + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", max: 16, attr: "Tiles © Esri" },
+  "esri-light": { label: "Esri light grey", url: ESRI_S + "Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", labels: ESRI_S + "Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}", max: 16, attr: "Tiles © Esri" },
+  "esri-ocean": { label: "Esri oceans", url: ESRI_S + "Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}", labels: ESRI_S + "Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}", max: 13, attr: "Tiles © Esri" },
+  "esri-satlbl": { label: "Esri imagery with labels", url: ESRI_S + "World_Imagery/MapServer/tile/{z}/{y}/{x}", labels: ESRI_S + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", attr: "Tiles © Esri" },
+  "osm": { label: "OpenStreetMap", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", max: 19, attr: "© OpenStreetMap contributors" },
+  "carto-dark": { label: "CARTO dark", url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", max: 19, attr: "© OpenStreetMap contributors © CARTO" },
+  "carto-light": { label: "CARTO light", url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", max: 19, attr: "© OpenStreetMap contributors © CARTO" } };
+Object.entries(BASE_EXTRA).forEach(([id, b]) => { if (!BASES[id]) BASES[id] = { label: b.label }; });
+function baseLayerFor(id, onFail){ const b = BASE_EXTRA[id]; if (!b) return null;
+  if (map && !map.getPane("baselabels")){ const p = map.createPane("baselabels"); p.style.zIndex = 250; p.style.pointerEvents = "none"; }
+  const t = L.tileLayer(b.url, { maxZoom: 19, maxNativeZoom: b.max || 18, attribution: b.attr, subdomains: "abcd" }); let n = 0;
+  t.on("tileerror", () => { if (++n === 8 && onFail) onFail(b.label); });
+  if (!b.labels) return t;
+  return L.featureGroup([t, L.tileLayer(b.labels, { maxZoom: 19, maxNativeZoom: b.max || 18, pane: map && map.getPane("baselabels") ? "baselabels" : "overlayPane" })]); }
+{ const _esri = esri; esri = function(id){ const l = baseLayerFor(id, lbl => toast("Map tiles not loading", `${lbl} may be blocked on this network — choose another base map in the site bar.`, "var(--amber)")); return l || _esri(id); }; }
+
+/* ---------- the bar ---------- */
+UI.sbar = Object.assign({ cls: "", st: "", cc: "" }, UI.sbar || {});
+const SB_HOME = [12, 112, 4];
+const sbOk = s => (!UI.sbar.cls || (UI.sbar.cls === "OFFICE" ? isOffice(s) : !isOffice(s) && s.cls === UI.sbar.cls)) && (!UI.sbar.st || s.status === UI.sbar.st) && (!UI.sbar.cc || s.country === UI.sbar.cc);
+{ const _ci = collectItems; collectItems = function(){ const out = _ci.apply(this, arguments); if (!UI.sbar.cls && !UI.sbar.st && !UI.sbar.cc) return out; return out.filter(it => it.g !== "s" || sbOk(it.s)); }; }
+function sbOpts(){ const uniq = f => [...new Set(SITES.map(f).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+  const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
+  return { cls: opt("", "All classes", UI.sbar.cls) + uniq(s => isOffice(s) ? null : s.cls).map(c => opt(c, /^class/i.test(c) ? c.replace(/^class/i, "Class") : c, UI.sbar.cls)).join("") + (SITES.some(isOffice) ? opt("OFFICE", "Offices", UI.sbar.cls) : ""),
+    st: opt("", "All statuses", UI.sbar.st) + uniq(s => s.status).map(c => opt(c, c, UI.sbar.st)).join(""),
+    cc: opt("", "All countries", UI.sbar.cc) + uniq(s => s.country).map(c => opt(c, c, UI.sbar.cc)).join(""),
+    base: Object.entries(BASES).filter(([id]) => !id.startsWith("g-") || CFG.gKey).map(([id, b]) => opt(id, b.label.replace(" (no key)", ""), UI.ly.base)).join("") }; }
+function sbRender(){ const mw = $(".mapwrap"); if (!mw) return; let bar = $("#siteBar");
+  if (!bar){ mw.insertAdjacentHTML("afterbegin", `<form id="siteBar" class="sitebar" role="search" autocomplete="off"></form>`); bar = $("#siteBar"); mw.classList.add("hasbar"); }
+  const o = sbOpts(), n = SITES.filter(s => isFinite(s.lat) && sbOk(s)).length, filt = UI.sbar.cls || UI.sbar.st || UI.sbar.cc;
+  bar.innerHTML = `<div class="sbq"><input id="sbQ" placeholder="Site, city, country or address…" aria-label="Find a site, city, country or address" value="${esc(UI.sbQ || "")}"><div id="sbR" class="sbr" hidden></div></div>
+    <button type="button" class="sbb" id="sbAddr" title="Look the text up as an address (sent to OpenStreetMap's Photon service)">Find address</button>
+    <select data-sb="cls" aria-label="Site class">${o.cls}</select><select data-sb="st" aria-label="Site status">${o.st}</select><select data-sb="cc" aria-label="Country">${o.cc}</select>
+    <select id="sbBase" aria-label="Base map">${o.base}</select><button type="button" class="sbb" id="sbReset">Reset view</button>${filt ? `<span class="sbn">${n} site${n === 1 ? "" : "s"} shown <button type="button" class="linkbtn" id="sbClr">clear</button></span>` : ""}`;
+  sbFit(); }
+// the bar wraps onto a second row when the map is narrow; the map starts below it
+function sbFit(){ const bar = $("#siteBar"), mw = $(".mapwrap"); if (!bar || !mw) return; const h = bar.offsetHeight; if (mw.style.getPropertyValue("--sbh") !== h + "px"){ mw.style.setProperty("--sbh", h + "px"); if (map) setTimeout(() => map.invalidateSize(), 30); } placeLayerButton(); }
+if (typeof ResizeObserver !== "undefined") setTimeout(() => { const bar = $("#siteBar"); if (bar) new ResizeObserver(() => sbFit()).observe(bar); }, 200);
+function sbGoSite(s){ if (!map || !s) return; $("#sbR").hidden = true; map.setView([s.lat, s.lon], Math.max(map.getZoom(), 13)); setTimeout(() => { try{ sitePopup(s, L.latLng(s.lat, s.lon)); }catch(e){} }, 250); }
+function sbSites(q){ q = q.toLowerCase(); return SITES.filter(s => isFinite(s.lat) && [s.code, s.name, s.city, metroOf(s), s.country].some(v => String(v || "").toLowerCase().includes(q)))
+  .sort((a, b) => (b.code.toLowerCase().startsWith(q)) - (a.code.toLowerCase().startsWith(q)) || a.code.localeCompare(b.code)).slice(0, 12); }
+function sbShow(html){ const r = $("#sbR"); if (!r) return; r.innerHTML = html; r.hidden = !html; }
+function sbList(q){ const hits = sbSites(q);
+  sbShow(hits.length ? hits.map(s => `<button type="button" data-sbsite="${esc(s.code)}"><b>${esc(s.code)}</b>${s.name ? " " + esc(trunc(s.name, 40)) : ""}<span class="s">${esc([isOffice(s) ? "Office" : s.cls, s.status, metroOf(s) || s.city, s.country].filter(Boolean).join(" · "))}</span></button>`).join("")
+    + (hits.length >= 12 ? `<div class="s sbhint">Showing the first 12 — type more to narrow down</div>` : "")
+    : `<div class="s sbhint">No site matches "${esc(q)}". Press Find address to look it up as a place.</div>`); }
+async function sbAddress(q){ if (!q || q.length < 3) return; sbShow(`<div class="s sbhint">Looking up "${esc(q)}"… (OpenStreetMap Photon)</div>`);
+  try{ const j = await getJSON("https://photon.komoot.io/api/?limit=6&q=" + encodeURIComponent(q), 10000);
+    const ad = (j.features || []).map(f => { const p = f.properties || {}, c = f.geometry && f.geometry.coordinates; return c ? { lat: c[1], lon: c[0], label: [p.name, p.street, p.city, p.state, p.country].filter(Boolean).join(", ") } : null; }).filter(Boolean);
+    sbShow(ad.length ? ad.map(a => `<button type="button" data-sbll="${a.lat},${a.lon}" data-sbl="${esc(a.label)}">📍 ${esc(a.label)}</button>`).join("") + `<div class="s sbhint">Addresses are looked up by OpenStreetMap's Photon service.</div>` : `<div class="s sbhint">No address found for "${esc(q)}".</div>`); }
+  catch(e){ sbShow(`<div class="s sbhint">Address search unavailable (${esc(e.message)}).</div>`); } }
+function sbFitFiltered(){ if (!map) return; const ss = SITES.filter(s => isFinite(s.lat) && sbOk(s)); if (!ss.length) return;
+  if (ss.length === 1) map.setView([ss[0].lat, ss[0].lon], 13); else map.fitBounds(L.latLngBounds(ss.map(s => [s.lat, s.lon])).pad(.15), { maxZoom: 13 }); }
+document.addEventListener("input", e => { if (e.target.id !== "sbQ") return; UI.sbQ = e.target.value; const q = e.target.value.trim(); if (q.length < 2){ sbShow(""); return; } sbList(q); });
+document.addEventListener("keydown", e => { if (e.target.id !== "sbQ") return;
+  if (e.key === "Escape"){ sbShow(""); return; }
+  if (e.key === "Enter"){ e.preventDefault(); const q = e.target.value.trim(), hits = sbSites(q); if (hits.length === 1 || (hits[0] && hits[0].code.toLowerCase() === q.toLowerCase())) sbGoSite(hits[0]); else if (!hits.length) sbAddress(q); else sbList(q); } });
+document.addEventListener("click", e => { const t = e.target;
+  if (t.closest("#sbAddr")){ sbAddress(($("#sbQ") || {}).value.trim()); return; }
+  if (t.closest("#sbReset")){ UI.sbar = { cls: "", st: "", cc: "" }; UI.sbQ = ""; saveUI(); sbRender(); redrawMap(); if (map){ map.closePopup(); map.setView([SB_HOME[0], SB_HOME[1]], SB_HOME[2]); } return; }
+  if (t.closest("#sbClr")){ UI.sbar = { cls: "", st: "", cc: "" }; saveUI(); sbRender(); redrawMap(); return; }
+  const b = t.closest("[data-sbsite]"); if (b){ sbGoSite(SITES.find(s => s.code === b.dataset.sbsite)); return; }
+  const a = t.closest("[data-sbll]"); if (a && map){ const [la, lo] = a.dataset.sbll.split(",").map(Number); sbShow(""); map.setView([la, lo], 14);
+    const near = SITES.filter(s => isFinite(s.lat)).map(s => ({ s, d: km(la, lo, s.lat, s.lon) })).sort((x, y) => x.d - y.d).slice(0, 3);
+    L.popup().setLatLng([la, lo]).setContent(`<b>${esc(a.dataset.sbl)}</b><div class="s" style="margin:4px 0">Nearest sites: ${near.map(x => `<a href="#" data-sbsite="${esc(x.s.code)}">${esc(x.s.code)}</a> ${x.d < 1 ? Math.round(x.d * 1000) + " m" : x.d.toFixed(1) + " km"}`).join(" · ")}</div><button class="act" data-mftrack="${la},${lo}">Track an event here</button>`).openOn(map); return; }
+  if (!t.closest("#siteBar")) sbShow(""); });
+document.addEventListener("change", e => { const t = e.target;
+  if (t.matches("[data-sb]")){ UI.sbar[t.dataset.sb] = t.value; saveUI(); sbRender(); redrawMap(); sbFitFiltered(); return; }
+  if (t.id === "sbBase"){ setBase(t.value); if (typeof buildLayerPanel === "function") buildLayerPanel(); } });
+// the bar sits above the map's layer chips; keep the layer button below both
+{ const _plb = placeLayerButton; placeLayerButton = function(){ _plb(); const qb = $("#quickbar"), lp = $("#lyrPanel"), bar = $("#siteBar"); if (qb && lp && bar) lp.style.top = (bar.offsetHeight + qb.offsetHeight + 2) + "px"; }; }
+{ const _sb = setBase; setBase = async function(id){ const r = await _sb.apply(this, arguments); const s = $("#sbBase"); if (s && s.value !== id) s.value = id; return r; }; }
+{ const _bs = sitesChanged; if (typeof _bs === "function") sitesChanged = function(){ const r = _bs.apply(this, arguments); sbRender(); return r; }; }
+setTimeout(sbRender, 50);
+{ const st = document.createElement("style"); st.textContent = `
+#mapFind{display:none !important}
+.sitebar{position:absolute;left:0;right:0;top:0;z-index:700;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;background:var(--panel);border-bottom:1px solid var(--line);box-sizing:border-box}
+.mapwrap.hasbar #map{top:var(--sbh,46px)}.mapwrap.hasbar .quickbar{top:var(--sbh,46px)}.mapwrap.hasbar .shakestatus{top:calc(var(--sbh,46px) + 10px)}
+.sitebar select,.sitebar input,.sbb{height:32px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:500 13px var(--font);padding:0 10px;flex:none}
+.sitebar select{max-width:190px;cursor:pointer}.sbb{cursor:pointer;color:var(--muted)}.sbb:hover{color:var(--text);border-color:var(--teal)}
+.sbq{position:relative;flex:1 1 220px;min-width:180px}.sbq input{width:100%;box-sizing:border-box}
+.sbr{position:fixed;z-index:3000;width:min(420px,90vw);max-height:60vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.sbr button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:7px 10px;font:13px var(--font);cursor:pointer}.sbr button:hover{background:color-mix(in srgb,var(--teal) 14%,transparent)}
+.sbhint{padding:7px 10px}.sbn{font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+.vccbase{position:absolute;top:8px;right:8px;z-index:600;height:28px;background:rgba(20,26,30,.9);color:#eef2f4;border:1px solid #3a4246;border-radius:6px;font:12px var(--font);padding:0 6px}`; document.head.appendChild(st); }
+// position the results list under the search box (fixed, so the map cannot clip it)
+{ const pos = () => { const i = $("#sbQ"), r = $("#sbR"); if (!i || !r || r.hidden) return; const b = i.getBoundingClientRect(); r.style.left = b.left + "px"; r.style.top = (b.bottom + 4) + "px"; };
+  new MutationObserver(pos).observe(document.body, { attributes: true, subtree: true, attributeFilter: ["hidden"] }); addEventListener("resize", pos); addEventListener("scroll", pos, true); }
+
+/* ---------- the same base maps on the Vision Command Centre map ---------- */
+UI.vccBase = UI.vccBase || "";
+function vccBaseList(){ const auto = vccThemeBases(); if (!UI.vccBase) return auto; const b = BASE_EXTRA[UI.vccBase] || (UI.vccBase === "esri-topo" ? { url: ESRI_S + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", attr: "Tiles © Esri" } : UI.vccBase === "esri-sat" ? { url: ESRI_S + "World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "Tiles © Esri" } : null);
+  return b ? [[UI.vccBase, b.url, b.attr, b.labels]].concat(auto) : auto; }
+{ const _at2 = applyTheme; applyTheme = function(){ _at2.apply(this, arguments); VCC_BASES.splice(0, VCC_BASES.length, ...vccBaseList()); if (VCCM.map) vccSetBase(0); }; }
+VCC_BASES.splice(0, VCC_BASES.length, ...vccBaseList());
+{ const _vd = vccMapDraw; vccMapDraw = function(r){ _vd(r); const h = VCCM.host; if (!h || h.querySelector(".vccbase")) return;
+    h.insertAdjacentHTML("beforeend", `<select class="vccbase" aria-label="Base map"><option value="">Match the theme</option>${Object.entries(BASES).filter(([id]) => !id.startsWith("g-")).map(([id, b]) => `<option value="${id}"${id === UI.vccBase ? " selected" : ""}>${esc(b.label.replace(" (no key)", ""))}</option>`).join("")}</select>`);
+    const sel = h.querySelector(".vccbase"); L.DomEvent.disableClickPropagation(sel);
+    sel.onchange = () => { UI.vccBase = sel.value; saveUI(); VCC_BASES.splice(0, VCC_BASES.length, ...vccBaseList()); vccSetBase(0); }; }; }
+
+
 boot();
 
 </script>
