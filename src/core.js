@@ -83,5 +83,10 @@ export function download(name, text, type = "text/plain"){ const a = document.cr
 export const csv = rows => rows.map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\n");
 // libraries are self-hosted in vendor/ and checked against the hash recorded at build time (see tools/build.mjs)
 export const VENDOR = typeof __VENDOR__ !== "undefined" ? __VENDOR__ : {};
-export function loadVendor(key){ const v = VENDOR[key]; if (!v) return Promise.reject(new Error("library not packaged: " + key)); return loadScript(v.src, v.sri); }
+// In the single-file build every library sits in the page itself, base64 in a <script type="text/plain" id="vendor-KEY">.
+export function vendorText(key){ const el = document.getElementById("vendor-" + key); if (!el) return null; const b = atob(el.textContent.trim()), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new TextDecoder().decode(u); }
+export function loadVendor(key){ const v = VENDOR[key]; if (!v) return Promise.reject(new Error("library not packaged: " + key));
+  if (v.inline){ if (document.querySelector(`script[data-vendor="${key}"]`)) return Promise.resolve(); const t = vendorText(key); if (t == null) return Promise.reject(new Error("library not packaged: " + key));
+    const x = document.createElement("script"); x.dataset.vendor = key; x.textContent = t; document.head.appendChild(x); return Promise.resolve(); }
+  return loadScript(v.src, v.sri); }
 export function loadScript(src, sri){ return new Promise((ok, bad) => { if ([...document.scripts].some(s => s.src === src || s.getAttribute("src") === src)) return ok(); const x = document.createElement("script"); x.src = src; if (sri && location.protocol !== "file:") x.integrity = sri; x.onload = ok; x.onerror = () => bad(new Error("could not load " + src)); document.head.appendChild(x); }); }

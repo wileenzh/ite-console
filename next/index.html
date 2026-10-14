@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ITE — PSOC console</title>
-<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-13 19:27 UTC.">
+<meta name="description" content="ITE, the PSOC operational console: watch hazards against our sites, decide, escalate and report. Build 2026-10-14 01:35 UTC.">
 <meta name="robots" content="noindex, nofollow">
 <script>/* the map library, self-hosted; checked against its build-time hash except when opened from a file (browsers cannot check file:// loads) */
 (function(){ var f = location.protocol === "file:"; document.write('<link rel="stylesheet" href="vendor/leaflet.css"' + (f ? "" : ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"') + '><script src="vendor/leaflet.js"' + (f ? "" : ' integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"') + '><\/script>'); })();</script>
@@ -473,9 +473,26 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
   }
   var csv = (rows) => rows.map((r) => r.map((v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\n");
   var VENDOR = typeof define_VENDOR_default !== "undefined" ? define_VENDOR_default : {};
+  function vendorText(key) {
+    const el = document.getElementById("vendor-" + key);
+    if (!el) return null;
+    const b = atob(el.textContent.trim()), u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return new TextDecoder().decode(u);
+  }
   function loadVendor(key) {
     const v = VENDOR[key];
     if (!v) return Promise.reject(new Error("library not packaged: " + key));
+    if (v.inline) {
+      if (document.querySelector(`script[data-vendor="${key}"]`)) return Promise.resolve();
+      const t2 = vendorText(key);
+      if (t2 == null) return Promise.reject(new Error("library not packaged: " + key));
+      const x = document.createElement("script");
+      x.dataset.vendor = key;
+      x.textContent = t2;
+      document.head.appendChild(x);
+      return Promise.resolve();
+    }
     return loadScript(v.src, v.sri);
   }
   function loadScript(src, sri) {
@@ -3601,7 +3618,7 @@ details.crit{border:0;margin-top:6px}details.crit summary{font-weight:400;color:
       return;
     }
     w.document.write(`<!doctype html><meta charset="utf-8"><title>${c.n} — ITE live TV</title><style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%}</style><video id="v" controls autoplay muted playsinline></video>
-    <script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`);
+    ${HLS().inline ? `<script>${(vendorText("hls") || "").replace(/<\/script/gi, "<\\/script")}<\/script>` : `<script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script>`}<script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`);
     w.document.close();
   }
   function stopStream() {

@@ -1,6 +1,6 @@
 // Live TV in Watch: CNA, NHK WORLD, DW News and Al Jazeera English, played straight from each broadcaster's
 // public stream. The player is kept between screen refreshes so a data update never interrupts it.
-import { esc, loadVendor, VENDOR, load, save } from "../core.js";
+import { esc, loadVendor, vendorText, VENDOR, load, save } from "../core.js";
 
 const HLS = () => VENDOR.hls || { src: "", sri: "" }, HLS_ABS = () => new URL(HLS().src, location.href).href;
 export const CHANNELS = {
@@ -24,7 +24,7 @@ function youtube(){ const c = CHANNELS[ch]; stopStream(); const f = box.querySel
 // a second window for the video wall or another screen: the same stream, nothing else
 function popOut(){ const c = CHANNELS[ch] || CHANNELS.cna, w = window.open("", "ite-tv", "width=960,height=560"); if (!w){ msg("The browser blocked the pop-out window; allow pop-ups for this page."); return; }
   w.document.write(`<!doctype html><meta charset="utf-8"><title>${c.n} — ITE live TV</title><style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%}</style><video id="v" controls autoplay muted playsinline></video>
-    <script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script><script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`); w.document.close(); }
+    ${HLS().inline ? `<script>${(vendorText("hls") || "").replace(/<\/script/gi, "<\\/script")}<\/script>` : `<script src="${HLS_ABS()}" integrity="${HLS().sri}"><\/script>`}<script>var v=document.getElementById("v"),u=${JSON.stringify(c.u)},i=0;function go(){if(i>=u.length)return;var url=u[i++];if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;v.onerror=go;return;}if(window.Hls&&Hls.isSupported()){var h=new Hls();h.on(Hls.Events.ERROR,function(e,d){if(d.fatal){h.destroy();go();}});h.loadSource(url);h.attachMedia(v);}}go();<\/script>`); w.document.close(); }
 function stopStream(){ const yf = box && box.querySelector(".tvframe iframe"); if (yf) yf.remove(); if (hls){ try{ hls.destroy(); }catch(e){} hls = null; } video.removeAttribute("src"); try{ video.load(); }catch(e){} }
 async function play(){ const c = CHANNELS[ch] || CHANNELS.cna; stopStream(); state = ch;
   box.querySelectorAll("[data-tvch]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tvch === ch));

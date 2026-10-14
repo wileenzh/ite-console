@@ -40,4 +40,4 @@ Security: every library and font is served from this site with an integrity hash
 
 On first start it brings over the current console's settings, keys and open escalations from the same browser (not its sites); the current console is not changed.
 
-Source code is in `src/` and is built into the single page `next/index.html`: `npm install`, then `npm run build` (or `npm run watch`).
+Source code is in `src/` and is built into the single page `next/index.html`: `npm install`, then `npm run build` (or `npm run watch`). The build also writes `next/ITE.html`, the same console with every library and font inside it, to open straight from disk or send as one file (not committed; about 4.5 MB).
