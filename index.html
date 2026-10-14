@@ -13573,6 +13573,630 @@ addEventListener("resize", () => { if (UI.mode === "vcc") vclApply(); });
 .vclgrip.v{position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;border-radius:4px}.vclgrip:hover,.vcldrag .vclgrip{background:color-mix(in srgb,var(--teal) 60%,transparent)}
 .vcldrag{user-select:none}.vcldrag iframe,.vcldrag .leaflet-container{pointer-events:none}.vccmap{min-height:0}.vccmaphost{height:100%}`; document.head.appendChild(st); }
 
+/* =====================================================================
+   PULSE PARITY — 1. SOURCES
+   Every source the PULSE dashboard reads, brought into ITE's one warnings
+   model (DATA.alerts), so each warning is scored against the cities, drawn
+   on the map, listed for triage, checked on the Sources page and announced
+   in the alerts centre — instead of sitting on a card of its own.
+   Keys and site lists are never written into this file: they are entered in
+   Settings or imported from a PULSE file, and stay in this browser.
+   ===================================================================== */
+CFG.agency = Object.assign({ kmaKey: "", jmaPrefs: ["130000", "120000", "110000", "140000", "270000", "280000", "260000"], kmaAreas: ["seoul", "busan"],
+  bmkgAreas: "32.15.03.2004|Karawang;32.75.03.1002|Bekasi;31.71.01.1001|Central Jakarta (Gambir);31.73.02.1003|West Jakarta (Tomang)",
+  nea: true, bmkg: true, tmd: true, myheat: true, kma: true }, CFG.agency || {});
+CFG.pulse = Object.assign({ quakePollSec: 30, gdeltProtest: true, protestCountries: ["philippines", "indonesia", "burma", "thailand", "hongkong", "bangladesh", "pakistan"], wxModel: "national" }, CFG.pulse || {});
+
+/* ---------- cities PULSE watches that ITE did not ---------- */
+[["Busan", 35.18, 129.075, "North Asia", "Asia/Seoul", "kma_seamless", "busan", "KR"], ["Zhangjiakou", 40.77, 114.88, "North Asia", "Asia/Shanghai", "cma_grapes_global", "zhangjiakou", "CN"],
+ ["Nantong", 31.98, 120.894, "North Asia", "Asia/Shanghai", "cma_grapes_global", "nantong", "CN"], ["Johor Bahru", 1.4927, 103.7414, "South Asia", "Asia/Kuala_Lumpur", "ecmwf_ifs025", "johor-bahru", "MY"],
+ ["Chennai", 13.083, 80.27, "India", "Asia/Kolkata", "ecmwf_ifs025", "chennai", "IN"], ["Hyderabad", 17.385, 78.487, "India", "Asia/Kolkata", "ecmwf_ifs025", "hyderabad", "IN"],
+ ["Pune", 18.52, 73.857, "India", "Asia/Kolkata", "ecmwf_ifs025", "pune", "IN"], ["Jamnagar", 22.47, 70.06, "India", "Asia/Kolkata", "ecmwf_ifs025", "jamnagar", "IN"],
+ ["Nagpur", 21.146, 79.088, "India", "Asia/Kolkata", "ecmwf_ifs025", "nagpur", "IN"], ["Canberra", -35.28, 149.13, "ANZ", "Australia/Sydney", "bom_access_global", "canberra", "AU"],
+ ["Perth", -31.95, 115.86, "ANZ", "Australia/Perth", "bom_access_global", "perth", "AU"]
+].forEach(([name, lat, lon, region, tz, model, slug, cc]) => { if (CITIES.some(c => c.name === name)) return; CITIES.push({ name, lat, lon, region, tz, model, slug }); CITY_CC[name] = cc; });
+// national models where the agency publishes one (ITE falls back to automatic best match by itself if a model does not answer)
+CITIES.forEach(c => { if (CITY_CC[c.name] === "KR") c.model = "kma_seamless"; if (CITY_CC[c.name] === "AU") c.model = "bom_access_global"; });
+CITIES.forEach(c => { c.natModel = c.model; });
+Object.assign(MODEL_NAME, { kma_seamless: "KMA", bom_access_global: "BoM" });
+Object.assign(STATE_OF, { Busan: ["부산", "Busan"], "Johor Bahru": ["Johor", "Johor Bahru", "Iskandar"], Chennai: ["Tamil Nadu", "Chennai"], Hyderabad: ["Telangana", "Hyderabad"],
+  Pune: ["Maharashtra", "Pune"], Nagpur: ["Nagpur", "Vidarbha"], Jamnagar: ["Gujarat", "Jamnagar", "Saurashtra"], Perth: ["Western Australia", "Perth"], Canberra: ["Australian Capital Territory", "ACT", "Canberra"],
+  Nantong: ["南通", "江苏", "Jiangsu"], Zhangjiakou: ["张家口", "河北", "Hebei"] });
+// PULSE's "national models / auto" switch: auto asks Open-Meteo for its own best match everywhere
+function applyWxModelMode(){ CITIES.forEach(c => { c.model = CFG.pulse.wxModel === "auto" ? "auto_best" : c.natModel; }); }
+{ const _lm = loadMeteo; loadMeteo = async function(){ applyWxModelMode();
+    if (CFG.pulse.wxModel !== "auto") return _lm.apply(this, arguments);
+    const cur = "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code", daily = "temperature_2m_max,precipitation_sum,wind_gusts_10m_max,weather_code";
+    const res = asArr(await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${CITIES.map(c => c.lat).join(",")}&longitude=${CITIES.map(c => c.lon).join(",")}&current=${cur}&daily=${daily}&forecast_days=3&timezone=auto`));
+    res.forEach((r, i) => { DATA.wx[CITIES[i].name] = Object.assign(r, { model: "AUTO" }); }); }; }
+
+/* ---------- JMA: the live R8 feed (the old warning/{code}.json path has been frozen since 28 May 2026) ---------- */
+const JMA_ALL = [["016000", "Hokkaido (Sapporo)", 43.06, 141.35], ["020000", "Aomori", 40.82, 140.74], ["030000", "Iwate", 39.7, 141.15], ["040000", "Miyagi", 38.27, 140.87], ["050000", "Akita", 39.72, 140.1],
+  ["060000", "Yamagata", 38.24, 140.36], ["070000", "Fukushima", 37.75, 140.47], ["080000", "Ibaraki", 36.34, 140.45], ["090000", "Tochigi", 36.57, 139.88], ["100000", "Gunma", 36.39, 139.06], ["110000", "Saitama", 35.86, 139.65],
+  ["120000", "Chiba", 35.61, 140.12], ["130000", "Tokyo", 35.69, 139.69], ["140000", "Kanagawa", 35.44, 139.64], ["150000", "Niigata", 37.9, 139.02], ["160000", "Toyama", 36.7, 137.21], ["170000", "Ishikawa", 36.59, 136.63],
+  ["180000", "Fukui", 36.07, 136.22], ["190000", "Yamanashi", 35.66, 138.57], ["200000", "Nagano", 36.65, 138.18], ["210000", "Gifu", 35.39, 136.72], ["220000", "Shizuoka", 34.98, 138.38], ["230000", "Aichi", 35.18, 136.91],
+  ["240000", "Mie", 34.73, 136.51], ["250000", "Shiga", 35.0, 135.87], ["260000", "Kyoto", 35.02, 135.76], ["270000", "Osaka", 34.69, 135.52], ["280000", "Hyogo", 34.69, 135.18], ["290000", "Nara", 34.69, 135.83],
+  ["300000", "Wakayama", 34.23, 135.17], ["310000", "Tottori", 35.5, 134.24], ["320000", "Shimane", 35.47, 133.05], ["330000", "Okayama", 34.66, 133.93], ["340000", "Hiroshima", 34.4, 132.46], ["350000", "Yamaguchi", 34.19, 131.47],
+  ["360000", "Tokushima", 34.07, 134.56], ["370000", "Kagawa", 34.34, 134.04], ["380000", "Ehime", 33.84, 132.77], ["390000", "Kochi", 33.56, 133.53], ["400000", "Fukuoka", 33.61, 130.42], ["410000", "Saga", 33.25, 130.3],
+  ["420000", "Nagasaki", 32.74, 129.87], ["430000", "Kumamoto", 32.79, 130.74], ["440000", "Oita", 33.24, 131.61], ["450000", "Miyazaki", 31.91, 131.42], ["460000", "Kagoshima", 31.56, 130.56], ["470000", "Okinawa", 26.21, 127.68]];
+// sub-areas named in the feed; the Tokyo islands lie hundreds of km out, so they are placed where they are and never count against the Tokyo city card
+const JMA_SUB = { "130010": ["Tokyo Region (mainland)", null, null, "Tokyo"], "130020": ["Northern Izu Islands", 34.75, 139.39], "130030": ["Southern Izu Islands", 33.11, 139.79], "130040": ["Ogasawara Islands", 27.09, 142.19], "270010": ["Osaka Region", null, null, "Osaka"] };
+const JMA_PREF_CITY = { "130000": "Tokyo", "120000": "Tokyo", "110000": "Tokyo", "140000": "Tokyo", "270000": "Osaka", "280000": "Osaka", "260000": "Osaka" };
+// JMA alert-level scheme from 28 May 2026 (Level 2 advisory · 3 warning · 4 danger warning · 5 emergency warning)
+const JMA_R8 = { "10": ["Heavy Rain Advisory", 2], "12": ["Heavy Snow Advisory", 2], "13": ["Snowstorm Advisory", 2], "14": ["Thunderstorm Advisory", 2], "15": ["Strong Wind Advisory", 2], "16": ["High Wave Advisory", 2],
+  "17": ["Snowmelt Advisory", 2], "18": ["Inundation Advisory", 2], "19": ["Storm Surge Advisory", 2], "20": ["Dense Fog Advisory", 2], "21": ["Dry Air Advisory", 2], "22": ["Avalanche Advisory", 2], "23": ["Low Temperature Advisory", 2],
+  "24": ["Frost Advisory", 2], "25": ["Ice Accretion Advisory", 2], "26": ["Snow Accretion Advisory", 2], "29": ["Landslide Advisory", 2],
+  "02": ["Snowstorm Warning", 3], "03": ["Heavy Rain Warning", 3], "04": ["Inundation Warning", 3], "05": ["Storm Warning", 3], "06": ["Heavy Snow Warning", 3], "07": ["High Wave Warning", 3], "08": ["Storm Surge Warning", 3], "09": ["Landslide Warning", 3],
+  "43": ["Heavy Rain DANGER Warning", 4], "44": ["Inundation DANGER Warning", 4], "48": ["Storm Surge DANGER Warning", 4], "49": ["Landslide DANGER Warning", 4],
+  "42": ["Snowstorm DANGER Warning", 4], "45": ["Storm DANGER Warning", 4], "46": ["Heavy Snow DANGER Warning", 4], "47": ["High Wave DANGER Warning", 4],
+  "32": ["Snowstorm EMERGENCY Warning", 5], "33": ["Heavy Rain EMERGENCY Warning", 5], "34": ["Inundation EMERGENCY Warning", 5], "35": ["Storm EMERGENCY Warning", 5], "36": ["Heavy Snow EMERGENCY Warning", 5],
+  "37": ["High Wave EMERGENCY Warning", 5], "38": ["Storm Surge EMERGENCY Warning", 5], "39": ["Landslide EMERGENCY Warning", 5] };
+const JMA_OFF = ["発表警報・注意報はなし", "解除", "此の警報・注意報はなし"];
+const jmaSev = lvl => lvl >= 4 ? "EXTREME" : lvl === 3 ? "SEVERE" : "MODERATE";
+function jmaParseR8(data){ const bulletins = Array.isArray(data) ? data : [data], found = {}; let issued = null;
+  bulletins.forEach(b => { if (!b) return; const stamp = b.reportDatetime || (b.warning && b.warning.reportDatetime); if (stamp && (!issued || stamp > issued)) issued = stamp;
+    const w = b.warning || b; Object.keys(w).forEach(k => { if (!/Items$/.test(k) || !Array.isArray(w[k])) return;
+      w[k].forEach(item => { const code = item.areaCode || item.code; if (!code) return;
+        (item.kinds || item.warnings || []).forEach(kd => { if (!kd.code || !kd.status || JMA_OFF.includes(kd.status)) return; (found[code] = found[code] || new Set()).add(kd.code); }); }); }); });
+  const six = Object.keys(found).filter(c => String(c).length === 6); return { found, codes: six.length ? six : Object.keys(found), issued }; }
+async function loadJMAr8(){ const out = [], errs = [], prefs = JMA_ALL.filter(p => (CFG.agency.jmaPrefs || []).includes(p[0]));
+  await Promise.all(prefs.map(async ([code, pref, plat, plon]) => {
+    try{ const r = jmaParseR8(JSON.parse(await fetchVia(`https://www.jma.go.jp/bosai/warning/data/r8/${code}.json`)));
+      r.codes.forEach(sub => { const sn = JMA_SUB[sub], subName = sn ? sn[0] : (sub === code ? pref : pref + " area " + sub), city = sn ? sn[3] || null : JMA_PREF_CITY[code] || null;
+        const lat = sn && sn[1] != null ? sn[1] : plat, lon = sn && sn[2] != null ? sn[2] : plon, outlying = sn && !sn[3];
+        [...r.found[sub]].forEach(wc => { const [name, lvl] = JMA_R8[wc] || ["Advisory code " + wc, 2];
+          out.push(agencyAlert({ id: `jma:${code}:${sub}:${wc}`, title: `Level ${lvl} — ${name} (${subName})`, type: hazardType(name), area: outlying ? `${subName} (outlying islands, not the mainland city)` : `${pref} / ${subName}`,
+            lat, lon, severity: jmaSev(lvl), start: r.issued ? Date.parse(r.issued) : Date.now(), jmaLevel: lvl,
+            source: { name: "Japan Meteorological Agency", authorityUri: `https://www.jma.go.jp/bosai/warning/#area_type=offices&area_code=${code}&lang=en` }, cc: "JP", points: city ? [city] : [] })); }); });
+    }catch(e){ errs.push(pref + ": " + e.message); } }));
+  if (errs.length && errs.length === prefs.length) throw new Error(errs[0]);
+  AG.jma = out; }
+{ const i = AGENCY_LOADERS.findIndex(x => x[0] === "jma"); if (i >= 0) AGENCY_LOADERS[i][2] = loadJMAr8; }
+
+/* ---------- Taiwan CWA: county warnings plus the separate heat-light product ---------- */
+const CWA_TRACKED = ["臺北市", "新北市", "桃園市"];
+const CWA_LOC_EN = { "臺北市": "Taipei City", "新北市": "New Taipei City", "桃園市": "Taoyuan City" };
+const CWA_PH_EN = { "大雨": "Heavy Rain", "豪雨": "Torrential Rain", "大豪雨": "Extremely Torrential Rain", "超大豪雨": "Super Torrential Rain", "颱風": "Typhoon", "強風": "Strong Wind", "陸上強風": "Strong Wind (Land)", "海上強風": "Strong Wind (Sea)", "低溫": "Cold Weather", "大雪": "Heavy Snow", "濃霧": "Dense Fog", "長浪": "Swell", "高溫": "Extreme Heat" };
+const CWA_HEAT = { "黃色": ["Yellow", "MODERATE", "36°C or higher"], "橙色": ["Orange", "SEVERE", "36°C or higher for 3+ days, or 38°C or higher"], "紅色": ["Red", "EXTREME", "38°C or higher for 3+ days"] };
+const cwaArr = v => Array.isArray(v) ? v : v ? [v] : [];
+async function loadCWA2(){
+  if (!CFG.agency.cwaKey) throw new Error("no key set");
+  const get = id => fetchVia(`https://opendata.cwa.gov.tw/api/v1/rest/datastore/${id}?Authorization=${encodeURIComponent(CFG.agency.cwaKey)}&format=JSON`).then(t => JSON.parse(t));
+  const [wx, heat] = await Promise.allSettled([get("W-C0033-001"), get("W-C0033-005")]), out = [];
+  if (wx.status === "fulfilled") ((wx.value.records || {}).location || []).forEach(loc => { if (!CWA_TRACKED.includes(loc.locationName)) return;
+    ((loc.hazardConditions || {}).hazards || []).forEach(h => { const inf = h.info || {}, ph = inf.phenomena || "", sig = inf.significance || "", en = CWA_PH_EN[ph] || ph, areaEn = CWA_LOC_EN[loc.locationName];
+      const tier = /超大豪雨|大豪雨|紅色|Red/.test(ph + sig) ? 3 : /豪雨|橙色|Orange|陸上颱風|警報/.test(ph + sig) ? 2 : 1;
+      out.push(agencyAlert({ id: `cwa:${loc.locationName}:${ph}:${sig}`, title: `${en} ${sig.includes("警報") ? "Warning" : "Advisory"} (${areaEn})`, type: hazardType(en), area: areaEn, severity: tierToSev(tier),
+        start: Date.parse(String((h.validTime || {}).startTime || "").replace(" ", "T") + "+08:00") || Date.now(), end: Date.parse(String((h.validTime || {}).endTime || "").replace(" ", "T") + "+08:00") || null,
+        source: { name: "Central Weather Administration (Taiwan)", authorityUri: "https://www.cwa.gov.tw/V8/E/P/Warning/FIFOWS.html" }, cc: "TW", points: ["Taipei"] })); }); });
+  if (heat.status === "fulfilled"){ const by = {}, now = Date.now();
+    cwaArr((heat.value.records || {}).info).forEach(info => { if (!info || (info.expires && Date.parse(info.expires) < now)) return;
+      const pv = n => { const p = cwaArr(info.parameter).find(x => x && x.valueName === n); return p ? p.value : ""; };
+      const col = pv("alert_color") || (String(pv("severity_level")).match(/(黃色|橙色|紅色)/) || [])[1] || "";
+      cwaArr(info.area).forEach(a => { const d = (a && a.areaDesc) || "", county = CWA_TRACKED.find(c => d.startsWith(c)); if (!county) return;
+        const slot = ((by[county] = by[county] || {})[col] = (by[county] || {})[col] || { n: 0, eff: info.effective, exp: info.expires }); slot.n++;
+        if (info.expires && (!slot.exp || info.expires > slot.exp)) slot.exp = info.expires; }); });
+    Object.entries(by).forEach(([county, cols]) => Object.entries(cols).forEach(([col, s]) => { const c = CWA_HEAT[col] || [col || "Unrated", "MODERATE", ""];
+      out.push(agencyAlert({ id: `cwa:heat:${county}:${col}:${String(s.eff || "").slice(0, 10)}`, title: `Heat Advisory, ${c[0]} Light (${CWA_LOC_EN[county]})`, type: "HEAT", area: `${CWA_LOC_EN[county]} · ${s.n} district${s.n === 1 ? "" : "s"}`,
+        severity: c[1], start: Date.parse(s.eff) || Date.now(), end: Date.parse(s.exp) || null, desc: c[2] ? "Rule: " + c[2] + "." : "",
+        source: { name: "Central Weather Administration (Taiwan)", authorityUri: "https://www.cwa.gov.tw/V8/C/P/Warning/W29.html" }, cc: "TW", points: ["Taipei"] })); })); }
+  if (wx.status === "rejected" && heat.status === "rejected") throw new Error(wx.reason.message);
+  AG.cwa = out; }
+{ const i = AGENCY_LOADERS.findIndex(x => x[0] === "cwa"); if (i >= 0) AGENCY_LOADERS[i][2] = loadCWA2; }
+
+/* ---------- KMA: official special weather warnings (authKey from apihub.kma.go.kr) ---------- */
+const KMA_AREAS = [["seoul", "Seoul", ["서울"], 37.57, 126.98, "Seoul"], ["busan", "Busan", ["부산"], 35.18, 129.08, "Busan"], ["incheon", "Incheon", ["인천"], 37.46, 126.71], ["daegu", "Daegu", ["대구"], 35.87, 128.6],
+  ["gwangju", "Gwangju", ["광주"], 35.16, 126.85], ["daejeon", "Daejeon", ["대전"], 36.35, 127.38], ["ulsan", "Ulsan", ["울산"], 35.54, 129.31], ["sejong", "Sejong", ["세종"], 36.48, 127.29],
+  ["gyeonggi", "Gyeonggi-do", ["경기"], 37.27, 127.01], ["gangwon", "Gangwon-do", ["강원"], 37.88, 127.73], ["chungbuk", "Chungcheongbuk-do", ["충북", "충청북도"], 36.64, 127.49],
+  ["chungnam", "Chungcheongnam-do", ["충남", "충청남도"], 36.66, 126.67], ["jeonbuk", "Jeollabuk-do", ["전북", "전라북도"], 35.82, 127.15], ["jeonnam", "Jeollanam-do", ["전남", "전라남도"], 34.82, 126.46],
+  ["gyeongbuk", "Gyeongsangbuk-do", ["경북", "경상북도"], 36.58, 128.73], ["gyeongnam", "Gyeongsangnam-do", ["경남", "경상남도"], 35.24, 128.69], ["jeju", "Jeju-do", ["제주"], 33.5, 126.53]];
+const KMA_WRN = { W: "Strong Wind", R: "Heavy Rain", C: "Cold Wave", D: "Dry Air", O: "Storm Surge", N: "Tsunami", V: "High Seas", T: "Typhoon", S: "Heavy Snow", Y: "Asian Dust", H: "Heat Wave", F: "Fog" };
+const KMA_LVL = { "1": ["Preliminary", "MODERATE"], "2": ["Advisory", "MODERATE"], "3": ["Warning", "SEVERE"] };
+function kmaRows(text){ let fields = null; const rows = [];
+  String(text || "").split("\n").map(l => l.trim()).filter(Boolean).forEach(line => {
+    if (line[0] === "#"){ const c = line.replace(/^#+/, "").trim().split(/\s+/); if (c.some(x => /^(WRN|LVL|CMD|REG|TITLE|REMARK)/i.test(x))) fields = c; return; }
+    const cols = line.split(/\s*,\s*|\s{2,}|\t/).filter(Boolean); if (cols.length < 2) return;
+    if (fields){ const r = { __raw: line }; fields.forEach((f, i) => { r[f.toUpperCase()] = cols[i] !== undefined ? cols[i] : ""; }); rows.push(r); } else rows.push({ __raw: line, __unmapped: true }); });
+  return rows; }
+const kmaPick = (r, c) => { for (const k of Object.keys(r)) for (const x of c) if (k.indexOf(x) === 0) return r[k]; };
+async function loadKMA(){
+  if (!CFG.agency.kmaKey) throw new Error("no key set");
+  const rows = kmaRows(await fetchVia(`https://apihub.kma.go.kr/api/typ01/url/wrn_now_data.php?authKey=${encodeURIComponent(CFG.agency.kmaKey)}`)).filter(r => kmaPick(r, ["CMD"]) !== "3"), out = [];
+  KMA_AREAS.filter(a => (CFG.agency.kmaAreas || []).includes(a[0])).forEach(([code, name, match, lat, lon, city]) => rows.filter(r => match.some(m => String(r.__raw).includes(m))).forEach(r => {
+    const w = kmaPick(r, ["WRN"]), l = kmaPick(r, ["LVL"]), raw = kmaPick(r, ["TITLE", "REMARK"]) || r.__raw, lab = w && KMA_WRN[w] && l && KMA_LVL[l] ? `${KMA_WRN[w]} ${KMA_LVL[l][0]}` : "Special weather report";
+    out.push(agencyAlert({ id: `kma:${code}:${w || ""}:${l || ""}:${raw.slice(0, 40)}`, title: `${lab} (${name})`, type: hazardType(lab), area: name, lat, lon, severity: l && KMA_LVL[l] ? KMA_LVL[l][1] : "MODERATE",
+      start: Date.now(), desc: "As issued: " + raw, source: { name: "Korea Meteorological Administration", authorityUri: "https://www.weather.go.kr/w/warning/whole-wrn.do" }, cc: "KR", points: city ? [city] : [] })); }));
+  AG.kma = out; }
+
+/* ---------- Singapore NEA: rainfall, heat stress (WBGT), PSI and PM2.5 ---------- */
+const PM25_AQI = [[0, 9, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]];
+function pm25ToAqi(c){ const t = Math.floor(c * 10) / 10; for (const [a, b, i, j] of PM25_AQI) if (t >= a && t <= b) return Math.round((j - i) / (b - a) * (t - a) + i); const [a, b, i, j] = PM25_AQI[PM25_AQI.length - 1]; return Math.round((j - i) / (b - a) * (t - a) + i); }
+const numsUnder = (node, keys, out = []) => { if (Array.isArray(node)) node.forEach(x => numsUnder(x, keys, out)); else if (node && typeof node === "object") Object.keys(node).forEach(k => { const v = node[k]; if (typeof v === "number" && keys.includes(k.toLowerCase())) out.push(v); else if (v && typeof v === "object") numsUnder(v, keys, out); }); return out; };
+const READINGS = {};   // agency readings shown for reference on the Warnings screen (values that do not raise an alert on their own)
+async function loadNEA(){
+  const out = [], errs = [], R = READINGS.nea = { at: Date.now(), rows: [] }, src = { name: "National Environment Agency (Singapore)", authorityUri: "https://www.weather.gov.sg/home/" };
+  const add = (id, title, type, sev, desc, uri) => out.push(agencyAlert({ id: "nea:" + id, title, type, area: "Singapore (island-wide)", severity: sev, start: Date.now(), desc, source: Object.assign({}, src, uri ? { authorityUri: uri } : {}), cc: "SG", points: ["Singapore"] }));
+  await Promise.all([
+    getJSON("https://api.data.gov.sg/v1/environment/rainfall").then(d => { const v = numsUnder(d.items, ["value"]); if (!v.length) throw new Error("no rainfall reading"); const mx = Math.max(...v), hr = Math.round(mx * 12);
+      R.rows.push(["Rainfall, island-wide max", `${mx.toFixed(1)} mm in 5 min (≈${hr} mm/h if sustained)`, mx > 4.2 ? "Very heavy" : mx > .85 ? "Heavy" : mx > .2 ? "Moderate" : "Light / none"]);
+      if (mx > .85) add("rain:" + (mx > 4.2 ? "vh" : "h"), `${mx > 4.2 ? "Very heavy" : "Heavy"} rain — ${mx.toFixed(1)} mm/5 min`, "RAIN", mx > 4.2 ? "SEVERE" : "MODERATE", `Highest NEA station reading ${mx.toFixed(1)} mm in 5 minutes (≈${hr} mm/h if sustained).`); }).catch(e => errs.push("rainfall: " + e.message)),
+    fetchVia("https://api-open.data.gov.sg/v2/real-time/api/weather?api=wbgt").then(t => { const d = JSON.parse(t), rec = d && d.data && d.data.records ? d.data.records[0] : null, LV = ["Low", "Moderate", "High"];
+      const v = ((rec && rec.item && rec.item.readings) || []).map(r => ({ n: (r.station && (r.station.townCenter || r.station.name)) || "station", w: parseFloat(r.wbgt), l: String(r.heatStress || "").trim() })).filter(r => LV.includes(r.l));
+      if (!v.length) throw new Error("no heat stress level"); const top = Math.max(...v.map(r => LV.indexOf(r.l))), at = v.filter(r => LV.indexOf(r.l) === top).sort((a, b) => (b.w || 0) - (a.w || 0)), pk = at[0];
+      R.rows.push(["Heat stress (WBGT), island-wide highest", `${LV[top]} · WBGT ${isFinite(pk.w) ? pk.w.toFixed(1) + "°C" : "n/a"} at ${pk.n} · ${at.length} of ${v.length} stations`, LV[top]]);
+      if (top > 0) add("wbgt:" + LV[top], `${LV[top]} heat stress — WBGT ${isFinite(pk.w) ? pk.w.toFixed(1) + "°C" : ""} at ${pk.n}`, "HEAT", top === 2 ? "SEVERE" : "MODERATE", `NEA heat stress advisory: ${at.length} of ${v.length} stations at ${LV[top]}.`, "https://www.weather.gov.sg/heat-stress/"); }).catch(e => errs.push("heat stress: " + e.message)),
+    getJSON("https://api.data.gov.sg/v1/environment/air-temperature").then(d => { const v = []; (d.items || []).forEach(it => (it.readings || []).forEach(r => { if (typeof r.value === "number") v.push(r.value); }));
+      if (v.length) R.rows.push(["Air temperature, island-wide max", Math.max(...v).toFixed(1) + "°C", "reference only"]); }).catch(e => errs.push("air temperature: " + e.message)),
+    getJSON("https://api.data.gov.sg/v1/environment/psi").then(d => { const r = d.items && d.items[0] && d.items[0].readings && d.items[0].readings.psi_twenty_four_hourly; if (!r) throw new Error("no PSI reading"); const mx = Math.max(...Object.values(r));
+      const lab = mx > 300 ? "Hazardous" : mx > 200 ? "Very unhealthy" : mx > 100 ? "Unhealthy" : mx > 50 ? "Moderate" : "Good"; R.rows.push(["24-h PSI, island-wide max", String(mx), lab]);
+      if (mx > 100) add("psi:" + lab, `PSI ${mx} — ${lab}`, "AIR", mx > 200 ? "SEVERE" : "MODERATE", "NEA 24-hour Pollutant Standards Index.", "https://www.haze.gov.sg/"); }).catch(e => errs.push("PSI: " + e.message)),
+    getJSON("https://api.data.gov.sg/v1/environment/pm25").then(d => { const r = d.items && d.items[0] && d.items[0].readings && d.items[0].readings.pm25_one_hourly; if (!r) throw new Error("no PM2.5 reading"); const mx = Math.max(...Object.values(r)), aqi = pm25ToAqi(mx);
+      const lab = aqi > 300 ? "Hazardous" : aqi > 200 ? "Very unhealthy" : aqi > 150 ? "Unhealthy" : aqi > 100 ? "Unhealthy for sensitive groups" : aqi > 50 ? "Moderate" : "Good"; R.rows.push(["PM2.5 → US AQI, island-wide max", `${mx} µg/m³ → AQI ${aqi}`, lab]);
+      if (aqi > 100) add("pm25:" + lab, `PM2.5 ${mx} µg/m³ — US AQI ${aqi} (${lab})`, "AIR", aqi > 150 ? "SEVERE" : "MODERATE", "Current-hour NEA PM2.5 against US EPA 24-hour breakpoints (approximation).", "https://www.haze.gov.sg/"); }).catch(e => errs.push("PM2.5: " + e.message))]);
+  R.errs = errs; if (errs.length >= 5) throw new Error(errs[0]); AG.nea = out; }
+
+/* ---------- Indonesia BMKG: village forecast (next 12 h) and the official nowcast warnings ---------- */
+const bmkgAreas = () => String(CFG.agency.bmkgAreas || "").split(";").map(x => x.split("|")).filter(x => /^\d\d\.\d\d\.\d\d\.\d{4}$/.test((x[0] || "").trim())).map(([c, l]) => ({ adm4: c.trim(), label: (l || c).trim() }));
+function bmkgSlotMs(s){ for (const [v, tz] of [[s.datetime, "Z"], [s.utc_datetime, "Z"], [s.local_datetime, "+07:00"]]){ const x = String(v || "").trim(); if (!x) continue; const n = Date.parse(/(?:Z|[+\-]\d\d:?\d\d)$/i.test(x) ? x : x.replace(" ", "T") + tz); if (isFinite(n)) return n; } return NaN; }
+function bmkgSlots(p){ const out = [], seen = new Set(), add = s => { if (!s || typeof s !== "object" || (!s.weather_desc && !s.weather_desc_en && s.weather === undefined)) return; const k = [s.datetime, s.utc_datetime, s.local_datetime, s.weather].join("|"); if (!seen.has(k)){ seen.add(k); out.push(s); } };
+  (p && Array.isArray(p.data) ? p.data : []).forEach(r => { if (r && Array.isArray(r.cuaca)) r.cuaca.flat(Infinity).forEach(add); }); if (out.length) return out;
+  const st = [p]; while (st.length){ const n = st.pop(); if (!n || typeof n !== "object") continue; if (Array.isArray(n)){ n.forEach(v => st.push(v)); continue; } add(n); Object.keys(n).forEach(k => { if (k !== "lokasi") st.push(n[k]); }); } return out; }
+function bmkgClass(s){ const d = [s.weather_desc_en, s.weather_desc].filter(Boolean).join(" / ").toLowerCase().normalize("NFKD"), c = Number(s.weather), ws = s.ws === "" || s.ws == null ? null : Number(s.ws);
+  if (/thunderstorm|thundery|lightning|hujan\s+(?:disertai\s+)?petir|badai|kilat|puting\s+beliung|severe|extreme/.test(d)) return "SEVERE";
+  if (/very\s+heavy\s+rain|heavy\s+rain|torrential\s+rain|hujan\s+(?:sangat\s+)?lebat|hujan\s+sedang\s*(?:hingga|sampai|[-–—])\s*lebat/.test(d) || [65, 95, 97].includes(c)) return "SEVERE";
+  if (/moderate\s+rain|rain\s+shower|showers|hujan\s+sedang/.test(d) || c === 63) return "MODERATE";
+  if (ws != null && isFinite(ws) && ws >= 45) return "SEVERE"; if (ws != null && isFinite(ws) && ws >= 25) return "MODERATE"; return null; }
+function bmkgTargets(t){ const out = []; if (/\bkarawang\b/i.test(t)) out.push("Karawang"); if (/\bbekasi\b|\bcikarang\b/i.test(t)) out.push("Bekasi");
+  const wj = /\bjakarta\s+barat\b|\bwest\s+jakarta\b|\bjakbar\b|\b(?:grogol|petamburan|tomang|kembangan|cengkareng|kalideres|tambora|palmerah|taman\s+sari|kebon\s+jeruk)\b/i.test(t); if (wj) out.push("West Jakarta");
+  if (/\b(?:dki\s+)?jakarta\b/i.test(t) && !wj) out.push("Jakarta"); return out; }
+async function loadBMKG(){
+  const out = [], errs = [], now = Date.now(), heat = [], fcHits = [], src = { name: "BMKG (Indonesia)", authorityUri: "https://www.bmkg.go.id/" };
+  await Promise.all([...bmkgAreas().map(async a => { try{ const d = JSON.parse(await fetchVia("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=" + a.adm4));
+      const got = String((d.lokasi && d.lokasi.adm4) || (d.data && d.data[0] && d.data[0].lokasi && d.data[0].lokasi.adm4) || ""); if (got && got !== a.adm4) throw new Error("district mismatch: asked " + a.adm4 + ", got " + got);
+      const timed = bmkgSlots(d).map(s => ({ s, ms: bmkgSlotMs(s) })).filter(x => isFinite(x.ms)).sort((x, y) => x.ms - y.ms); let cur = null; timed.forEach(x => { if (x.ms <= now && x.ms >= now - 3 * 3600e3) cur = x; });
+      const use = (cur ? [cur] : []).concat(timed.filter(x => x.ms > now && x.ms <= now + 12 * 3600e3)); if (!use.length) throw new Error("no forecast slot in the next 12 h");
+      let worst = null; use.forEach(x => { const t = Number(x.s.t); if (isFinite(t)) heat.push([a.label, t]); const c = bmkgClass(x.s); if (c && (!worst || (c === "SEVERE" && worst.c !== "SEVERE"))) worst = { c, x }; });
+      if (worst){ const s = worst.x.s; fcHits.push({ label: a.label, c: worst.c, ms: worst.x.ms, wx: s.weather_desc_en || s.weather_desc || "Significant weather", when: s.local_datetime || "" }); }
+    }catch(e){ errs.push(a.label + ": " + e.message); } }),
+    fetchVia("https://www.bmkg.go.id/alerts/nowcast/en").then(t => { const doc = new DOMParser().parseFromString(t, "application/xml"); if (doc.querySelector("parsererror")) throw new Error("invalid nowcast XML");
+      [...doc.querySelectorAll("item, entry")].forEach(n => { const rd = k => { const e = n.querySelector(k); return e ? (e.textContent || "").trim() : ""; }, lk = n.querySelector("link"), title = rd("title");
+        const desc = new DOMParser().parseFromString("<body>" + (rd("description") || rd("summary") || rd("content")) + "</body>", "text/html").body.textContent.replace(/\s+/g, " ").trim(), tg = bmkgTargets(title + " " + desc);
+        if (!tg.length) return; out.push(agencyAlert({ id: "bmkg:now:" + (rd("guid") || rd("id") || title), title: `BMKG nowcast — ${tg.join(", ")}: ${title || "active warning"}`.slice(0, 160), type: hazardType(title + " " + desc), area: tg.join(", "),
+          severity: "SEVERE", start: Date.parse(rd("pubDate") || rd("updated") || rd("published")) || Date.now(), desc: desc.slice(0, 900), source: { name: "BMKG nowcast", authorityUri: (lk && (lk.getAttribute("href") || lk.textContent || "").trim()) || "https://www.bmkg.go.id/alerts/nowcast/en" }, cc: "ID", points: ["Jakarta"] })); }); })
+      .catch(e => errs.push("nowcast: " + e.message))]);
+  // a forecast is not a warning: one first-tier item across the districts, so near-daily thunderstorm forecasts never open escalations on their own (BMKG's nowcast warnings above do)
+  if (fcHits.length){ const wx = [...new Set(fcHits.map(h => h.wx))].join(" / "), first = fcHits.slice().sort((x, y) => x.ms - y.ms)[0];
+    out.push(agencyAlert({ id: `bmkg:fc:${new Date(first.ms).toISOString().slice(0, 13)}:${fcHits.map(h => h.label).sort().join(",")}`, title: `BMKG forecast: ${wx} in ${fcHits.length} district${fcHits.length === 1 ? "" : "s"} within 12 h`, type: hazardType(wx), area: fcHits.map(h => h.label).join(", "),
+      severity: "MODERATE", start: first.ms, desc: fcHits.map(h => `${h.label}: ${h.wx}${h.when ? " at " + h.when + " WIB" : ""}${h.c === "SEVERE" ? " (significant)" : ""}`).join("; ") + ". Village forecast, not an official warning.", source: src, cc: "ID", points: ["Jakarta"] })); }
+  const pk = heat.sort((a, b) => b[1] - a[1])[0];
+  READINGS.bmkg = { at: Date.now(), rows: pk ? [["Highest forecast temperature, next 12 h", `${pk[1]}°C at ${pk[0]}`, "reference only — BMKG issues no heat warnings for Indonesia"]] : [], errs };
+  if (errs.length && errs.length >= bmkgAreas().length + 1) throw new Error(errs[0]); AG.bmkg = out; }
+
+/* ---------- Thailand TMD: numbered warning bulletins and TMD's own CAP feed ---------- */
+const TMD_AREAS = [["Bangkok & vicinity", /bangkok|pathum\s*thani|nonthaburi|samut\s*prakan|central\s+(?:region|part)|the\s+central|upper\s+central|กรุงเทพ|ปทุมธานี|นนทบุรี|สมุทรปราการ|ภาคกลาง/i],
+  ["Chon Buri / the East", /chon\s*buri|chonburi|rayong|the\s+east\b|eastern\s+(?:region|part)|ชลบุรี|ระยอง|ภาคตะวันออก(?!เฉียงเหนือ)/i]];
+const tmdClean = s => String(s || "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim();
+function tmdDate(s){ s = String(s || "").trim(); const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/); if (m){ let y = +m[3]; if (y > 2400) y -= 543; return Date.UTC(y, +m[2] - 1, +m[1], (+m[4] || 0) - 7, +m[5] || 0, +m[6] || 0); } const n = Date.parse(s); return isFinite(n) ? n : NaN; }
+const tmdKid = (el, n) => { for (const c of el.children) if (c.localName.toLowerCase() === n.toLowerCase()) return c.textContent || ""; return ""; };
+const tmdThai = s => /[฀-๿]/.test(s || "");
+function tmdItems(x){ const d = new DOMParser().parseFromString(x, "application/xml"); if (d.getElementsByTagName("parsererror").length) throw new Error("invalid TMD XML");
+  let n = [...d.getElementsByTagName("item")]; if (!n.length) n = [...d.getElementsByTagName("entry")];
+  return n.map(e => { let link = tmdKid(e, "link").trim(); if (!link){ const l = e.getElementsByTagName("link")[0]; if (l) link = l.getAttribute("href") || ""; }
+    return { title: tmdClean(tmdKid(e, "title")), desc: tmdClean(tmdKid(e, "description") || tmdKid(e, "summary")), ms: tmdDate(tmdKid(e, "pubDate") || tmdKid(e, "updated") || tmdKid(e, "date")), link }; }); }
+const tmdSev = t => /tropical\s+storm|typhoon|depression|พายุโซนร้อน|พายุไต้ฝุ่น|ดีเปรสชัน/i.test(t) ? "SEVERE" : /very\s+heavy|heavy\s+rain|strong\s+wind|wind-?waves?|ฝนตกหนัก|คลื่นลมแรง/i.test(t) ? "MODERATE" : "MINOR";
+async function loadTMD(){
+  const out = [], errs = [], now = Date.now(), src = uri => ({ name: "Thai Meteorological Department", authorityUri: uri || "https://www.tmd.go.th/en/warning-and-events/warning-storm" });
+  const areasOf = t => TMD_AREAS.filter(([, re]) => re.test(t)).map(([n]) => n);
+  try{ const items = tmdItems(await fetchVia("https://tmd.go.th/api/xml/warning-news")).filter(i => i.title || i.desc);
+    items.forEach(i => { const sj = i.desc.match(/Subject:\s*(.+?)(?:\s{2,}|\s+No\.\s*\d+|$)/i); if ((!i.title || tmdThai(i.title) || /^กรมอุตุนิยมวิทยา$/.test(i.title)) && sj && !tmdThai(sj[1])) i.title = sj[1].trim(); });
+    const en = items.filter(i => !tmdThai(i.title)), pool = en.length ? en : items, series = {};
+    pool.forEach(i => { if (!isFinite(i.ms) || now - i.ms > 36 * 3600e3) return; const k = i.title.replace(/\s*No\.?\s*\d+.*$/i, "").replace(/\s*ฉบับที่.*$/, "").trim().toLowerCase() || i.title; if (!series[k] || i.ms > series[k].ms) series[k] = i; });
+    Object.values(series).forEach(i => { const ar = areasOf(i.title + " " + i.desc), sev = ar.length ? tmdSev(i.title + " " + i.desc.slice(0, 400)) : "MINOR";
+      out.push(agencyAlert({ id: "tmd:" + i.title, title: i.title.slice(0, 160), type: hazardType(i.title + " " + i.desc.slice(0, 200)), area: ar.length ? "Thailand — " + ar.join(", ") : "Thailand (does not name Bangkok or the East)", severity: sev, start: i.ms,
+        end: i.ms + 36 * 3600e3, desc: i.desc.slice(0, 900), source: src(i.link), cc: "TH", points: ar.length ? ["Bangkok"] : [] })); }); }
+  catch(e){ errs.push("bulletins: " + e.message); }
+  try{ const list = tmdItems(await fetchVia("https://www.tmd.go.th/api/xml/CAP")).filter(i => isFinite(i.ms) && now - i.ms < 48 * 3600e3).sort((a, b) => b.ms - a.ms).slice(0, 6), shown = new Set(out.map(a => a.title.toLowerCase()));
+    for (const c of list){ let sevCap = "", exp = NaN, areas = "", title = c.title, desc = c.desc;
+      if (c.link) try{ const x = new DOMParser().parseFromString(await fetchVia(c.link, null, 15000), "application/xml"), infos = [...x.getElementsByTagName("info")], info = infos.find(n => /^en/i.test(tmdKid(n, "language"))) || infos[0];
+        if (info){ title = tmdClean(tmdKid(info, "headline") || tmdKid(info, "event")) || title; desc = tmdClean(tmdKid(info, "description")) || desc; sevCap = tmdKid(info, "severity").trim(); exp = tmdDate(tmdKid(info, "expires")); areas = [...info.getElementsByTagName("areaDesc")].map(a => tmdClean(a.textContent)).join(", "); } }catch(e){}
+      if ((isFinite(exp) && exp < now) || shown.has(String(title).toLowerCase())) continue; const ar = areasOf(title + " " + desc + " " + areas); if (!ar.length) continue;
+      out.push(agencyAlert({ id: "tmd:cap:" + title + ":" + c.ms, title: title.slice(0, 160), type: hazardType(title + " " + desc), area: "Thailand — " + ar.join(", "), severity: /extreme/i.test(sevCap) ? "EXTREME" : /severe/i.test(sevCap) ? "SEVERE" : "MODERATE",
+        start: c.ms, end: isFinite(exp) ? exp : null, desc: desc.slice(0, 900), source: src(c.link), cc: "TH", points: ["Bangkok"] })); } }
+  catch(e){ errs.push("CAP: " + e.message); }
+  if (errs.length === 2) throw new Error(errs.join("; ")); AG.tmd = out; }
+
+/* ---------- MetMalaysia: today's forecast high for KL and Johor Bahru against MetMalaysia's heat tiers ---------- */
+async function loadMyHeat(){
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" }), out = [], rows = [], errs = [];
+  await Promise.all([["Kuala Lumpur", "Kuala Lumpur"], ["Johor Bahru", "Johor Bahru"]].map(async ([q, city]) => { try{
+      const list = asArr(await getJSON(`https://api.data.gov.my/weather/forecast?icontains=${encodeURIComponent(q)}@location__location_name&date_start=${today}@date&date_end=${today}@date&limit=5`)).filter(Boolean);
+      const t = list.map(r => r.max_temp).filter(v => typeof v === "number"); if (!t.length) throw new Error("no forecast for today"); const mx = Math.max(...t);
+      const lv = mx > 40 ? [3, "Level 3 extreme heatwave territory", "EXTREME"] : mx > 37 ? [2, "Level 2 heatwave territory", "SEVERE"] : mx >= 35 ? [1, "Level 1 alert territory", "MODERATE"] : null;
+      rows.push([`${city} forecast high today`, `${mx}°C`, lv ? lv[1] : "below the 35°C alert threshold"]);
+      if (lv) out.push(agencyAlert({ id: `myheat:${city}:${today}:${lv[0]}`, title: `${lv[1]} — forecast high ${mx}°C (${city})`, type: "HEAT", area: city, severity: lv[2], start: Date.now(),
+        desc: "MetMalaysia's 7-day forecast. A heatwave is declared only after 3 consecutive days in the range; one day is an early signal.", source: { name: "MetMalaysia", authorityUri: "https://www.met.gov.my/en/iklim/status-cuaca-panas/" }, cc: "MY", points: [city] }));
+    }catch(e){ errs.push(city + ": " + e.message); } }));
+  READINGS.myheat = { at: Date.now(), rows, errs }; if (errs.length === 2) throw new Error(errs[0]); AG.myheat = out; }
+// one MetMalaysia episode arrives as several zone records with the same heading; keep one per heading
+{ const i = AGENCY_LOADERS.findIndex(x => x[0] === "mymet"); if (i >= 0){ const f = AGENCY_LOADERS[i][2]; AGENCY_LOADERS[i][2] = async function(){ await f(); const seen = new Set(); AG.mymet = (AG.mymet || []).filter(a => { const k = a.title + "|" + (a.points[0] || ""); if (seen.has(k)) return false; seen.add(k); return true; }); }; } }
+
+Object.assign(AGENCY_FEEDS, { kma: { name: "KMA" }, nea: { name: "NEA Singapore" }, bmkg: { name: "BMKG" }, tmd: { name: "TMD Thailand" }, myheat: { name: "MetMalaysia heat" } });
+["kma", "nea", "bmkg", "tmd", "myheat"].forEach(k => { FEEDS[k] = FEEDS[k] || { ok: null, err: null, at: 0, busy: false }; FEEDS[k].name = AGENCY_FEEDS[k].name; });
+AGENCY_LOADERS.push(["kma", () => CFG.agency.on && CFG.agency.kma !== false && !!CFG.agency.kmaKey, loadKMA], ["nea", () => CFG.agency.on && CFG.agency.nea !== false, loadNEA],
+  ["bmkg", () => CFG.agency.on && CFG.agency.bmkg !== false && bmkgAreas().length > 0, loadBMKG], ["tmd", () => CFG.agency.on && CFG.agency.tmd !== false, loadTMD], ["myheat", () => CFG.agency.on && CFG.agency.myheat !== false, loadMyHeat]);
+{ const at = k => SOURCE_CATALOG.findIndex(s => s[0] === k), put = row => { const i = at(row[0]); if (i >= 0) SOURCE_CATALOG[i] = row; else SOURCE_CATALOG.splice(at("hko") + 1, 0, row); };
+  put(["jma", "JMA", "Japan Meteorological Agency (R8 feed)", "Advisories, warnings, danger and emergency warnings (alert levels 2–5) for the prefectures chosen in Settings", "met, flood, coastal, cold, soil", "No (relay)", "10 min"]);
+  put(["cwa", "Taiwan CWA", "Central Weather Administration", "County warnings (W-C0033-001) and heat lights (W-C0033-005) for Taipei, New Taipei, Taoyuan", "met, flood, heat", "Free key", "10 min"]);
+  put(["kma", "KMA", "Korea Meteorological Administration (apihub)", "Official special weather warnings for the regions chosen in Settings", "met, heat, cold, coastal, air", "Free key", "10 min"]);
+  put(["nea", "NEA Singapore", "National Environment Agency via data.gov.sg", "Rainfall, heat stress (WBGT), air temperature, PSI and PM2.5", "met, heat, air", "No", "10 min"]);
+  put(["bmkg", "BMKG", "Badan Meteorologi, Klimatologi, dan Geofisika", "Village forecasts for the Jakarta-area districts in Settings and the official nowcast warnings", "met, flood", "No (relay)", "10 min"]);
+  put(["tmd", "TMD Thailand", "Thai Meteorological Department", "Numbered warning bulletins and CAP alerts naming Bangkok or the East", "met, flood, heat, cold", "No (relay)", "10 min"]);
+  put(["myheat", "MetMalaysia heat", "data.gov.my (MetMalaysia)", "Today's forecast high for Kuala Lumpur and Johor Bahru against MetMalaysia heat tiers", "heat", "No", "10 min"]); }
+// agency warnings keep refreshing every 10 minutes while the console is minimised or behind another window (the visible-tab timer pauses then)
+setInterval(() => { if (document.hidden) try{ refreshAgencies(); }catch(e){} }, 10 * 60e3);
+
+/* =====================================================================
+   PULSE PARITY — 2. HAZARD VIEWS
+   Earthquakes polled every 30 s from a background worker (it keeps going
+   while the console is minimised), a 60-day earthquake archive, JMA's
+   official typhoon forecasts beside GDACS, a volcano view, and GDELT news
+   monitoring of protests by country. Each one feeds the same triage queue,
+   escalations, handover and alerts centre as the rest of ITE.
+   ===================================================================== */
+
+/* ---------- earthquakes: 30-second background polling ---------- */
+let QPOLL_BUSY = false;
+async function quakePoll(){
+  if (QPOLL_BUSY || fastBusy) return; QPOLL_BUSY = true;
+  try{ await Promise.all([runFeed("usgs", loadUSGS), runFeed("emsc", loadEMSC)]);
+    mergeQuakes(); rescore(); evaluateAlarms(); runAutoEscalation(); quakeArchive(); safe(renderModes, "tabs"); safe(redrawMap, "map");
+    const a = document.activeElement, typing = a && $("#panel").contains(a) && /INPUT|SELECT|TEXTAREA/.test(a.tagName);
+    if (!typing && ["quake", "overview", "vcc", "todo"].includes(UI.mode)) renderPanel(); }
+  finally{ QPOLL_BUSY = false; } }
+{ const sec = Math.max(15, +CFG.pulse.quakePollSec || 30); let w = null;
+  try{ w = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(1), ${sec * 1000});`], { type: "application/javascript" }))); w.onmessage = () => quakePoll(); }
+  catch(e){ setInterval(quakePoll, sec * 1000); } }
+FEEDS.usgs.name = "USGS (every 30 s)";
+{ const i = SOURCE_CATALOG.findIndex(s => s[0] === "usgs"); if (i >= 0) SOURCE_CATALOG[i][6] = "30 s, also while minimised"; }
+
+/* ---------- earthquakes: 60-day archive, kept after USGS drops an event from its day feed ---------- */
+const QARCH_KEY = "psoc.uni.qarchive.v1"; let QARCH = lsGet(QARCH_KEY, []);
+function quakeArchive(){ const cut = Date.now() - 60 * 86400e3, byId = new Map(QARCH.map(q => [q.id, q])); let ch = false;
+  (DATA.quakes || []).forEach(q => { if (q.emscOnly) return; const k = qKey(q), st = QSTATE[k] || {}, ex = byId.get(k);
+    const rec = { id: k, mag: q.mag, place: q.place, time: q.time, lat: q.lat, lon: q.lon, depth: q.depth, url: q.url, tsunami: !!q.tsunami, alert: q.alert || null,
+      near: q.near && q.near.site ? q.near.site.code : "", nearKm: q.near ? Math.round(q.near.distanceKm) : null, mmi: q.topMMI ? +q.topMMI.mmi.toFixed(1) : null,
+      alarm: !!(st.alarmedGlobal || st.alarmedProx), leadershipAt: st.leadershipAt || null, welfareAt: st.welfareAt || null };
+    if (!ex || JSON.stringify(ex) !== JSON.stringify(rec)){ byId.set(k, rec); ch = true; } });
+  if (!ch && QARCH.every(q => q.time >= cut)) return;
+  QARCH = [...byId.values()].filter(q => q.time >= cut).sort((a, b) => b.time - a.time).slice(0, 3000); lsSet(QARCH_KEY, QARCH); }
+function quakeArchiveHtml(){ const rows = QARCH.filter(q => UI.qarchAll || q.alarm || q.mag >= Math.max(4.5, CFG.quake.nearMag)).slice(0, 200);
+  return `<details class="qarch"${UI.qarchOpen ? " open" : ""} data-qarch><summary><b>Archive — last 60 days</b> <span class="s">${QARCH.length} earthquakes kept in this browser, including ones USGS has since dropped from its day feed</span></summary>
+    <div class="acts" style="margin:6px 0"><label class="ctl"><input type="checkbox" data-qarchall${UI.qarchAll ? " checked" : ""}> Show every magnitude (default: alarms and M${Math.max(4.5, CFG.quake.nearMag)}+)</label><span class="sp"></span><button class="tab-mini" data-qarchcsv>Export CSV</button></div>
+    <div class="tbl"><table class="acc"><thead><tr><th>When (SGT)</th><th>Mag</th><th>Place</th><th>Nearest site</th><th>Est. MMI</th><th>Alarm</th><th>Leadership</th><th>Welfare</th></tr></thead><tbody>
+    ${rows.map(q => `<tr><td class="nowrap">${esc(sgt(q.time))}</td><td><b style="color:${magColor(q.mag)}">M${q.mag.toFixed(1)}</b></td><td><a href="${esc(safeUrl(q.url))}" target="_blank" rel="noopener">${esc(q.place || "")}</a>${q.tsunami ? ` <span class="tag">tsunami flag</span>` : ""}</td>
+      <td>${esc(q.near || "—")}${q.nearKm != null ? ` <span class="s">${q.nearKm} km</span>` : ""}</td><td>${q.mmi ? romanOf(q.mmi) : "—"}</td><td>${q.alarm ? "yes" : ""}</td><td>${q.leadershipAt ? esc(sgt(q.leadershipAt)) : ""}</td><td>${q.welfareAt ? esc(sgt(q.welfareAt)) : ""}</td></tr>`).join("") || `<tr><td colspan="8" class="s">Nothing archived yet.</td></tr>`}
+    </tbody></table></div></details>`; }
+document.addEventListener("click", e => { const t = e.target.closest("[data-qarchcsv]"); if (!t) return;
+  const hd = ["time_utc", "magnitude", "place", "latitude", "longitude", "depth_km", "nearest_site", "nearest_km", "est_mmi", "alarm", "tsunami", "leadership_sent", "welfare_sent", "url"];
+  const rows = QARCH.map(q => [new Date(q.time).toISOString(), q.mag, q.place, q.lat, q.lon, q.depth, q.near, q.nearKm, q.mmi, q.alarm, q.tsunami, q.leadershipAt ? new Date(q.leadershipAt).toISOString() : "", q.welfareAt ? new Date(q.welfareAt).toISOString() : "", q.url]);
+  const csv = [hd].concat(rows).map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `earthquakes-60d-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); });
+document.addEventListener("change", e => { if (e.target.matches("[data-qarchall]")){ UI.qarchAll = e.target.checked; UI.qarchOpen = true; saveUI(); renderPanel(); } });
+document.addEventListener("toggle", e => { if (e.target.matches && e.target.matches("[data-qarch]")){ UI.qarchOpen = e.target.open; saveUI(); } }, true);
+
+/* ---------- typhoons: JMA (RSMC Tokyo) official forecast beside GDACS ---------- */
+const JMA_TC = "https://www.jma.go.jp/bosai/typhoon/data/";
+const TCJ = { list: [], at: 0, err: "", busy: false };
+const tcNorm = n => String(n || "").toLowerCase().replace(/-\d\d$/, "").replace(/^(tropical (storm|depression|cyclone)|severe tropical storm|super typhoon|typhoon)\s+/, "").replace(/[^a-z]/g, "");
+const JMA_COURSE = { "北": "N", "北北東": "NNE", "北東": "NE", "東北東": "ENE", "東": "E", "東南東": "ESE", "南東": "SE", "南南東": "SSE", "南": "S", "南南西": "SSW", "南西": "SW", "西南西": "WSW", "西": "W", "西北西": "WNW", "北西": "NW", "北北西": "NNW" };
+const JMA_INT = { "強い": "Strong", "非常に強い": "Very strong", "猛烈な": "Violent" }, JMA_SCALE = { "大型": "Large", "超大型": "Very large" };
+function tcJmaClass(kt){ if (kt == null) return ["?", "Unknown", "#7C8BA8"]; if (kt < 34) return ["TD", "Tropical depression", "#7FB3D5"]; if (kt < 48) return ["TS", "Tropical storm", "#35C1D6"];
+  if (kt < 64) return ["STS", "Severe tropical storm", "#E8C547"]; if (kt < 85) return ["TY", "Typhoon", "#F0A23A"]; if (kt < 105) return ["TY", "Very strong typhoon", "#E5484D"]; return ["TY", "Violent typhoon", "#FF2D55"]; }
+function tcJmaPart(p){ const n = v => { const x = parseFloat(v); return isFinite(x) ? x : null; }, mx = a => { let m = 0; (a || []).forEach(x => { const v = x && x.range && n(x.range.km); if (v != null && v > m) m = v; }); return m || null; };
+  const pos = p.position && p.position.deg, course = p.course ? JMA_COURSE[p.course] || null : null;
+  return { h: p.advancedHours || 0, lat: pos ? n(pos[0]) : null, lon: pos ? n(pos[1]) : null, kt: p.maximumWind && p.maximumWind.sustained ? n(p.maximumWind.sustained.kt) : null, gust: p.maximumWind && p.maximumWind.gust ? n(p.maximumWind.gust.kt) : null,
+    hpa: n(p.pressure), intensity: JMA_INT[p.intensity] || "", scale: JMA_SCALE[p.scale] || "", probKm: p.probabilityCircleRadius ? n(p.probabilityCircleRadius.km) : null, galeKm: mx(p.galeWarning), stormKm: mx(p.stormWarning),
+    course, speedKmh: p.speed ? n(p.speed["km/h"]) : null, time: p.validtime && p.validtime.UTC ? Date.parse(p.validtime.UTC) : null }; }
+async function tcJmaLoad(force){ if (TCJ.busy || (!force && Date.now() - TCJ.at < 10 * 60e3)) return; TCJ.busy = true; TCJ.err = "";
+  try{ const list = asArr(await getJSON(JMA_TC + "targetTc.json")).filter(t => t && t.tropicalCyclone);
+    TCJ.list = (await Promise.all(list.map(async t => { try{ const parts = asArr(await getJSON(JMA_TC + t.tropicalCyclone + "/specifications.json")); let title = null, now = null; const fc = [];
+        parts.forEach(p => { if (p.part === "title") title = p; else if (p.position && p.position.deg){ const q = tcJmaPart(p); if (q.lat == null || q.lon == null) return; if (q.h === 0) now = q; else fc.push(q); } });
+        if (!title || !now) return null; fc.sort((a, b) => a.h - b.h);
+        return { id: t.tropicalCyclone, number: title.typhoonNumber, name: (title.name && title.name.en) || t.tropicalCyclone, issue: title.issue && title.issue.UTC ? Date.parse(title.issue.UTC) : null, now, fc }; }catch(e){ return null; } }))).filter(Boolean);
+    TCJ.at = Date.now(); TCJ.list.forEach(tcCrumb); }
+  catch(e){ TCJ.err = e.message; } TCJ.busy = false; }
+// positions this browser has seen, so a past track can be drawn for a JMA-only storm (not the agency best track; labelled that way)
+const TCC_KEY = "psoc.uni.tccrumbs.v1";
+function tcCrumb(s){ const all = lsGet(TCC_KEY, {}), k = tcNorm(s.name) + "|" + (s.number || s.id), a = all[k] = all[k] || [], t = s.now.time || Date.now();
+  if (!a.length || a[a.length - 1][0] !== t) a.push([t, s.now.lat, s.now.lon, s.now.kt]); if (a.length > 80) a.splice(0, a.length - 80);
+  Object.keys(all).forEach(x => { const v = all[x]; if (!v.length || v[v.length - 1][0] < Date.now() - 21 * 86400e3) delete all[x]; }); lsSet(TCC_KEY, all); }
+const tcCrumbs = s => lsGet(TCC_KEY, {})[tcNorm(s.name) + "|" + (s.number || s.id)] || [];
+function tcJmaFor(e){ return TCJ.list.find(s => s.id === e.jmaId) || TCJ.list.find(s => tcNorm(s.name) && tcNorm(s.name) === tcNorm(e.name)) || null; }
+// storms only JMA knows join the GDACS list, with JMA's forecast as their track
+function tcMergeJma(){ TCS.list = TCS.list.filter(e => !e.jmaOnly);
+  TCJ.list.forEach(s => { if (TCS.list.some(e => tcJmaFor(e) === s)) return;
+    const ev = { eventid: "jma-" + s.id, jmaId: s.id, jmaOnly: true, name: s.name, level: "JMA", lat: s.now.lat, lon: s.now.lon, current: true, to: s.issue, report: "https://www.jma.go.jp/bosai/map.html#contents=typhoon&lang=en" };
+    const obs = tcCrumbs(s).map(([t, lat, lon, kt]) => ({ lat, lon, kmh: kt != null ? kt * 1.852 : null, t }));
+    if (!obs.length || obs[obs.length - 1].lat !== s.now.lat) obs.push({ lat: s.now.lat, lon: s.now.lon, kmh: s.now.kt != null ? s.now.kt * 1.852 : null, t: s.now.time });
+    TCS.geo[ev.eventid] = { obs, fc: s.fc.map(p => ({ lat: p.lat, lon: p.lon, kmh: p.kt != null ? p.kt * 1.852 : null, t: p.time })), cone: [], wind: [], at: Date.now(), jma: true };
+    TCS.list.push(ev); }); }
+// exposure along JMA's forecast, interpolated hour by hour: DIRECT inside the storm-force (50 kt) wind circle, POSSIBLE inside that plus the 70 % circle, WATCH within 500 km
+function tcJmaTimeline(s){ const pts = [s.now].concat(s.fc), out = [];
+  if (pts.length === 1){ out.push({ t: s.now.time || Date.now(), lat: s.now.lat, lon: s.now.lon, R: s.now.stormKm || 0, P: 0 }); return out; }
+  for (let i = 0; i < pts.length - 1; i++){ const a = pts[i], b = pts[i + 1], ta = a.time || Date.now(), tb = b.time || (ta + (b.h - a.h) * 3600e3), n = Math.max(1, Math.round((tb - ta) / 3600e3));
+    for (let k = 0; k < n; k++){ const f = k / n, L2 = (x, y) => (x || 0) + ((y || 0) - (x || 0)) * f; out.push({ t: ta + (tb - ta) * f, lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f, R: L2(a.stormKm, b.stormKm), P: L2(a.probKm, b.probKm) }); } }
+  const z = pts[pts.length - 1]; out.push({ t: z.time, lat: z.lat, lon: z.lon, R: z.stormKm || 0, P: z.probKm || 0 }); return out; }
+function tcJmaExposure(s){ const tl = tcJmaTimeline(s), out = [];
+  SITES.filter(x => isFinite(x.lat) && (isLive(x) || isBuild(x) || isOffice(x))).forEach(site => { let best = 1e9, bt = null, direct = null, poss = null;
+    tl.forEach(q => { const d = km(site.lat, site.lon, q.lat, q.lon); if (d < best){ best = d; bt = q.t; } if (q.R > 0 && d <= q.R && direct == null) direct = q.t; if ((q.R > 0 || q.P > 0) && d <= q.R + q.P && poss == null) poss = q.t; });
+    const level = direct != null ? "DIRECT" : poss != null ? "POSSIBLE" : best <= 500 ? "WATCH" : null; if (level) out.push({ site, level, km: best, at: bt, first: direct != null ? direct : poss }); });
+  const r = { DIRECT: 0, POSSIBLE: 1, WATCH: 2 }; return out.sort((a, b) => r[a.level] - r[b.level] || a.km - b.km); }
+const TCX_FIRED = new Set(lsGet("psoc.uni.tcxfired.v1", []));
+function tcJmaAlerts(){ TCJ.list.forEach(s => { const ex = tcJmaExposure(s); ["DIRECT", "POSSIBLE"].forEach(level => { const xs = ex.filter(x => x.level === level); if (!xs.length) return;
+      const k = `${s.id}:${level}`; if (TCX_FIRED.has(k)) return; TCX_FIRED.add(k); const sev = level === "DIRECT" ? "P1" : "P2", first = xs.map(x => x.first).filter(Boolean).sort((a, b) => a - b)[0], codes = xs.map(x => x.site.code);
+      enqueueAction({ srcKey: "tcx:" + k, source: "Typhoon (JMA forecast)", pri: sev, title: `${s.name}: ${level === "DIRECT" ? "storm-force winds forecast at" : "possible storm-force winds at"} ${codes.length} site${codes.length === 1 ? "" : "s"}${first ? " from " + sgt(first) : ""}`,
+        detail: `${codes.slice(0, 20).join(", ")}${codes.length > 20 ? " +" + (codes.length - 20) : ""} · JMA forecast · ${tcJmaClass(s.now.kt)[1]}${s.now.hpa ? ", " + s.now.hpa + " hPa" : ""}`, site: codes[0], city: metroOf(xs[0].site) || "", suggested: ["escalate", "notify", "monitor"],
+        payload: { cat: "weather", sev, desc: `Typhoon ${s.name} — ${level === "DIRECT" ? "storm-force winds forecast" : "possible storm-force winds"} at ${codes.length} site(s)`, sites: codes.slice(0, 40), lat: s.now.lat, lon: s.now.lon, src: "tc:" + s.id } }); }); });
+  lsSet("psoc.uni.tcxfired.v1", [...TCX_FIRED].slice(-500)); }
+{ const _tl = tcLoad; tcLoad = async function(force){ await Promise.all([_tl(force), tcJmaLoad(force)]); tcMergeJma(); tcJmaAlerts(); if (UI.mode === "typhoon") renderPanel(); }; }
+setInterval(() => { tcJmaLoad(false).then(() => { tcMergeJma(); tcJmaAlerts(); }); }, 10 * 60e3); setTimeout(() => tcLoad(false), 5000);
+FEEDS.jmatc = { name: "JMA typhoon", ok: null, err: null, at: 0, busy: false };
+{ const _j = tcJmaLoad; tcJmaLoad = async function(force){ await _j(force); FEEDS.jmatc.ok = !TCJ.err; FEEDS.jmatc.err = TCJ.err || null; FEEDS.jmatc.at = TCJ.at || Date.now(); }; }
+SOURCE_CATALOG.push(["jmatc", "JMA typhoon forecasts", "Japan Meteorological Agency (RSMC Tokyo)", "Position, 10-minute wind, pressure, storm-force radius and 70 % probability circle at every forecast time, North-West Pacific", "met, coastal", "No", "10 min"]);
+function tcJmaHtml(e){ const s = e && tcJmaFor(e); if (!s) return `<div class="s" style="margin-top:8px">JMA: ${TCJ.err ? "not reachable (" + esc(TCJ.err) + ")" : TCJ.at ? "no JMA advisory for this storm (outside the North-West Pacific, or not yet named)" : "loading…"}</div>`;
+  const c = tcJmaClass(s.now.kt), ex = tcJmaExposure(s), n = s.now;
+  return `<div class="sec" style="margin-top:12px">JMA official forecast — ${esc(s.name)}${s.number ? " (No. " + esc(s.number) + ")" : ""} <small>RSMC Tokyo · issued ${s.issue ? esc(sgt(s.issue)) : "—"}</small></div>
+    <div class="tcj"><span class="vccsev" style="--c:${c[2]};color:#111">${c[0]}</span> <b>${esc(c[1])}</b>${n.intensity ? " · " + esc(n.intensity) : ""}${n.scale ? " · " + esc(n.scale) : ""}
+      · ${n.kt != null ? n.kt + " kt (" + Math.round(n.kt * 1.852) + " km/h)" : "wind —"}${n.gust ? ", gusts " + n.gust + " kt" : ""}${n.hpa ? " · " + n.hpa + " hPa" : ""}${n.course ? " · moving " + n.course + (n.speedKmh ? " at " + n.speedKmh + " km/h" : "") : ""}${n.stormKm ? " · storm-force winds up to " + n.stormKm + " km" : ""}${n.galeKm ? " · gales up to " + n.galeKm + " km" : ""}</div>
+    <div class="tbl"><table class="acc"><thead><tr><th>Site</th><th>Exposure (JMA forecast)</th><th>Closest</th><th>When (SGT)</th></tr></thead><tbody>${ex.slice(0, 30).map(x => `<tr${x.level === "DIRECT" ? ` class="tcrisk"` : ""}><td><b>${esc(x.site.code)}</b> <span class="s">${esc(metroOf(x.site) || x.site.city || "")}</span></td>
+      <td><span class="tag" style="border-color:${x.level === "DIRECT" ? "var(--red)" : x.level === "POSSIBLE" ? "var(--amber)" : "var(--line)"}">${x.level === "DIRECT" ? "Direct — inside storm-force winds" : x.level === "POSSIBLE" ? "Possible — inside the 70 % circle" : "Watch — within 500 km"}</span></td><td>${Math.round(x.km)} km</td><td>${x.first ? esc(sgt(x.first)) : x.at ? esc(sgt(x.at)) : ""}</td></tr>`).join("") || `<tr><td colspan="4" class="s">No tracked site within 500 km of the JMA forecast track.</td></tr>`}</tbody></table></div>
+    <div class="s">Storm-force radius is JMA's "up to" figure (the larger quadrant). The track is interpolated hour by hour between forecast times. <a href="https://www.jma.go.jp/bosai/map.html#contents=typhoon&lang=en" target="_blank" rel="noopener">JMA typhoon page</a></div>`; }
+{ const _tm = tcMapDraw; tcMapDraw = function(){ _tm(); try{ if (!TCM.layers) return; const e = TCS.list.find(x => String(x.eventid) === String(UI.tcSel)) || TCS.list[0], s = e && tcJmaFor(e); if (!s) return;
+    [s.now].concat(s.fc).forEach((p, i) => { if (p.probKm) L.circle([p.lat, p.lon], { radius: p.probKm * 1000, color: "#ffffff", weight: 1, dashArray: "3 5", fillOpacity: .04 }).bindTooltip(`JMA 70 % circle ${p.time ? sgt(p.time) : ""}`).addTo(TCM.layers);
+      if (p.stormKm) L.circle([p.lat, p.lon], { radius: p.stormKm * 1000, color: "#E5484D", weight: 1.4, fillColor: "#E5484D", fillOpacity: i ? .06 : .14 }).bindTooltip(`Storm-force winds (50 kt) up to ${p.stormKm} km${p.time ? " · " + sgt(p.time) : ""}`).addTo(TCM.layers); });
+    L.polyline([[s.now.lat, s.now.lon]].concat(s.fc.map(p => [p.lat, p.lon])), { color: "#35C1D6", weight: 3, dashArray: "2 6" }).bindTooltip("JMA forecast track").addTo(TCM.layers);
+    s.fc.forEach(p => L.circleMarker([p.lat, p.lon], { radius: 4, color: "#35C1D6", weight: 2, fillColor: tcJmaClass(p.kt)[2], fillOpacity: 1 }).bindTooltip(`JMA +${p.h} h · ${p.time ? sgt(p.time) : ""}${p.kt != null ? " · " + p.kt + " kt" : ""}${p.hpa ? " · " + p.hpa + " hPa" : ""}`).addTo(TCM.layers));
+    tcJmaExposure(s).filter(x => x.level !== "WATCH").slice(0, 15).forEach(x => L.circleMarker([x.site.lat, x.site.lon], { radius: 6, color: "#fff", weight: 1, fillColor: x.level === "DIRECT" ? "#E5484D" : "#E8873A", fillOpacity: 1 }).bindTooltip(`${x.site.code} — ${x.level.toLowerCase()}`).addTo(TCM.layers)); }catch(err){ console.warn("JMA typhoon layer", err); } }; }
+
+/* ---------- volcanoes: Smithsonian / USGS weekly report and NASA EONET, with sites at 100 and 250 km ---------- */
+const VOL = { list: [], at: 0, err: [], busy: false, scope: lsGet("psoc.uni.volscope.v1", "apac") };
+const VCLOSE = 100, VNEAR = 250, volNorm = s => String(s || "").toLowerCase().replace(/\s*volcano\b/g, "").replace(/[^a-z0-9]+/g, "");
+const volApac = v => v.lat >= -55 && v.lat <= 70 && (v.lon >= 60 || v.lon <= -165);
+async function volLoad(force){ if (VOL.busy || (!force && Date.now() - VOL.at < 30 * 60e3)) return; VOL.busy = true; VOL.err = []; const by = {}, out = [], key = x => x.vn ? "vn" + x.vn : "n" + volNorm(x.name);
+  try{ const d = xml(await fetchVia("https://volcano.si.edu/news/WeeklyVolcanoRSS.xml"));
+    [...d.getElementsByTagName("item")].forEach(it => { const title = tx(it, "title"), m = /^(.*?)\s*\(([^)]*)\)\s*-\s*Report for\s*(.*?)\s+-\s+(.*)$/.exec(title), pt = (tx(it, "georss:point") || "").trim().split(/[\s,]+/).map(Number);
+      if (!(pt.length >= 2 && isFinite(pt[0]))) return; let summary = "", sources = "";
+      try{ const h = new DOMParser().parseFromString(tx(it, "description"), "text/html"), ps = [...h.querySelectorAll("p")]; (ps.length ? ps : [h.body]).map(p => (p.textContent || "").trim()).filter(Boolean).forEach(t => { if (/^Sources?:/i.test(t)) sources = t.replace(/^Sources?:\s*/i, ""); else summary += (summary ? "\n\n" : "") + t; }); }catch(e){}
+      const g = /vn_(\d+)/.exec(tx(it, "guid")), v = { name: m ? m[1] : title, country: m ? m[2] : "", period: m ? m[3] : "", kind: m && /new/i.test(m[4]) ? "NEW" : "ONGOING", lat: pt[0], lon: pt[1], summary, sources, vn: g ? g[1] : "", pub: Date.parse(tx(it, "pubDate")) || 0, eo: 0 };
+      v.key = key(v); by[v.key] = v; out.push(v); }); }
+  catch(e){ VOL.err.push("Smithsonian weekly report: " + e.message); }
+  try{ const j = await getJSON("https://eonet.gsfc.nasa.gov/api/v3/events?category=volcanoes&status=open&limit=200");
+    (j.events || []).forEach(ev => { const g = (ev.geometry || []).slice().sort((a, b) => Date.parse(a.date) - Date.parse(b.date)), last = g[g.length - 1] || {}, c = last.coordinates || [];
+      const src = (ev.sources || []).find(s => /vn=\d+/.test(s.url || "")), m = /^(.*?)(?:\s+Volcano)?,\s*(.+)$/.exec(ev.title || ""), x = { name: m ? m[1] : ev.title, country: m ? m[2] : "", lat: c[1], lon: c[0], vn: src ? /vn=(\d+)/.exec(src.url)[1] : "", date: Date.parse(last.date) || 0 };
+      if (typeof x.lat !== "number") return; const v = by[key(x)] || by["n" + volNorm(x.name)];
+      if (v){ v.eo = x.date; if (!v.vn && x.vn) v.vn = x.vn; return; }
+      const nv = { key: key(x), name: x.name, country: x.country, lat: x.lat, lon: x.lon, kind: "LISTED", period: "", summary: "", sources: "", vn: x.vn, pub: 0, eo: x.date }; by[nv.key] = nv; out.push(nv); }); }
+  catch(e){ VOL.err.push("NASA EONET: " + e.message); }
+  if (out.length || VOL.err.length < 2){ VOL.list = out; VOL.at = Date.now(); volRecompute(); volAlerts(); }
+  FEEDS.volcano.ok = VOL.err.length < 2; FEEDS.volcano.err = VOL.err.join("; ") || null; FEEDS.volcano.at = Date.now(); VOL.busy = false; if (UI.mode === "volcano") renderPanel(); }
+function volRecompute(){ const S = SITES.filter(s => isFinite(s.lat) && (isLive(s) || isBuild(s) || isOffice(s)));
+  VOL.list.forEach(v => { const all = S.map(s => ({ s, km: km(v.lat, v.lon, s.lat, s.lon) })).sort((a, b) => a.km - b.km); v.nearest = all[0] || null; v.near = all.filter(x => x.km <= VNEAR); v.nClose = v.near.filter(x => x.km <= VCLOSE).length; v.risk = v.nClose ? "CLOSE" : v.near.length ? "NEAR" : ""; }); }
+const volShown = () => VOL.list.filter(v => VOL.scope === "world" || volApac(v)).sort((a, b) => { const r = v => v.risk === "CLOSE" ? 0 : v.risk === "NEAR" ? 1 : 2, k = v => v.kind === "NEW" ? 0 : v.kind === "ONGOING" ? 1 : 2; return r(a) - r(b) || k(a) - k(b) || (b.pub || b.eo) - (a.pub || a.eo) || a.name.localeCompare(b.name); });
+const VKIND = { NEW: "New activity this week", ONGOING: "Continuing eruption", LISTED: "Listed as open by NASA EONET" };
+const volSev = v => v.kind === "NEW" && v.risk === "CLOSE" ? "P2" : v.risk === "CLOSE" || (v.kind === "NEW" && v.risk) ? "P3" : v.kind === "NEW" || v.risk ? "P3" : "P4";
+function volBrief(v){ const L2 = [`VOLCANO WATCH: ${v.name.toUpperCase()} (${v.country})`, VKIND[v.kind] + (v.period ? " | weekly report for " + v.period : "") + ` | position ${v.lat.toFixed(2)}, ${v.lon.toFixed(2)}`];
+  if (v.summary) L2.push(v.summary.replace(/\n+/g, " ").slice(0, 700)); L2.push(`Sites: ${v.nClose} within ${VCLOSE} km, ${v.near.length} within ${VNEAR} km.`); v.near.slice(0, 10).forEach(x => L2.push(`- ${x.s.code} ${metroOf(x.s) || x.s.city || ""}: ${Math.round(x.km)} km`));
+  L2.push("Source: Smithsonian / USGS Weekly Volcanic Activity Report" + (v.eo ? " and NASA EONET" : "") + ". Quick guide only; refer to the national volcano agency."); return L2.join("\n"); }
+function volAlerts(){ const fired = new Set(lsGet("psoc.uni.volfired.v1", []));
+  VOL.list.filter(v => v.risk === "CLOSE" || (v.kind === "NEW" && v.risk)).forEach(v => { const k = (v.vn || volNorm(v.name)) + "|" + (v.period || "open"); if (fired.has(k)) return; fired.add(k);
+    enqueueAction({ srcKey: "vol:" + k, source: "Volcano watch", pri: volSev(v), title: `${v.name} (${v.country}): ${VKIND[v.kind].toLowerCase()} — ${v.nClose ? v.nClose + " site(s) within " + VCLOSE + " km" : v.near.length + " site(s) within " + VNEAR + " km"}`,
+      detail: v.summary.slice(0, 400), site: v.near[0] ? v.near[0].s.code : "", suggested: ["escalate", "monitor"],
+      payload: { cat: "volcanic_hazard", sev: volSev(v), desc: `Volcano ${v.name} (${v.country}) — ${VKIND[v.kind].toLowerCase()}`, sites: v.near.slice(0, 40).map(x => x.s.code), lat: v.lat, lon: v.lon, src: "vol:" + (v.vn || volNorm(v.name)) } }); });
+  lsSet("psoc.uni.volfired.v1", [...fired].slice(-300)); }
+FEEDS.volcano = { name: "Volcano watch", ok: null, err: null, at: 0, busy: false };
+SOURCE_CATALOG.push(["volcano", "Volcano watch", "Smithsonian GVP / USGS weekly report and NASA EONET", "Erupting volcanoes, new activity this week, and tracked sites within 100 km and 250 km", "volcanic", "No (relay)", "30 min"]);
+const VOLM = {};
+function volcanoPanel(){ if (!VOL.at && !VOL.busy) setTimeout(() => volLoad(true), 20);
+  const list = volShown(), sel = list.find(v => v.key === UI.volSel) || list[0], close = list.filter(v => v.risk === "CLOSE").length, nw = list.filter(v => v.kind === "NEW").length;
+  return `<div class="ptools"><span class="label">Volcanoes</span><span class="ctl">${VOL.busy ? "loading…" : VOL.at ? `${list.length} active · ${nw} with new activity · ${close} within ${VCLOSE} km of a site · updated ${esc(ago(VOL.at))}` : ""}</span><span class="sp"></span>
+      <button class="tab-mini" data-volscope="apac" aria-pressed="${VOL.scope !== "world"}">Asia-Pacific</button><button class="tab-mini" data-volscope="world" aria-pressed="${VOL.scope === "world"}">Worldwide</button><button class="tab-mini" data-volrefresh>↻</button></div>
+    <div class="pbody">${VOL.err.map(e => `<div class="banner bad">${esc(e)}${serverBase() ? "" : " — the PSOC server relay can fetch it if this network blocks it."}</div>`).join("")}
+    <div class="tcgrid"><div class="tclist">${list.map(v => `<button class="vccal${v === sel ? " on" : ""}" data-volsel="${esc(v.key)}"><div><span class="vccsev" style="--c:${v.risk === "CLOSE" ? "#E5484D" : v.risk === "NEAR" ? "#E8873A" : "#7C8BA8"}">${v.risk === "CLOSE" ? "≤" + VCLOSE + " km" : v.risk === "NEAR" ? "≤" + VNEAR + " km" : "no site near"}</span> <span class="tag">${v.kind === "NEW" ? "NEW" : v.kind === "ONGOING" ? "ongoing" : "EONET"}</span></div><b>${esc(v.name)}</b><div class="s">${esc(v.country)}${v.nearest ? " · nearest " + esc(v.nearest.s.code) + " " + Math.round(v.nearest.km) + " km" : ""}</div></button>`).join("") || `<div class="empty">${VOL.at ? "No erupting volcanoes in this scope." : "Loading…"}</div>`}</div>
+      <div><div id="volmap" class="vccmap"></div>
+      ${sel ? `<div class="sec" style="margin-top:10px">${esc(sel.name)} <small>${esc(sel.country)} · ${esc(VKIND[sel.kind])}${sel.period ? " · weekly report for " + esc(sel.period) : ""}</small><span class="sp"></span>
+          <button class="tab-mini" data-voltrack="${esc(sel.key)}">Track as escalation</button><button class="tab-mini" data-volbrief="${esc(sel.key)}">Copy brief for handover</button></div>
+        ${sel.summary ? `<p class="help" style="white-space:pre-line">${esc(sel.summary.slice(0, 1400))}</p>` : ""}${sel.sources ? `<div class="s">Sources: ${esc(sel.sources)}</div>` : ""}
+        <div class="tbl"><table class="acc"><thead><tr><th>Site</th><th>Class</th><th>Distance</th><th>Risk</th></tr></thead><tbody>${sel.near.map(x => `<tr${x.km <= VCLOSE ? ` class="tcrisk"` : ""}><td><b>${esc(x.s.code)}</b> <span class="s">${esc(metroOf(x.s) || x.s.city || "")}</span></td><td>${esc(x.s.cls)}</td><td>${Math.round(x.km)} km</td><td>${x.km <= VCLOSE ? "Close" : "Nearby"}</td></tr>`).join("") || `<tr><td colspan="4" class="s">No tracked site within ${VNEAR} km${sel.nearest ? ` (nearest ${esc(sel.nearest.s.code)}, ${Math.round(sel.nearest.km)} km)` : ""}.</td></tr>`}</tbody></table></div>
+        <div class="s" style="margin-top:6px"><a href="${sel.vn ? "https://volcano.si.edu/volcano.cfm?vn=" + esc(sel.vn) : "https://volcano.si.edu/reports_weekly.cfm"}" target="_blank" rel="noopener">Smithsonian Global Volcanism Program</a> · rings at ${VCLOSE} km and ${VNEAR} km.</div>` : ""}</div></div></div>`; }
+function volMapDraw(){ const slot = $("#volmap"); if (!slot) return; const m = mkPanelMap(VOLM, slot); if (!m) return; VOLM.layers.clearLayers(); const list = volShown(), sel = list.find(v => v.key === UI.volSel) || list[0], b = [];
+  list.forEach(v => { const on = v === sel, col = v.risk === "CLOSE" ? "#E5484D" : v.risk === "NEAR" ? "#E8873A" : "#A0522D";
+    L.marker([v.lat, v.lon], { icon: L.divIcon({ className: "mkwrap", html: `<svg width="${on ? 26 : 18}" height="${on ? 26 : 18}" viewBox="0 0 24 24"><path d="M12 3 22 21H2z" fill="${col}" stroke="#fff" stroke-width="1.6"/>${v.kind === "NEW" ? `<circle cx="12" cy="15" r="3" fill="#fff"/>` : ""}</svg>`, iconSize: [on ? 26 : 18, on ? 26 : 18], iconAnchor: [on ? 13 : 9, on ? 22 : 15] }) })
+      .bindTooltip(`<b>${esc(v.name)}</b><br>${esc(VKIND[v.kind])}${v.nearest ? "<br>nearest " + esc(v.nearest.s.code) + " " + Math.round(v.nearest.km) + " km" : ""}`).on("click", () => { UI.volSel = v.key; saveUI(); renderPanel(); }).addTo(VOLM.layers); });
+  if (sel){ L.circle([sel.lat, sel.lon], { radius: VNEAR * 1000, color: "#F0A23A", weight: 1.3, dashArray: "4 5", fillColor: "#F0A23A", fillOpacity: .05 }).addTo(VOLM.layers);
+    L.circle([sel.lat, sel.lon], { radius: VCLOSE * 1000, color: "#E5484D", weight: 1.6, fillColor: "#E5484D", fillOpacity: .08 }).addTo(VOLM.layers); b.push([sel.lat, sel.lon]);
+    sel.near.forEach(x => { L.circleMarker([x.s.lat, x.s.lon], { radius: 5, color: "#fff", weight: 1, fillColor: x.km <= VCLOSE ? "#E5484D" : "#5B9BD5", fillOpacity: 1 }).bindTooltip(`${x.s.code} — ${Math.round(x.km)} km`).addTo(VOLM.layers); b.push([x.s.lat, x.s.lon]); }); }
+  const fit = () => { if (b.length > 1) m.fitBounds(L.latLngBounds(b).pad(.25), { maxZoom: 8, animate: false }); else if (b.length) m.setView(b[0], 7); else if (list.length) m.fitBounds(L.latLngBounds(list.map(v => [v.lat, v.lon])).pad(.1), { animate: false }); }; fit(); refit(VOLM, fit); }
+document.addEventListener("click", async e => { const t = e.target.closest("[data-volsel],[data-volscope],[data-volrefresh],[data-voltrack],[data-volbrief]"); if (!t) return; const d = t.dataset;
+  if (d.volsel){ UI.volSel = d.volsel; saveUI(); renderPanel(); return; }
+  if (d.volscope){ VOL.scope = d.volscope; lsSet("psoc.uni.volscope.v1", VOL.scope); renderPanel(); return; }
+  if (d.volrefresh !== undefined){ volLoad(true); renderPanel(); return; }
+  const v = VOL.list.find(x => x.key === (d.voltrack || d.volbrief)); if (!v) return;
+  if (d.volbrief){ const ok = await copyRich("<pre>" + esc(volBrief(v)) + "</pre>", volBrief(v)); t.textContent = ok ? "Copied" : "Copy failed"; setTimeout(() => { t.textContent = "Copy brief for handover"; }, 1600); return; }
+  if (d.voltrack && guard("escalate")) openEventModal(null, { cat: "volcanic_hazard", sev: volSev(v), desc: `${v.country} | Volcanic Hazard | ${v.name} — ${VKIND[v.kind].toLowerCase()}`, lat: v.lat, lon: v.lon, sites: v.near.slice(0, 40).map(x => x.s.code), src: "vol:" + (v.vn || volNorm(v.name)) }); });
+setTimeout(() => volLoad(false), 9000); setInterval(() => volLoad(false), 30 * 60e3);
+
+/* ---------- protests: GDELT news coverage by country (one combined request, as PULSE does, so GDELT does not rate-limit it) ---------- */
+const PROTEST_COUNTRIES = [["philippines", "Philippines", "PH"], ["indonesia", "Indonesia", "ID"], ["burma", "Myanmar", "MM"], ["thailand", "Thailand", "TH"], ["hongkong", "Hong Kong", "HK"], ["bangladesh", "Bangladesh", "BD"],
+  ["pakistan", "Pakistan", "PK"], ["india", "India", "IN"], ["srilanka", "Sri Lanka", "LK"], ["nepal", "Nepal", "NP"], ["vietnam", "Vietnam", "VN"], ["cambodia", "Cambodia", "KH"], ["laos", "Laos", "LA"], ["malaysia", "Malaysia", "MY"],
+  ["singapore", "Singapore", "SG"], ["southkorea", "South Korea", "KR"], ["northkorea", "North Korea", "KP"], ["japan", "Japan", "JP"], ["taiwan", "Taiwan", "TW"], ["china", "China", "CN"], ["mongolia", "Mongolia", "MN"],
+  ["australia", "Australia", "AU"], ["newzealand", "New Zealand", "NZ"], ["papuanewguinea", "Papua New Guinea", "PG"], ["fiji", "Fiji", "FJ"], ["afghanistan", "Afghanistan", "AF"]];
+const GPR = { by: {}, at: 0, err: "", busy: false, seen: new Set(lsGet("psoc.uni.gprseen.v1", [])) };
+function gprClass(t){ t = String(t || "").toLowerCase();
+  if (/\bkill(ed|ing)?\b|\bdead\b|\bdeaths?\b|\bfatal\b|shot dead|gunfire|live rounds|explosion|\bbomb(ed|ing)?\b|martial law|\bcoup\b|massacre/.test(t)) return ["severe", "Severe / violent", "P2"];
+  if (/clash(es|ed)?|violence|tear gas|injured|wounded|arrest(ed|s)?|crackdown|\briot(s|ing)?\b|baton|water cannon|curfew|detain(ed|s)?/.test(t)) return ["warning", "Clashes / unrest", "P3"];
+  if (/protest(s|ers|ing)?|demonstrat(ion|ors|e)|\brally\b|\brallies\b|\bmarch(es|ed|ing)?\b|strike(s)?|sit-in|picket(ing)?|walkout|boycott/.test(t)) return ["advisory", "Protest / demonstration", "P4"];
+  return ["advisory", "Mentions unrest", "P4"]; }
+async function gprLoad(force, attempt){ attempt = attempt || 1; if (CFG.pulse.gdeltProtest === false || (GPR.busy && attempt === 1) || (!force && Date.now() - GPR.at < 15 * 60e3)) return; GPR.busy = true; GPR.err = "";
+  const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])); if (!cs.length){ GPR.busy = false; return; }
+  const q = '(protest OR demonstration OR rally OR "civil unrest" OR riot OR strike OR picket OR "tear gas") (' + cs.map(c => "sourcecountry:" + c[0]).join(" OR ") + ")";
+  try{ const r = await fetch("https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q) + "&mode=artlist&maxrecords=250&timespan=24h&sort=datedesc&format=json", { cache: "no-store" });
+    if (r.status === 429){ if (attempt <= 2){ await new Promise(ok => setTimeout(ok, 6000 * attempt)); return gprLoad(true, attempt + 1); } throw new Error("GDELT is rate-limiting this browser (HTTP 429); it retries on the next cycle"); }
+    if (!r.ok) throw new Error("HTTP " + r.status); const j = await r.json(), by = {}; cs.forEach(c => by[c[0]] = []);
+    (j.articles || []).forEach(a => { const sc = String(a.sourcecountry || "").toLowerCase().replace(/\s+/g, ""); if (!by[sc]) return; const cl = gprClass(a.title), k = sc + "::" + (a.url || a.title);
+      by[sc].push(Object.assign({ cls: cl, key: k, isNew: GPR.at > 0 && !GPR.seen.has(k), t: gdeltDate(a.seendate) }, a)); GPR.seen.add(k); });
+    GPR.by = by; GPR.at = Date.now(); lsSet("psoc.uni.gprseen.v1", [...GPR.seen].slice(-3000));
+    Object.entries(by).forEach(([sc, arts]) => arts.filter(a => a.isNew && a.cls[0] === "severe").slice(0, 3).forEach(a => { const c = PROTEST_COUNTRIES.find(x => x[0] === sc);
+      enqueueAction({ srcKey: "gpr:" + a.key, source: "Protest monitor (GDELT)", pri: "P3", title: `${c[1]}: ${a.title}`.slice(0, 180), detail: `${a.domain || ""} · ${a.cls[1]} (automated, unverified) · ${a.url || ""}`, suggested: ["monitor", "escalate"],
+        payload: { cat: "protest", sev: "P3", desc: `${c[1]} | Civil Unrest | ${a.title}`.slice(0, 200), country: COUNTRY_NAME && COUNTRY_NAME[c[2]] || c[1], src: "gpr:" + a.key } }); })); }
+  catch(e){ GPR.err = e.message; }
+  FEEDS.gdeltpr.ok = !GPR.err; FEEDS.gdeltpr.err = GPR.err || null; FEEDS.gdeltpr.at = Date.now(); GPR.busy = false; if (UI.mode === "protests") renderPanel(); }
+const gdeltDate = s => { const m = /^(\d{4})(\d\d)(\d\d)T?(\d\d)(\d\d)(\d\d)/.exec(String(s || "")); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : Date.now(); };
+FEEDS.gdeltpr = { name: "GDELT protest monitor", ok: null, err: null, at: 0, busy: false };
+SOURCE_CATALOG.push(["gdeltpr", "GDELT protest monitor", "GDELT Project (DOC 2.0)", "News coverage of protests, demonstrations and unrest in the countries chosen in Settings, last 24 h, classified by severity", "unrest", "No", "15 min"]);
+function gprHtml(){ if (CFG.pulse.gdeltProtest === false) return ""; if (!GPR.at && !GPR.busy) setTimeout(() => gprLoad(true), 30);
+  const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])), open = UI.gprOpen || "";
+  return `<div class="sec" style="margin-top:14px">News monitor — protests and unrest by country <small>GDELT, last 24 h · ${GPR.busy ? "checking…" : GPR.at ? "checked " + esc(ago(GPR.at)) : ""} · countries in Settings · classification is automated and unverified</small><span class="sp"></span><button class="tab-mini" data-gprrefresh>↻ Check now</button></div>
+    ${GPR.err ? `<div class="banner bad">${esc(GPR.err)}</div>` : ""}
+    <div class="gprgrid">${cs.map(([code, label]) => { const arts = GPR.by[code] || [], worst = arts.some(a => a.cls[0] === "severe") ? "#E5484D" : arts.some(a => a.cls[0] === "warning") ? "#E8873A" : arts.length ? "#E8C547" : "var(--line)", nNew = arts.filter(a => a.isNew).length;
+      return `<div class="gprc" style="--c:${worst}"><button class="gprh" data-gpropen="${code}"><b>${esc(label)}</b><span class="s">${arts.length} article${arts.length === 1 ? "" : "s"}${nNew ? ` · <b style="color:var(--amber)">${nNew} new</b>` : ""}</span></button>
+        ${open === code || (!open && arts.some(a => a.cls[0] === "severe")) ? arts.slice(0, 12).map(a => `<div class="gpri"><a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">${esc(a.title || "(untitled)")}</a>${a.isNew ? ` <span class="tag">NEW</span>` : ""}
+          <div class="s">${esc(a.domain || "")} · ${esc(ago(a.t))} · <i>${esc(a.cls[1])}</i> <button class="linkbtn" data-gprtrack="${esc(a.key)}">Track</button></div></div>`).join("") || `<div class="s">No matching headlines indexed — this does not mean nothing happened on the ground.</div>` : ""}</div>`; }).join("")}</div>`; }
+{ const _pp = protestPanel; protestPanel = function(){ const h = _pp(); const i = h.lastIndexOf("</div>"); return i > 0 ? h.slice(0, i) + gprHtml() + h.slice(i) : h + gprHtml(); }; }
+document.addEventListener("click", e => { const t = e.target.closest("[data-gpropen],[data-gprrefresh],[data-gprtrack]"); if (!t) return; const d = t.dataset;
+  if (d.gpropen){ UI.gprOpen = UI.gprOpen === d.gpropen ? "" : d.gpropen; renderPanel(); return; }
+  if (d.gprrefresh !== undefined){ gprLoad(true); renderPanel(); return; }
+  if (d.gprtrack && guard("escalate")){ let a = null, c = null; Object.entries(GPR.by).forEach(([k, arts]) => arts.forEach(x => { if (x.key === d.gprtrack){ a = x; c = PROTEST_COUNTRIES.find(y => y[0] === k); } })); if (!a) return;
+    openEventModal(null, { cat: "protest", sev: a.cls[2], desc: `${c[1]} | Civil Unrest | ${a.title}`.slice(0, 200), country: (typeof COUNTRY_NAME !== "undefined" && COUNTRY_NAME[c[2]]) || c[1], src: "gpr:" + a.key }); } });
+setTimeout(() => gprLoad(false), 20000); setInterval(() => gprLoad(false), 15 * 60e3);
+
+/* ---------- handover: the new hazards appear in the shift handover too ---------- */
+{ const _oh = openHandover; openHandover = function(){ _oh(); const pre = $("#box pre"); if (!pre) return; let extra = "";
+    const tc = TCJ.list.map(s => ({ s, x: tcJmaExposure(s).filter(x => x.level !== "WATCH") })).filter(r => r.x.length);
+    if (tc.length){ extra += "\nTYPHOON EXPOSURE (JMA FORECAST):\n"; tc.forEach(r => { extra += `   • ${r.s.name} (${tcJmaClass(r.s.now.kt)[1]}): ${r.x.slice(0, 8).map(x => `${x.site.code} ${x.level.toLowerCase()}`).join(", ")}\n`; }); }
+    const vv = VOL.list.filter(v => v.risk); if (vv.length){ extra += "\nVOLCANOES NEAR SITES:\n"; vv.slice(0, 8).forEach(v => { extra += `   • ${v.name} (${v.country}) — ${VKIND[v.kind].toLowerCase()}; ${v.nClose} site(s) ≤${VCLOSE} km, ${v.near.length} ≤${VNEAR} km\n`; }); }
+    const gp = Object.entries(GPR.by).map(([k, a]) => [k, a.filter(x => x.cls[0] !== "advisory")]).filter(r => r[1].length);
+    if (gp.length){ extra += "\nPROTEST / UNREST COVERAGE, LAST 24 H (GDELT, automated):\n"; gp.forEach(([k, a]) => { extra += `   • ${(PROTEST_COUNTRIES.find(c => c[0] === k) || [, k])[1]}: ${a.length} clashes/violent report(s) — e.g. ${a[0].title}\n`; }); }
+    const nea = READINGS.nea && READINGS.nea.rows.length ? READINGS.nea.rows : null; if (nea){ extra += "\nSINGAPORE NEA READINGS:\n"; nea.forEach(r => { extra += `   • ${r[0]}: ${r[1]} (${r[2]})\n`; }); }
+    if (!extra) return; const full = pre.textContent.replace(/All \d+ cities normal/, `All ${CITIES.length} cities normal`) + extra; pre.textContent = full;
+    if ($("#handCopy")) $("#handCopy").onclick = async () => { const ok = await copyRich("<pre>" + esc(full) + "</pre>", full); $("#handCopy").textContent = ok ? "Copied" : "Copy failed"; };
+    if ($("#handRepo")) $("#handRepo").onclick = () => { if (typeof publishRepo === "function" && guard("publish")) publishRepo({ type: "Shift handover", title: `Shift handover — ${sgt(Date.now())}`, content: full, tags: ["Shift handover"] }); }; }; }
+
+/* =====================================================================
+   PULSE PARITY — 3. FEATURES
+   ===================================================================== */
+
+/* ---------- screens: volcanoes (new) and the JMA forecast on the typhoon screen ---------- */
+NON_CITY_MODES.push("volcano"); KEYS.volcano = ["VOLCANOES", [[2, "≤100 km of a site"], [1, "≤250 km"]], "Erupting volcanoes from the Smithsonian / USGS weekly report and NASA EONET, with tracked sites at 100 km and 250 km"];
+{ const t = G("intel").tabs; if (!t.some(x => x[0] === "volcano")) t.splice(t.findIndex(x => x[0] === "protests") + 1, 0, ["volcano", "Volcano tracker"]); }
+{ const _rpiV = renderPanelInner; renderPanelInner = function(p){
+    if (UI.mode === "volcano"){ if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = volcanoPanel(); setTimeout(volMapDraw, 30); return; }
+    _rpiV(p);
+    if (UI.mode === "typhoon"){ const e = TCS.list.find(x => String(x.eventid) === String(UI.tcSel)) || TCS.list[0], col = p.querySelector(".tcgrid > div:last-child"); if (col) col.insertAdjacentHTML("beforeend", tcJmaHtml(e)); }
+    if (UI.mode === "disasters"){ const b = p.querySelector(".pbody"); if (b) b.insertAdjacentHTML("beforeend", readingsHtml() + advLogHtml()); }
+    if (UI.mode === "quake"){ const b = p.querySelector(".pbody"); if (b) b.insertAdjacentHTML("beforeend", quakeArchiveHtml()); }
+    if (["weather", "forecast"].includes(UI.mode)){ const t = p.querySelector(".ptools .sp"); if (t) t.insertAdjacentHTML("beforebegin", `<span class="ctl">Models <select data-wxmodel><option value="national"${CFG.pulse.wxModel !== "auto" ? " selected" : ""}>National (JMA, KMA, CMA, BoM, else ECMWF)</option><option value="auto"${CFG.pulse.wxModel === "auto" ? " selected" : ""}>Automatic best match</option></select></span>`); }
+  }; }
+document.addEventListener("change", e => { if (e.target.matches("[data-wxmodel]")){ CFG.pulse.wxModel = e.target.value; saveCfg(); runFeed("meteo", loadMeteo).then(() => afterData()); toast("Weather models: " + (CFG.pulse.wxModel === "auto" ? "automatic best match" : "national"), "Reloading the forecasts…", "var(--teal)"); } });
+{ const _smV = setMode; setMode = function(m){ const was = UI.mode; if (m === "volcano" && was !== "volcano") UI.layoutBeforeVol = UI.layout;
+    const r = _smV(m); try{ if (m === "volcano") setLayout("cards"); else if (was === "volcano" && UI.layoutBeforeVol){ setLayout(UI.layoutBeforeVol); UI.layoutBeforeVol = null; } }catch(e){} return r; }; }
+
+/* ---------- Warnings screen: agency readings and the advisory log ---------- */
+function readingsHtml(){ const blocks = [["NEA Singapore", READINGS.nea], ["MetMalaysia heat forecast", READINGS.myheat], ["BMKG Indonesia", READINGS.bmkg]].filter(([, r]) => r && (r.rows.length || (r.errs || []).length));
+  if (!blocks.length) return "";
+  return `<div class="sec" style="margin-top:14px">Agency readings <small>values that are shown for reference and only raise a warning above the agency's own threshold</small></div><div class="rdgrid">${blocks.map(([n, r]) => `<div class="rdc"><b>${esc(n)}</b> <span class="s">${esc(ago(r.at))}</span>
+    ${r.rows.map(x => `<div class="rdr"><span>${esc(x[0])}</span><b>${esc(x[1])}</b><span class="s">${esc(x[2])}</span></div>`).join("")}${(r.errs || []).map(x => `<div class="s" style="color:var(--amber)">${esc(x)}</div>`).join("")}</div>`).join("")}</div>`; }
+const ADV_KEY = "psoc.uni.advseen.v1", ADVLOG_KEY = "psoc.uni.advlog.v1";
+let ADV_SEEN = lsGet(ADV_KEY, null), ADVLOG = lsGet(ADVLOG_KEY, []), ADV_NEW = new Set();
+{ const _ma = mergeAlerts; mergeAlerts = function(){ _ma(); const first = ADV_SEEN === null, seen = new Set(ADV_SEEN || []), now = Date.now(); ADV_NEW = new Set();
+    (DATA.alerts || []).forEach(a => { if (seen.has(a.id)) return; seen.add(a.id); if (first) return; ADV_NEW.add(a.id);
+      ADVLOG.unshift({ t: now, id: a.id, title: a.title, area: a.area, sev: a.severity, src: a.source && a.source.name, cc: a.cc });
+ });
+    ADV_SEEN = [...seen].slice(-4000); lsSet(ADV_KEY, ADV_SEEN); ADVLOG = ADVLOG.slice(0, 200); lsSet(ADVLOG_KEY, ADVLOG); }; }
+function advLogHtml(){ return `<details class="qarch" style="margin-top:14px"><summary><b>Advisory log</b> <span class="s">every official warning first seen by this console (newest first, last ${ADVLOG.length})</span></summary>
+  <div class="tbl"><table class="acc"><thead><tr><th>First seen (SGT)</th><th>Severity</th><th>Warning</th><th>Area</th><th>Source</th></tr></thead><tbody>${ADVLOG.slice(0, 200).map(x => `<tr><td class="nowrap">${esc(sgt(x.t))}</td><td>${esc(x.sev || "")}</td><td>${esc(x.title)}${ADV_NEW.has(x.id) ? ` <span class="tag">NEW</span>` : ""}</td><td>${esc(x.area || "")}</td><td>${esc(x.src || "")}</td></tr>`).join("") || `<tr><td colspan="5" class="s">Nothing logged yet — entries appear the moment a new warning is first detected.</td></tr>`}</tbody></table></div></details>`; }
+
+/* ---------- Map & cities: the estate and exposure at a glance (PULSE home) ---------- */
+function estateStrip(){ const now = Date.now(), live = SITES.filter(isLive), open = openEvents(), sv = s => open.filter(e => e.sev === s).length;
+  const q24 = DATA.quakes.filter(q => q.mag >= 4.5 && now - q.time < 86400e3 && inAPAC(q.lat, q.lon)), inRange = DATA.quakes.filter(q => q.nearCount > 0 && q.mag >= CFG.quake.nearMag);
+  const adv = (DATA.alerts || []).filter(a => (a.start || 0) > now - 86400e3), vol = VOL.list.filter(v => v.risk), tcx = TCJ.list.reduce((n, s) => n + tcJmaExposure(s).filter(x => x.level !== "WATCH").length, 0);
+  const tile = (go, label, big, sub, c) => `<button class="estt" data-gomode2="${go}" style="--c:${c}"><span class="l">${esc(label)}</span><b>${big}</b><span class="s">${sub}</span></button>`;
+  return `<div class="estrip">${tile("overview", "Live sites", live.length, `${SITES.length} tracked · ${SITES.filter(isOffice).length} offices`, "#67B8C0")}
+    ${tile("escalations", "Active escalations", open.length, `${sv("P1")} P1 · ${sv("P2")} P2 · ${sv("P3")} P3`, open.length ? "#F0A23A" : "#2FB170")}
+    ${tile("quake", "Earthquakes 24 h", q24.length, q24.length ? "M4.5+ in Asia-Pacific" : "none at M4.5 or above", q24.length ? "#D97757" : "#2FB170")}
+    ${tile("quake", "Sites in alarm range", inRange.reduce((n, q) => n + q.nearCount, 0), inRange.length ? `${inRange.length} quake(s) M${CFG.quake.nearMag}+ within ${CFG.quake.nearKm} km` : `no M${CFG.quake.nearMag}+ within ${CFG.quake.nearKm} km`, inRange.length ? "#E5484D" : "#2FB170")}
+    ${tile("typhoon", "Active typhoons", TCS.list.length, TCS.list.length ? (tcx ? `${tcx} site(s) in the forecast path` : "no site in storm-force winds") : TCS.err && TCJ.err ? "feeds unreachable" : "none", tcx ? "#E5484D" : TCS.list.length ? "#2BB3C0" : "#2FB170")}
+    ${tile("disasters", "Warnings 24 h", adv.length, adv.length ? `${adv.filter(a => a.severity !== "MODERATE" && a.severity !== "MINOR").length} severe or extreme` : "agencies quiet", adv.length ? "#35C1D6" : "#2FB170")}
+    ${tile("volcano", "Volcanoes near sites", vol.length, vol.length ? `${vol.filter(v => v.risk === "CLOSE").length} within ${VCLOSE} km` : "none within 250 km", vol.length ? "#E0603A" : "#2FB170")}</div>`; }
+{ const _cp = cityPanel; cityPanel = function(mode){ const h = _cp(mode); return mode === "overview" ? h.replace('<div class="pbody">', '<div class="pbody">' + estateStrip()) : h; }; }
+
+/* ---------- sites: a site card with every hazard affecting that site now (PULSE) ---------- */
+function openSiteCard(code){ const s = SITES.find(x => x.code === code); if (!s) return; const now = Date.now();
+  const inWarn = (DATA.alerts || []).filter(a => (a.geo && pointInGeo(s.lon, s.lat, a.geo)) || (a.points || []).includes(metroOf(s))), qs3 = DATA.quakes.filter(q => km(q.lat, q.lon, s.lat, s.lon) <= 300 && now - q.time < 86400e3);
+  const tcx = TCJ.list.map(t => ({ t, x: tcJmaExposure(t).find(x => x.site === s) })).filter(r => r.x), vol = VOL.list.map(v => ({ v, d: km(v.lat, v.lon, s.lat, s.lon) })).filter(r => r.d <= VNEAR);
+  openModal(head(`${s.code}${s.city ? " — " + s.city : ""}`) + `<div class="bd"><div class="s">${esc(s.cls)} · ${esc(s.status)} · ${esc(s.country || "")}${s.region ? " · " + esc(s.region) : ""} · ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}</div>
+        <div class="sec">Hazards affecting this site now</div>
+    ${inWarn.map(a => `<div class="minirow" style="--c:var(--amber)"><b>${esc(a.title)}</b><span>${esc(a.source && a.source.name || "")}</span></div>`).join("")}
+    ${qs3.map(q => `<div class="minirow" style="--c:${magColor(q.mag)}"><b>M${q.mag.toFixed(1)} ${esc(q.place || "")}</b><span>${Math.round(km(q.lat, q.lon, s.lat, s.lon))} km · ${esc(ago(q.time))}</span></div>`).join("")}
+    ${tcx.map(r => `<div class="minirow" style="--c:var(--red)"><b>${esc(r.t.name)} — ${esc(r.x.level.toLowerCase())}</b><span>closest ${Math.round(r.x.km)} km${r.x.first ? " from " + esc(sgt(r.x.first)) : ""}</span></div>`).join("")}
+    ${vol.map(r => `<div class="minirow" style="--c:#E0603A"><b>${esc(r.v.name)} volcano</b><span>${Math.round(r.d)} km · ${esc(VKIND[r.v.kind].toLowerCase())}</span></div>`).join("")}
+    ${!inWarn.length && !qs3.length && !tcx.length && !vol.length ? `<div class="s">Nothing in force at this site.</div>` : ""}</div>
+    <div class="ft"><button class="pill" id="scMap">Show on map</button><span style="flex:1"></span><button class="pill" data-x>Close</button><button class="pill primary" id="scTrack">Track an event here</button></div>`);
+  $("#scMap").onclick = () => { $("#ov").classList.remove("show"); UI.sel = "s:" + s.code; saveUI(); if ($("#main").classList.contains("nomap")) setMode("overview"); setTimeout(() => { if (map){ map.setView([s.lat, s.lon], Math.max(map.getZoom(), 11)); sitePopup(s, L.latLng(s.lat, s.lon)); } }, 200); };
+  $("#scTrack").onclick = () => { $("#ov").classList.remove("show"); if (guard("escalate")) openEventModal(null, { sites: [s.code], country: s.country, lat: s.lat, lon: s.lon, desc: `${s.country || ""} | | ${s.code}` }); }; }
+{ const _sp = sitePopup; sitePopup = function(s, ll){ _sp(s, ll); const p = map && map._popup; if (!p || !p.isOpen()) return; p.setContent(p.getContent() + `<div style="margin-top:6px"><button class="act" data-sitecard="${esc(s.code)}">Hazards at this site</button></div>`); }; }
+document.addEventListener("click", e => { const t = e.target.closest("[data-sitecard]"); if (t){ e.preventDefault(); openSiteCard(t.dataset.sitecard); } });
+
+
+/* ---------- map: find a site or an address ---------- */
+{ const mw = $(".mapwrap"); if (mw){ mw.insertAdjacentHTML("beforeend", `<form class="mapfind" id="mapFind" role="search"><input id="mapFindIn" placeholder="Find a site or address…" aria-label="Find a site or address" autocomplete="off"><div id="mapFindR"></div></form>`);
+    let tmo = null; const R = $("#mapFindR"), show = h => { R.innerHTML = h; R.style.display = h ? "" : "none"; }; show("");
+    const go = (lat, lon, label, code) => { show(""); if (!map) return; map.setView([lat, lon], code ? 12 : 13); if (code){ const s = SITES.find(x => x.code === code); if (s) sitePopup(s, L.latLng(lat, lon)); } else L.popup().setLatLng([lat, lon]).setContent(`<b>${esc(label)}</b><br><button class="act" data-mftrack="${lat},${lon}">Track an event here</button>`).openOn(map); };
+    $("#mapFindIn").addEventListener("input", e => { const q = e.target.value.trim().toLowerCase(); clearTimeout(tmo); if (q.length < 2){ show(""); return; }
+      const hits = SITES.filter(s => isFinite(s.lat) && [s.code, s.city, s.country].some(v => String(v || "").toLowerCase().includes(q))).slice(0, 6);
+      show(hits.map(s => `<button type="button" data-mfgo="${s.lat},${s.lon}" data-mfcode="${esc(s.code)}"><b>${esc(s.code)}</b> <span class="s">${esc([s.city, s.country].filter(Boolean).join(", "))}</span></button>`).join("") + (q.length >= 3 ? `<div class="s" style="padding:4px 8px">Searching addresses…</div>` : ""));
+      if (q.length >= 3) tmo = setTimeout(async () => { try{ const j = await getJSON("https://photon.komoot.io/api/?limit=5&q=" + encodeURIComponent(q), 10000);
+          const ad = (j.features || []).map(f => { const p = f.properties || {}, c = f.geometry && f.geometry.coordinates; return c ? { lat: c[1], lon: c[0], label: [p.name, p.street && (p.housenumber ? p.housenumber + " " : "") + p.street, p.city, p.country].filter(Boolean).join(", ") } : null; }).filter(Boolean);
+          show(hits.map(s => `<button type="button" data-mfgo="${s.lat},${s.lon}" data-mfcode="${esc(s.code)}"><b>${esc(s.code)}</b> <span class="s">${esc([s.city, s.country].filter(Boolean).join(", "))}</span></button>`).join("") + ad.map(a => `<button type="button" data-mfgo="${a.lat},${a.lon}" data-mflabel="${esc(a.label)}">📍 ${esc(a.label)}</button>`).join("") || `<div class="s" style="padding:6px 8px">No match.</div>`); }
+        catch(err){ R.insertAdjacentHTML("beforeend", `<div class="s" style="padding:4px 8px">Address search unavailable (${esc(err.message)})</div>`); } }, 450); });
+    $("#mapFind").onsubmit = e => { e.preventDefault(); const b = R.querySelector("[data-mfgo]"); if (b) b.click(); };
+    R.addEventListener("click", e => { const b = e.target.closest("[data-mfgo]"); if (!b) return; const [la, lo] = b.dataset.mfgo.split(",").map(Number); go(la, lo, b.dataset.mflabel || "", b.dataset.mfcode || ""); });
+    document.addEventListener("click", e => { const t = e.target.closest("[data-mftrack]"); if (t && guard("escalate")){ const [la, lo] = t.dataset.mftrack.split(",").map(Number); openEventModal(null, { lat: la, lon: lo }); } else if (!e.target.closest("#mapFind")) show(""); }); } }
+
+/* ---------- live TV: the direct streams PULSE plays, for networks where YouTube is blocked ---------- */
+[["cna-direct", "CNA 24/7 (direct stream)", "Singapore", "SE Asia", "English", "https://d2e1asnsl7br7b.cloudfront.net/7782e205e72f43aeb4a48ec97f66ebbe/index.m3u8"],
+ ["nhk-direct", "NHK WORLD-JAPAN (direct stream)", "Japan", "North Asia", "English", "https://nhkwlive-ojp.akamaized.net/hls/live/2003459/nhkwlive-ojp-en/index.m3u8"],
+ ["dw-direct", "DW News (direct stream)", "Germany", "Global", "English", "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8"],
+ ["aje-direct", "Al Jazeera English (direct stream)", "Qatar", "Global", "English", "https://live-hls-apps-aje-fa.getaj.net/AJE/index.m3u8"]
+].forEach(([key, name, country, region, lang, ref]) => { if (!LTV.some(c => c.key === key)) LTV.push({ key, name, country, region, lang, ref }); });
+
+/* ---------- Settings: the new sources, areas and contacts ---------- */
+{ const _osP = openSettings; openSettings = function(){ _osP(); const anchor = $("[data-cfg='agency.cwaKey']"); if (!anchor || $("#pulseSet")) return; const ag = CFG.agency;
+    anchor.closest(".fgrid").insertAdjacentHTML("afterend", `<div id="pulseSet"><div class="fgrid"><label class="fld">KMA authKey (free, apihub.kma.go.kr)<input data-cfg="agency.kmaKey" value="${esc(ag.kmaKey || "")}" autocomplete="off"></label>
+        <label class="fld">BMKG districts (adm4 code|label; separated)<input data-cfg="agency.bmkgAreas" value="${esc(ag.bmkgAreas || "")}"></label></div>
+      <div class="fgrid">${[["agency.nea", "NEA Singapore (rain, heat stress, PSI, PM2.5)"], ["agency.bmkg", "BMKG Indonesia (forecast and nowcast)"], ["agency.tmd", "TMD Thailand (bulletins and CAP)"], ["agency.myheat", "MetMalaysia heat forecast (KL, Johor Bahru)"], ["agency.kma", "KMA Korea (needs key)"]]
+        .map(([p, l]) => `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px"><input type="checkbox" data-cfg="${p}"${p.split(".").reduce((o, k) => o[k], CFG) !== false ? " checked" : ""}> ${esc(l)}</label>`).join("")}</div>
+      <details class="more"><summary>JMA prefectures watched <span class="s">${(ag.jmaPrefs || []).length} selected</span></summary><div class="fgrid">${JMA_ALL.map(([c, n]) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" data-jmapref="${c}"${(ag.jmaPrefs || []).includes(c) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</div></details>
+      <details class="more"><summary>KMA regions watched <span class="s">${(ag.kmaAreas || []).length} selected</span></summary><div class="fgrid">${KMA_AREAS.map(([c, n]) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" data-kmaarea="${c}"${(ag.kmaAreas || []).includes(c) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</div></details>
+      <div class="sec">Protest news monitor (GDELT)</div><label style="display:flex;gap:8px;align-items:center;font-size:12.5px"><input type="checkbox" data-cfg="pulse.gdeltProtest"${CFG.pulse.gdeltProtest !== false ? " checked" : ""}> Monitor news coverage of protests and unrest</label>
+      <details class="more"><summary>Countries monitored <span class="s">${(CFG.pulse.protestCountries || []).length} selected</span></summary><div class="fgrid">${PROTEST_COUNTRIES.map(([c, n]) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" data-gprc="${c}"${(CFG.pulse.protestCountries || []).includes(c) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</div></details>
+      <div class="sec">Earthquake polling and weather models</div><div class="fgrid"><label class="fld">Check USGS every (seconds, from next start)<input type="number" min="15" step="5" data-cfg="pulse.quakePollSec" value="${CFG.pulse.quakePollSec}"></label>
+        <label class="fld">Weather models<select data-cfg="pulse.wxModel"><option value="national"${CFG.pulse.wxModel !== "auto" ? " selected" : ""}>National (JMA, KMA, CMA, BoM, else ECMWF)</option><option value="auto"${CFG.pulse.wxModel === "auto" ? " selected" : ""}>Automatic best match</option></select></label></div></div>`);
+    const save = $("#cfgSave"), orig = save.onclick; save.onclick = ev => { CFG.agency.jmaPrefs = $$("[data-jmapref]").filter(i => i.checked).map(i => i.dataset.jmapref); CFG.agency.kmaAreas = $$("[data-kmaarea]").filter(i => i.checked).map(i => i.dataset.kmaarea);
+      CFG.pulse.protestCountries = $$("[data-gprc]").filter(i => i.checked).map(i => i.dataset.gprc); orig.call(save, ev); gprLoad(true); }; }; }
+
+{ const st = document.createElement("style"); st.textContent = `
+.estrip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:2px 0 12px}.estt{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:var(--panel);color:var(--text);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:7px;padding:7px 10px;cursor:pointer;font:12px var(--font)}
+.estt .l{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}.estt b{font-size:24px;line-height:1.1}.estt .s{font-size:11.5px}.estt:hover{border-color:var(--c)}
+.rdgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}.rdc{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:8px 10px}.rdr{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:2px 10px;padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px}.rdr .s{grid-column:1/-1}
+.qarch{margin-top:14px}.qarch summary{cursor:pointer;padding:6px 0}
+.tcj{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin:6px 0;font-size:12.5px;line-height:1.6}
+.gprgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}.gprc{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:7px;padding:6px 10px}.gprh{display:flex;justify-content:space-between;gap:8px;width:100%;background:none;border:0;color:var(--text);cursor:pointer;padding:2px 0;font:12.5px var(--font)}.gpri{padding:5px 0;border-top:1px solid var(--line);font-size:12.5px}
+.mapfind{position:absolute;z-index:700;top:10px;right:56px;width:min(300px,45%)}.mapfind input{width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font:12.5px var(--font);box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#mapFindR{margin-top:4px;background:var(--panel);border:1px solid var(--line);border-radius:7px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.3)}#mapFindR button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:6px 9px;cursor:pointer;font:12.5px var(--font)}#mapFindR button:hover{background:color-mix(in srgb,var(--brand) 14%,transparent)}
+@media (max-width:760px){.mapfind{right:10px;top:48px;width:calc(100% - 20px)}}`; document.head.appendChild(st); }
+
+
+
 boot();
 
 </script>
