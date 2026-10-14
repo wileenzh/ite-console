@@ -14197,6 +14197,323 @@ document.addEventListener("click", e => { const t = e.target.closest("[data-site
 
 
 
+
+/* =====================================================================
+   14 OCT FIXES — from the watch officers' review
+   1. BAU Operations: no Releases to operations tab (the screen still opens
+      from the Report step and from an escalation's "Release to operations").
+   2. Vision Command Centre map: theme-matched base map with labels, a
+      taller map, sites grouped where they overlap, impact rings with
+      distances, the selected alert highlighted, counts in the legend.
+   3. Protest tracker: one map (the main map hides on this tab), live protest
+      reports from GDELT at the top with Track / Escalate, embassy alerts
+      only through the relay (browsers block those sites) with one clear note.
+   4. Incident management follows the console's dark theme.
+   5. Writing with AI: connect a model (Anthropic key or a company gateway,
+      or the PSOC server) and a fixed way to write: facts from the record →
+      standard template → house style + the team's own examples → fact
+      check → format check.
+   6. BAU › Access alarms: weekly Key Operational Alarm Categories report.
+   ===================================================================== */
+
+/* ---------- 1. BAU: Releases to operations is not a BAU tab ---------- */
+{ const g = G("bau"); if (g) g.tabs = g.tabs.filter(t => t[0] !== "releases"); const sh = G("stake"); if (sh && !sh.tabs.some(t => t[0] === "releases")) sh.tabs.push(["releases", "Releases to operations"]); }
+// reachable from the Report step and an escalation's "Release to operations", but not listed as a tab
+{ const _rm = renderModes; renderModes = function(){ const r = _rm.apply(this, arguments); $$('#subnav [data-mode="releases"]').forEach(b => { if (UI.mode !== "releases") b.style.display = "none"; }); return r; }; }
+
+/* ---------- 2. Vision Command Centre map ---------- */
+const VCC_ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+function vccThemeBases(){ const light = document.body.classList.contains("light");
+  return [[light ? "Esri light grey" : "Esri dark grey", VCC_ESRI + `Canvas/World_${light ? "Light" : "Dark"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, "Tiles © Esri", VCC_ESRI + `Canvas/World_${light ? "Light" : "Dark"}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
+    ["Esri topographic", VCC_ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", "Tiles © Esri"],
+    ["OpenStreetMap", "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap contributors"]]; }
+VCC_BASES.splice(0, VCC_BASES.length, ...vccThemeBases());
+vccSetBase = function(i){ if (!VCCM.map) return; [VCCM.base, VCCM.labels].forEach(l => { if (l) VCCM.map.removeLayer(l); }); VCCM.base = VCCM.labels = null;
+  if (i >= VCC_BASES.length){ vccMsg("Map backgrounds are blocked on this network — alerts, sites and the impact zone are still shown."); return; }
+  VCCM.baseIdx = i; VCCM.tileErr = 0; VCCM.tileOk = 0; const [, url, attr, lbl] = VCC_BASES[i];
+  VCCM.base = L.tileLayer(url, { maxZoom: 18, attribution: attr }).addTo(VCCM.map); if (lbl) VCCM.labels = L.tileLayer(lbl, { maxZoom: 18, pane: "overlayPane", opacity: .9 }).addTo(VCCM.map);
+  VCCM.base.on("tileload", () => { VCCM.tileOk++; if (VCCM.tileOk === 1) vccMsg(""); });
+  const lyr = VCCM.base, next = () => { if (VCCM.base === lyr && !VCCM.tileOk) vccSetBase(i + 1); };
+  VCCM.base.on("tileerror", () => { VCCM.tileErr++; if (VCCM.tileErr >= 3) next(); }); setTimeout(next, 6000); };
+{ const _at = applyTheme; applyTheme = function(t){ _at.apply(this, arguments); VCC_BASES.splice(0, VCC_BASES.length, ...vccThemeBases()); if (VCCM.map) vccSetBase(0); }; }
+function vccSitesLayer(){ const map = VCCM.map; if (!map || !VCCM.siteLayer) return; VCCM.siteLayer.clearLayers(); const groups = [];
+  (VCCM.sites || []).forEach(x => { const p = map.latLngToLayerPoint([x.s.lat, x.s.lon]), g = groups.find(g => g.p.distanceTo(p) < 34); if (g) g.items.push(x); else groups.push({ p, items: [x] }); });
+  const z = map.getZoom();
+  groups.forEach(g => { const it = g.items, inz = it.filter(x => x.inz).length, ll = [it.reduce((a, x) => a + x.s.lat, 0) / it.length, it.reduce((a, x) => a + x.s.lon, 0) / it.length];
+    const tip = it.slice(0, 14).map(x => `${esc(x.s.code)}${x.s.name ? " — " + esc(x.s.name) : ""} · ${x.d.toFixed(1)} km${x.inz ? " (in zone)" : ""}`).join("<br>") + (it.length > 14 ? `<br>… and ${it.length - 14} more` : "");
+    if (it.length === 1){ const x = it[0]; L.circleMarker(ll, { radius: 7, color: "#fff", weight: 1.5, fillColor: x.inz ? "#E8873A" : "#5B9BD5", fillOpacity: 1 })
+        .bindTooltip(tip, { permanent: x.inz && z >= 11, direction: "right", className: "vcctip" }).addTo(VCCM.siteLayer); return; }
+    L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="vccclu${inz ? " inz" : ""}">${it.length}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }) })
+      .bindTooltip(`<b>${it.length} sites${inz ? `, ${inz} in the zone` : ""}</b><br>${tip}`, { className: "vcctip" })
+      .on("click", () => map.fitBounds(L.latLngBounds(it.map(x => [x.s.lat, x.s.lon])).pad(.6), { maxZoom: 16 })).addTo(VCCM.siteLayer); }); }
+vccMapDraw = function(r){
+  const slot = $("#vccmap"); if (!slot) return;
+  if (!vccEnsureMap()){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network (cdnjs.cloudflare.com). Alerts, assets and contacts are still listed above.</div>`; return; }
+  if (VCCM.host.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(VCCM.host); }
+  const map = VCCM.map; map.options.zoomSnap = .25; map.options.zoomDelta = .5;
+  if (!VCCM.siteLayer){ VCCM.siteLayer = L.layerGroup().addTo(map); map.on("zoomend", vccSitesLayer); }
+  try{
+    map.invalidateSize(false); VCCM.layers.clearLayers(); VCCM.sites = [];
+    r.alerts = (r.alerts || []).filter(a => validLL(a.ll)); if (r.sel && !validLL(r.sel.ll)) r.sel = null;
+    (r.alerts || []).filter(a => a !== r.sel).forEach(a => L.circleMarker(a.ll, { radius: 6, color: "#fff", weight: 1, fillColor: "#C4314B", fillOpacity: .85 }).bindTooltip(esc(trunc(a.title, 80)), { className: "vcctip" })
+      .on("click", () => { UI.vccSel = a.id; saveUI(); renderPanel(); }).addTo(VCCM.layers));
+    let inZone = 0, near = 0;
+    if (r.sel){ const R = r.z.R, c = r.sel.ll;
+      [[3, .35], [2, .55]].forEach(([k, o]) => { L.circle(c, { radius: R * k * 1000, color: "#8A97A0", weight: 1, opacity: o, fill: false, dashArray: "3 6", interactive: false }).addTo(VCCM.layers);
+        L.marker([c[0] + R * k / 111.2, c[1]], { icon: L.divIcon({ className: "", html: `<span class="vccring">${R * k} km</span>`, iconSize: [60, 16], iconAnchor: [30, 8] }), interactive: false }).addTo(VCCM.layers); });
+      L.circle(c, { radius: R * 1000, color: "#E5484D", weight: 2, fillColor: "#E5484D", fillOpacity: .14, dashArray: "8 5" }).bindTooltip(`Impact zone — ${R} km`).addTo(VCCM.layers);
+      L.marker([c[0] + R / 111.2, c[1]], { icon: L.divIcon({ className: "", html: `<span class="vccring hot">${R} km impact zone</span>`, iconSize: [130, 16], iconAnchor: [65, 8] }), interactive: false }).addTo(VCCM.layers);
+      VCCM.sites = SITES.filter(s => isFinite(s.lat)).map(s => { const d = km(c[0], c[1], s.lat, s.lon); return { s, d, inz: d <= R }; }).filter(x => x.d <= R * 3);
+      inZone = VCCM.sites.filter(x => x.inz).length; near = VCCM.sites.length - inZone;
+      L.marker(c, { icon: L.divIcon({ className: "", html: `<div class="vccpin"><span></span></div>`, iconSize: [26, 26], iconAnchor: [13, 13] }), zIndexOffset: 1000 })
+        .bindTooltip(esc(trunc(r.sel.title.split("|")[0].trim(), 28)), { permanent: true, direction: "bottom", offset: [0, 12], className: "vcctip sel" }).addTo(VCCM.layers);
+      const fit = () => { try{ map.invalidateSize(false); map.fitBounds(L.latLng(c).toBounds(R * 2 * 1000 * 1.25), { padding: [24, 24], maxZoom: 15, animate: false }); vccSitesLayer(); }catch(e){} };
+      fit(); setTimeout(fit, 160); }
+    else if ((r.alerts || []).length){ map.fitBounds(L.latLngBounds(r.alerts.map(a => a.ll)).pad(.25), { maxZoom: 8, animate: false }); vccSitesLayer(); }
+    else { map.setView([10, 115], 4); vccSitesLayer(); vccMsg("No critical events right now."); }
+    const lg = VCCM.host.querySelector(".vccleg"); if (lg) lg.innerHTML = `<span><i style="background:#C4314B"></i>alerts ${(r.alerts || []).length}</span>${r.sel ? `<span><i style="background:#E8873A"></i>sites in zone ${inZone}</span><span><i style="background:#5B9BD5"></i>within ${r.z.R * 3} km ${near}</span><span><i class="ring"></i>numbers = sites grouped; click to zoom</span>` : ""}`;
+  }catch(e){ vccMsg("The map could not be drawn: " + esc(e.message)); }
+};
+{ const st = document.createElement("style"); st.textContent = `
+.vccmid .vccmap{height:clamp(420px,62vh,780px)}
+body.light .vccmap,body.light .vccmapel{background:#E9ECEE}
+.vccleg{left:8px;right:auto;bottom:8px;flex-wrap:wrap;max-width:calc(100% - 16px);font-size:12px;padding:5px 9px}.vccleg i.ring{border:2px solid #fff;background:transparent !important;box-sizing:border-box}
+.vccclu{width:30px;height:30px;border-radius:50%;background:#5B9BD5;color:#fff;font:700 12.5px var(--font);display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 0 0 4px rgba(91,155,213,.35);cursor:pointer}
+.vccclu.inz{background:#E8873A;box-shadow:0 0 0 4px rgba(232,135,58,.4)}
+.vccpin{width:26px;height:26px;position:relative}.vccpin span{position:absolute;inset:6px;border-radius:50%;background:#E5484D;border:2px solid #fff;box-shadow:0 0 0 0 rgba(229,72,77,.7);animation:vccp 1.8s infinite}
+@keyframes vccp{70%{box-shadow:0 0 0 16px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}@media (prefers-reduced-motion:reduce){.vccpin span{animation:none}}
+.vccring{display:inline-block;transform:translateY(-10px);font:600 11px var(--font);color:#C9D1D6;background:rgba(20,26,30,.75);padding:1px 6px;border-radius:8px;white-space:nowrap}.vccring.hot{color:#fff;background:#C4314B}
+.leaflet-tooltip.vcctip{background:rgba(20,26,30,.94);color:#eef2f4;border:1px solid #3a4246;font:12px/1.4 var(--font);box-shadow:0 4px 14px rgba(0,0,0,.35)}.leaflet-tooltip.vcctip:before{display:none}
+.leaflet-tooltip.vcctip.sel{background:#C4314B;border-color:#C4314B;color:#fff;font-weight:700}`; document.head.appendChild(st); }
+
+/* ---------- 3. Protest tracker ---------- */
+{ const old = ["philippines", "indonesia", "burma", "thailand", "hongkong", "bangladesh", "pakistan"], cur = CFG.pulse.protestCountries || [];
+  if (!cur.length || (cur.length === old.length && old.every(c => cur.includes(c)))){ CFG.pulse.protestCountries = ["japan", "southkorea", "china", "hongkong", "taiwan", "philippines", "vietnam", "thailand", "malaysia", "singapore", "indonesia", "india", "bangladesh", "pakistan", "burma", "australia", "newzealand"]; saveCfg(); } }
+// the US Embassy sites send no cross-origin headers, so a browser can only read them through the relay or the PSOC server
+loadEmbassy = async function(){ const relay = CFG.relayUrl || CFG.serverUrl; if (!relay){ EMB.items = []; EMB.at = 0; EMB.needRelay = true; throw new Error("needs the relay"); }
+  EMB.needRelay = false; const out = [], errs = [];
+  for (const cc of CFG.embassy.countries){ const host = EMB_HOSTS[cc]; if (!host) continue;
+    try{ const txt = await fetchVia(`https://${host}/?s=demonstration&feed=rss2`), doc = new DOMParser().parseFromString(txt, "text/xml");
+      [...doc.getElementsByTagName("item")].slice(0, 12).forEach(it => { const title = xmlText(it, "title"), link = xmlText(it, "link"), t = Date.parse(xmlText(it, "pubDate")) || 0, body = (xmlText(it, "encoded") || xmlText(it, "description")).replace(/<li[^>]*>/gi, "; ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#8211;|&ndash;/g, "–").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+        if (!/demonstrat|protest|rally|march/i.test(title + " " + body) || Date.now() - t > 60 * 86400e3) return; out.push(Object.assign({ id: "emb:" + (link || title), title, link, t, text: body.slice(0, 2500), host }, parseDemo(body, title, cc))); });
+      EMB.status[cc] = "ok"; }
+    catch(e){ EMB.status[cc] = e.message; errs.push(cc + ": " + e.message); } }
+  EMB.items = out.sort((a, b) => b.t - a.t); EMB.at = Date.now(); if (!out.length && errs.length) throw new Error(errs.slice(0, 2).join("; ")); };
+const PR_CITY_OF = cc => { const cs = CITIES.filter(c => CITY_CC[c.name] === cc); return cs.sort((a, b) => SITES.filter(s => metroOf(s) === b.name).length - SITES.filter(s => metroOf(s) === a.name).length)[0]; };
+function prLiveReports(){ const rows = []; Object.entries(GPR.by || {}).forEach(([code, arts]) => { const c = PROTEST_COUNTRIES.find(x => x[0] === code); (arts || []).forEach(a => rows.push({ a, c })); });
+  const rank = { severe: 0, warning: 1, advisory: 2 };
+  return rows.sort((x, y) => rank[x.a.cls[0]] - rank[y.a.cls[0]] || y.a.t - x.a.t).filter((r, i, all) => all.findIndex(o => o.a.title === r.a.title) === i).slice(0, 18); }
+function prLiveHtml(){ const rows = prLiveReports(), col = { severe: "#E5484D", warning: "#E8873A", advisory: "#E8C547" };
+  const head = `<div class="sec">Live protest reports <small>GDELT news, last 24 h · ${GPR.busy ? "checking…" : GPR.at ? esc(ago(GPR.at)) : "loading…"} · automated, unverified</small> <button class="linkbtn" data-gprrefresh>↻</button></div>`;
+  if (GPR.err) return head + `<div class="banner bad">${/failed to fetch|networkerror|load failed/i.test(GPR.err) ? "GDELT could not be reached from this network. It retries every 15 minutes." : esc(GPR.err)}</div>`;
+  return head + (rows.map(({ a, c }) => `<div class="prlive" style="--c:${col[a.cls[0]]}"><a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">${esc(trunc(a.title || "(untitled)", 110))}</a>
+      <div class="s">${esc(c ? c[1] : "")} · ${esc(a.cls[1])} · ${esc(a.domain || "")} · ${esc(ago(a.t))}</div>
+      <div class="acts"><button class="act" data-prfromg="${esc(a.key)}">Track on map</button><button class="act" data-gprtrack="${esc(a.key)}">Escalate</button></div></div>`).join("")
+    || `<div class="s" style="margin:4px 0 10px">${GPR.at ? "No protest coverage indexed in the last 24 h for the countries in Settings." : "Checking GDELT…"}</div>`); }
+{ const _pp = protestPanel; protestPanel = function(){ let h = _pp();
+    // embassy block: one clear line instead of per-country fetch errors
+    h = h.replace(/<div class="sec">Demonstration alerts[\s\S]*?(?=<button class="vccal|<div class="empty">No protests tracked|<div class="sec">Tracked)/, m => EMB.needRelay || (!EMB.items.length && FEEDS.embassy && FEEDS.embassy.err)
+      ? `<div class="sec">US Embassy demonstration alerts</div><div class="s" style="margin:0 0 10px">${EMB.needRelay ? "Embassy websites block reading from a browser. Set the relay or the PSOC server under Integrations to bring their alerts in here." : "Not reachable right now: " + esc(FEEDS.embassy.err)}</div>` : m);
+    h = h.replace('<div class="tclist">', `<div class="tclist">${prLiveHtml()}`);
+    { const m = /<button class="vccal|<div class="empty">No protests tracked/.exec(h); if (m) h = h.slice(0, m.index) + `<div class="sec" style="margin-top:12px">Tracked protests</div>` + h.slice(m.index); }
+    return h; }; }
+// the by-country grid stays available, folded away under the panel
+{ const _gh = gprHtml; gprHtml = function(){ const h = _gh(); return h ? `<details class="prbycc" style="margin-top:14px"><summary><b>Coverage by country</b> <span class="s">open to see every country's headlines</span></summary>${h}</details>` : h; }; }
+document.addEventListener("click", e => { const t = e.target.closest("[data-prfromg]"); if (!t || !guard("escalate")) return; let a = null, c = null;
+  Object.entries(GPR.by).forEach(([k, arts]) => arts.forEach(x => { if (x.key === t.dataset.prfromg){ a = x; c = PROTEST_COUNTRIES.find(y => y[0] === k); } })); if (!a) return;
+  const T = a.title || "", city = (CITIES.find(x => T.toLowerCase().includes(x.name.toLowerCase())) || PR_CITY_OF(c && c[2]) || {}).name || "";
+  const p = { id: nid("pr"), createdAt: Date.now(), status: "planned", title: T.slice(0, 140) || "Protest", city, when: a.t || Date.now(), size: "", notes: `From news (GDELT, unverified): ${a.domain || ""} ${a.url || ""}`, src: "gpr:" + a.key, route: [], updates: [], assemblies: [], areas: [], by: ME.name };
+  putShared("protests", p); audit("Protest added to tracker from news", p.title, city); UI.prSel = p.id; UI.prDraw = "assembly"; saveUI(); renderPanel();
+  toast("Protest added", (city ? city + " — " : "") + "find the place above the map, or click the map to add the assembly area", "var(--teal)"); });
+{ const _sm = setMode; setMode = function(m){ const r = _sm(m); try{ if (m === "protests" || m === "volcano") setLayout("panel"); }catch(e){} return r; }; }
+{ const st = document.createElement("style"); st.textContent = `.prlive{border-left:3px solid var(--c);padding:6px 8px;margin:0 0 6px;background:var(--panel);border-radius:0 6px 6px 0}.prlive a{color:var(--text);font-weight:600;font-size:12.5px;text-decoration:none}.prlive a:hover{text-decoration:underline}.prlive .acts{margin-top:4px;display:flex;gap:4px}
+.prbycc summary{cursor:pointer;padding:6px 0}`; document.head.appendChild(st); }
+
+/* ---------- 4. Incident management in the dark theme ---------- */
+{ const st = document.createElement("style"); st.textContent = `
+body:not(.light) .iws{--ib:var(--bg);--iw:var(--panel);--it:var(--text);--im:var(--muted);--il:var(--line);--ia:#5AA9F0}
+body:not(.light) .iws-nav button:hover,body:not(.light) .iws-link:hover{background:color-mix(in srgb,var(--text) 7%,transparent)}
+body:not(.light) .iws-nav button.on{background:color-mix(in srgb,var(--ia) 16%,transparent)}
+body:not(.light) .iws-status{background:color-mix(in srgb,var(--c) 18%,var(--panel))}
+body:not(.light) .iws-av,body:not(.light) .brp .av{background:#1F3B57;color:#BFDDF7}
+body:not(.light) .iws-tag{background:color-mix(in srgb,var(--ia) 20%,var(--panel));color:var(--text)}body:not(.light) .iws-tag button{color:var(--muted)}
+body:not(.light) .iws-btn{background:var(--panel);color:var(--text);border-color:#5A656C}body:not(.light) .iws-btn:hover{background:color-mix(in srgb,var(--text) 8%,var(--panel))}
+body:not(.light) .iws-btn.primary{background:#2F7BD9;border-color:#2F7BD9;color:#fff}body:not(.light) .iws-btn.danger{color:#F07A86;border-color:#F07A86}body:not(.light) .iws-btn.live{color:#5CD17A;border-color:#2E9E4A}
+body:not(.light) .iws-meta .sep{color:#5A656C}body:not(.light) .iws .inccard,body:not(.light) .iws-card{box-shadow:none;border:1px solid var(--line)}
+body:not(.light) .iws .inccard .act,body:not(.light) .iws .inccard .pill{background:var(--panel);color:var(--text);border-color:#5A656C}body:not(.light) .iws .inccard .act.on{background:#2F7BD9;color:#fff;border-color:#2F7BD9}
+body:not(.light) .iws textarea,body:not(.light) .iws input,body:not(.light) .iws select{background:var(--bg) !important;color:var(--text) !important;border-color:var(--line) !important}
+body:not(.light) .iws .minirow,body:not(.light) .iws-tile{background:color-mix(in srgb,var(--text) 4%,var(--panel))}
+body:not(.light) .iws .kpi,body:not(.light) .iws .chbox{background:var(--panel);color:var(--text)}
+body:not(.light) .iws table.acc{background:var(--panel);color:var(--text)}body:not(.light) .iws table.acc th{background:color-mix(in srgb,var(--text) 5%,var(--panel));color:var(--muted)}
+body:not(.light) .iws .inctbl tbody tr:hover td{background:color-mix(in srgb,var(--ia) 10%,var(--panel))}
+body:not(.light) .iws .tab-mini{background:var(--panel);color:var(--text);border-color:var(--line)}body:not(.light) .iws .tab-mini[aria-pressed="true"]{background:#2F7BD9;color:#fff;border-color:#2F7BD9}
+body:not(.light) .brp.in{background:color-mix(in srgb,#13A10E 16%,transparent)}
+body:not(.light) .lar button{color:var(--text)}body:not(.light) .ltabs{border-bottom-color:var(--line)}body:not(.light) .ltabs button{color:#5AA9F0}body:not(.light) .ltabs button.on{border-bottom-color:#5AA9F0}
+body:not(.light) .ltable table{color:var(--text)}body:not(.light) .ltable th{border-bottom-color:var(--line)}
+body:not(.light) .ltable td{background:var(--panel);border-color:var(--line);box-shadow:none}body:not(.light) .lrow td:first-child{border-left-color:var(--line)}body:not(.light) .lst span{color:var(--muted)}
+.ltable tr.lrow{display:table-row;padding:0;font-size:inherit;gap:0}
+body:not(.light) .ldet td{background:color-mix(in srgb,var(--text) 4%,var(--panel))}
+body:not(.light) .rpti{border-color:var(--line)}body:not(.light) .rprop code{background:var(--bg);color:var(--text)}
+body:not(.light) .rptprev{background:var(--bg);color:var(--text);border-color:var(--line)}body:not(.light) .rl.rbad{background:color-mix(in srgb,#C4314B 16%,transparent)}body:not(.light) .rdev{background:color-mix(in srgb,#C19C00 30%,transparent);color:var(--text)}`; document.head.appendChild(st); }
+
+/* ---------- 5. Writing reports with a language model ---------- */
+CFG.llmw = Object.assign({ provider: "server", key: "", model: "claude-sonnet-5-5", url: "", header: "", headerValue: "", redact: true, style: "", examples: [] }, CFG.llmw || {});
+const LLMW_MODELS = { "claude-sonnet-5-5": "Claude Sonnet 5.5 — fast, good for most drafting", "claude-opus-5-5": "Claude Opus 5.5 — slower, strongest at following a strict style" };
+function llmwDirect(){ const c = CFG.llmw; return c.provider === "anthropic" ? !!c.key : c.provider === "gateway" ? !!c.url : false; }
+function llmwRedactor(){ if (!CFG.llmw.redact) return { hide: s => s, show: s => s };
+  const terms = []; SITES.forEach(s => { if (s.code) terms.push(s.code); if (s.name && s.name.length > 3) terms.push(s.name); });
+  const uniq = [...new Set(terms)].sort((a, b) => b.length - a.length), map = new Map(), back = new Map(); let n = 0;
+  const re = uniq.length ? new RegExp("\\b(" + uniq.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "g") : null;
+  return { hide: s => re ? String(s).replace(re, m => { if (!map.has(m)){ const k = "SITE-" + (++n); map.set(m, k); back.set(k, m); } return map.get(m); }) : s,
+    show: s => String(s).replace(/SITE-\d+/g, k => back.get(k) || k) }; }
+{ const _ready = llmReady, _llm = llm;
+  llmReady = async function(){ return llmwDirect() || (CFG.llmw.provider === "server" && _ready()); };
+  llm = async function(system, user){ if (!llmwDirect()) return _llm(system, user);
+    const c = CFG.llmw, gw = c.provider === "gateway", R = llmwRedactor(), headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
+    if (gw){ if (c.header && c.headerValue) headers[c.header] = c.headerValue; } else Object.assign(headers, { "x-api-key": c.key, "anthropic-dangerous-direct-browser-access": "true" });
+    let r; try{ r = await fetch(gw ? c.url : "https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify({ model: c.model || "claude-sonnet-5-5", max_tokens: 2400, system: R.hide(system), messages: [{ role: "user", content: R.hide(user) }] }) }); }
+    catch(e){ throw new Error(gw ? "the gateway could not be reached from this browser" : "api.anthropic.com could not be reached from this network"); }
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? "the key was rejected" : (j.error && j.error.message) || "HTTP " + r.status);
+    return R.show((j.content || []).map(b => b.text || "").join("").trim()); }; }
+// the one way PSOC reports are written: record → template → house style + examples → fact check → format check
+function llmwSystem(kind){ const ex = (CFG.llmw.examples || []).filter(x => x && x.trim()).slice(0, 3);
+  return [`You write ${kind} for a corporate Physical Security Operations Centre (PSOC). You are given the incident record (the only source of facts) and a draft in the standard template.`,
+    "Rewrite only the free-text sentences so they read clearly and professionally. Do not add facts, times, numbers, names, places or causes that are not in the record. If something is unclear, keep it short and mark it (unconfirmed).",
+    "Keep every heading, its order, and the fixed sentences exactly as in the draft.", RPT_RULES,
+    CFG.llmw.style ? "Team house style (follow it):\n" + CFG.llmw.style : "",
+    ex.length ? "Examples of reports the team considers well written (match their tone and level of detail, not their facts):\n" + ex.map((x, i) => `--- Example ${i + 1} ---\n${x.trim()}`).join("\n") : "",
+    "Return only the full report text, nothing else."].filter(Boolean).join("\n\n"); }
+function llmwFactGuard(out, sources){ const src = sources.join("\n"), toks = new Set();
+  (out.match(/\b\d{4}\s*hrs\b|\b\d{1,3}(?:[,.]\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:km|m|people|persons|staff|injur\w*|dead|cameras?)\b|\b[A-Z]{3}\d{2,3}\b/g) || []).forEach(t => { const k = t.replace(/\s+/g, " "); if (!src.includes(k) && !src.includes(k.replace(/\s/g, ""))) toks.add(k); });
+  return [...toks]; }
+document.addEventListener("click", async e => { const t = e.target.closest("#panel [data-rptdraft],#panel [data-rptpolish]"); if (!t) return; const inc = SHARED.incidents.find(x => x.id === UI.incOpen);
+  if (!inc || !(llmwDirect() || (CFG.llmw.provider === "server" && LLM_READY === true))) return;
+  // a model is connected: draft and improve through the one writing method below instead of the template-only path
+  e.stopPropagation(); e.preventDefault();
+  const cur = UI.rptFor === inc.id && UI.rptDraftText != null ? UI.rptDraftText : (inc.report || {}).text || "";
+  if (t.dataset.rptdraft !== undefined && cur.trim() && !(await confirmBox("Replace the report with a fresh draft?", "The model writes it from the incident record in the standard template and your house style."))) return;
+  const base = t.dataset.rptdraft !== undefined ? rptDraft(inc) : cur, rec = JSON.stringify({ id: inc.id, title: inc.title, site: inc.site, severity: inc.sev, status: inc.status, created: rptDate(inc.createdAt) + " " + rptTime(inc.createdAt), summary: inc.summary, scenario: inc.scenario, impact: inc.impact, mitigation: inc.mitigation, timeline: (inc.trouble || []).concat(inc.discussion || []).map(x => sgParts(x.t).hm + " hrs: " + x.text) }, null, 1);
+  const label = t.textContent; t.disabled = true; t.textContent = "Writing…";
+  try{ const out = (await llm(llmwSystem("incident reports"), `INCIDENT RECORD:\n${rec}\n\nDRAFT IN THE STANDARD TEMPLATE:\n${base}`)).trim();
+    const unknown = llmwFactGuard(out, [rec, base]); UI.rptGuard = unknown; UI.rptFor = inc.id; UI.rptDraftText = out; renderPanel();
+    const n = rptCheck(out, inc).length;
+    toast(unknown.length ? "Check the draft" : "Draft ready", (unknown.length ? `Not found in the incident record: ${unknown.slice(0, 5).join(", ")}. ` : "") + (n ? `${n} difference${n === 1 ? "" : "s"} from the template — use Fix all.` : "Matches the standard template."), unknown.length ? "var(--amber)" : "var(--green)"); }
+  catch(err){ toast("The model could not write the report", err.message, "var(--red)"); }
+  finally{ t.disabled = false; t.textContent = label; } }, true);
+setTimeout(() => { if (CFG.llmw.provider === "server") llmReady(); }, 4000);
+{ const _rt = reportTab; reportTab = function(inc){ let h = _rt(inc); const direct = llmwDirect(), g = UI.rptFor === inc.id ? (UI.rptGuard || []) : [];
+    h = h.replace('<button class="act on" data-rptdraft>', `<button class="act" data-llmwset title="Choose the model, house style and example reports">⚙ Writing setup</button><button class="act on" data-rptdraft>`);
+    const note = `<div class="llmwnote">${direct || CFG.llmw.provider === "server" && LLM_READY ? `<b>How reports are written:</b> facts from this incident record → the standard template → your house style and example reports → a check that no time, number or site was added → the format check. Site codes and names are ${CFG.llmw.redact ? "replaced with SITE-1, SITE-2 … before anything is sent to the model" : "sent to the model as written"}.` : `<b>No language model connected.</b> Draft builds the standard template from the record. Open ⚙ Writing setup to connect a model so it can write the free text in your house style.`}${g.length ? `<div class="llmwwarn">Not found in the incident record — check before sending: <b>${g.map(esc).join(", ")}</b></div>` : ""}</div>`;
+    return h.replace('<div class="inccardb rptgrid">', note + '<div class="inccardb rptgrid">'); }; }
+function openWritingSetup(){ const c = CFG.llmw;
+  openModal(head("Writing with AI") + `<div class="bd"><p class="help" style="margin-top:0">One method for every report: facts come only from the record, the structure from the standard template, the tone from your house style and up to three example reports the team likes. The console then checks that no time, number or site code was added, and runs the format check.</p>
+    <div class="fgrid"><label class="fld">Model connection<select id="lwP"><option value="server"${c.provider === "server" ? " selected" : ""}>PSOC server (LLM_URL / LLM_KEY)</option><option value="anthropic"${c.provider === "anthropic" ? " selected" : ""}>Anthropic API key (this browser)</option><option value="gateway"${c.provider === "gateway" ? " selected" : ""}>Company gateway (Messages API)</option></select></label>
+      <label class="fld">Model<select id="lwM">${Object.entries(LLMW_MODELS).map(([k, l]) => `<option value="${k}"${k === c.model ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label></div>
+    <div class="fgrid" id="lwA"><label class="fld">Anthropic API key<input id="lwK" type="password" autocomplete="off" value="${esc(c.key)}" placeholder="sk-ant-…"></label></div>
+    <div class="fgrid" id="lwG"><label class="fld">Gateway URL<input id="lwU" value="${esc(c.url)}" placeholder="https://ai-gateway.internal/v1/messages"></label><label class="fld">Auth header (optional)<input id="lwH" value="${esc(c.header)}" placeholder="Authorization"></label><label class="fld">Header value<input id="lwV" type="password" value="${esc(c.headerValue)}"></label></div>
+    <label class="chkline"><input type="checkbox" id="lwR"${c.redact ? " checked" : ""}> Replace site codes and site names with SITE-1, SITE-2 … before sending, and put them back in the answer</label>
+    <label class="fld">House style (one rule per line)<textarea id="lwS" style="min-height:110px" placeholder="e.g. Lead with the business impact.&#10;Name the site code in the first sentence.&#10;Use 'the PSOC' not 'we'.">${esc(c.style)}</textarea></label>
+    ${[0, 1, 2].map(i => `<label class="fld">Example report ${i + 1} (optional — paste one the team considers well written; remove personal names first)<textarea data-lwx="${i}" style="min-height:80px">${esc((c.examples || [])[i] || "")}</textarea></label>`).join("")}
+    <p class="help">The key and examples stay in this browser only. ${c.provider === "anthropic" ? "" : ""}For production, prefer the PSOC server or a company gateway so no key sits in a browser.</p><div id="lwOut"></div></div>
+    <div class="ft"><button class="pill" id="lwT">Test connection</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="lwGo">Save</button></div>`, true);
+  const sync = () => { const p = $("#lwP").value; $("#lwA").style.display = p === "anthropic" ? "" : "none"; $("#lwG").style.display = p === "gateway" ? "" : "none"; $("#lwM").closest(".fld").style.display = p === "server" ? "none" : ""; }; $("#lwP").onchange = sync; sync();
+  const read = () => ({ provider: $("#lwP").value, model: $("#lwM").value, key: $("#lwK").value.trim(), url: $("#lwU").value.trim(), header: $("#lwH").value.trim(), headerValue: $("#lwV").value, redact: $("#lwR").checked, style: $("#lwS").value, examples: $$("[data-lwx]").map(x => x.value) });
+  $("#lwGo").onclick = () => { CFG.llmw = read(); LLM_READY = null; saveCfg(); audit("Writing with AI settings changed", CFG.llmw.provider, CFG.llmw.model); $("#ov").classList.remove("show"); renderPanel(); toast("Saved", "Writing with AI", "var(--green)"); };
+  $("#lwT").onclick = async () => { const keep = CFG.llmw; CFG.llmw = read(); LLM_READY = null; $("#lwOut").innerHTML = `<div class="s">Testing…</div>`;
+    try{ const a = await llm("Reply with the single word OK.", "Connection test from the ITE console."); $("#lwOut").innerHTML = `<div class="banner ok">Connected — the model replied "${esc(trunc(a, 40))}".</div>`; }
+    catch(err){ $("#lwOut").innerHTML = `<div class="banner bad">${esc(err.message)}</div>`; } finally{ CFG.llmw = keep; LLM_READY = null; } }; }
+document.addEventListener("click", e => { if (e.target.closest("[data-llmwset]")) openWritingSetup(); });
+{ const st = document.createElement("style"); st.textContent = `.llmwnote{margin:0 22px 4px;padding:8px 12px;border-radius:6px;background:color-mix(in srgb,#2F7BD9 10%,transparent);font-size:12.5px;line-height:1.5}.llmwwarn{margin-top:6px;color:#E8873A}`; document.head.appendChild(st); }
+
+/* ---------- 6. BAU › Access alarms: Key Operational Alarm Categories, week on week ---------- */
+const OGW_KEY = "psoc.uni.ogweek.v1";
+let OGW = lsGet(OGW_KEY, { weeks: {}, file: "", at: 0, sample: false });
+CFG.ogw = Object.assign({ startDay: 2, startHour: 8, region: "APAC", cats: ["Alarm Active", "Door Forced Open", "Door Held Open", "Granted No Entry", "Invalid Badge", "Anti-Passback Violation", "Invalid Access Level", "Alarm – Emergency Exit Only", "Biometric Mismatch", "Invalid Card Format"] }, CFG.ogw || {});
+const ogwNorm = s => String(s || "").toLowerCase().replace(/[–—-]/g, " ").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+function ogwCat(desc){ const d = ogwNorm(desc); return CFG.ogw.cats.find(c => { const n = ogwNorm(c); return d === n || d.startsWith(n) || (n.includes("passback") && d.includes("passback")) || (n.includes("emergency exit") && d.includes("emergency exit")); }) || null; }
+// week boundaries in SGT: the week runs from startDay startHour to the same time a week later
+function ogwWeekStart(t){ const sg = new Date(t + 8 * 3600e3), dow = sg.getUTCDay(); let d = Date.UTC(sg.getUTCFullYear(), sg.getUTCMonth(), sg.getUTCDate(), CFG.ogw.startHour) - 8 * 3600e3;
+  d -= ((dow - CFG.ogw.startDay + 7) % 7) * 864e5; if (d > t) d -= 7 * 864e5; return d; }
+function ogwAdd(rows){ let n = 0; rows.forEach(r => { if (!isFinite(r.t)) return; const w = ogwWeekStart(r.t), k = (r.desc || "(no description)").trim() + "|" + (r.pri == null || r.pri === "" ? "" : r.pri);
+    const W = OGW.weeks[w] = OGW.weeks[w] || {}; W[k] = (W[k] || 0) + 1; n++; }); return n; }
+function ogwParseFile(file){ return file.arrayBuffer().then(buf => { const wb = XLSX.read(buf, { type: "array", cellDates: true }), ws = wb.Sheets[wb.SheetNames[0]], rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  if (!rows.length) throw new Error("the file has no rows"); const cols = Object.keys(rows[0]), find = re => cols.find(c => re.test(c));
+  const ct = find(/ack.*time|time.*ack/i) || find(/^(event |alarm )?(date ?\/? ?time|time)$/i) || find(/time|date/i), cd = find(/alarm desc|description|event type|^alarm$|^event$/i), cp = find(/priority/i), cby = find(/acknowledged by|ack.*by|operator/i);
+  if (!ct || !cd) throw new Error("could not find the time and alarm description columns (found: " + cols.slice(0, 8).join(", ") + ")");
+  const toT = v => v instanceof Date ? v.getTime() - (CFG.ogw.fileTz === "local" ? 0 : 0) : Date.parse(String(v).replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})/, "$3-$2-$1"));
+  return { rows: rows.filter(r => !cby || String(r[cby]).trim()).map(r => ({ t: toT(r[ct]), desc: String(r[cd]), pri: cp ? (r[cp] === "" ? "" : +r[cp]) : "" })), cols: { time: ct, desc: cd, pri: cp, ack: cby } }; }); }
+function ogwTable(wThis){ const wLast = wThis - 7 * 864e5, A = OGW.weeks[wThis] || {}, B = OGW.weeks[wLast] || {};
+  const agg = W => { const o = { cat: {}, pri: {}, other: 0, otherPri: [], total: 0 }; Object.entries(W).forEach(([k, n]) => { const [desc, p] = k.split("|"), c = ogwCat(desc); o.total += n;
+      if (c){ o.cat[c] = (o.cat[c] || 0) + n; if (p !== ""){ const pp = o.pri[c] = o.pri[c] || {}; pp[p] = (pp[p] || 0) + n; } } else { o.other += n; if (p !== "") o.otherPri.push(+p); } }); return o; };
+  const a = agg(A), b = agg(B), hasB = Object.keys(B).length > 0;
+  const rows = CFG.ogw.cats.map(c => { const tw = a.cat[c] || 0, lw = b.cat[c] || 0, pr = a.pri[c] || b.pri[c]; const pri = pr ? Object.entries(pr).sort((x, y) => y[1] - x[1])[0][0] : "—";
+    return { c, pri, tw, lw, isNew: tw > 0 && lw === 0 && hasB, diff: tw - lw }; }).filter(r => r.tw || r.lw).sort((x, y) => y.tw - x.tw);
+  const keyTw = rows.reduce((s, r) => s + r.tw, 0), keyLw = rows.reduce((s, r) => s + r.lw, 0), anyNew = rows.some(r => r.isNew || (r.lw > 0 && r.tw === 0 && false));
+  const lfl = rows.filter(r => r.tw && r.lw), lflTw = lfl.reduce((s, r) => s + r.tw, 0), lflLw = lfl.reduce((s, r) => s + r.lw, 0);
+  const op = a.otherPri.length ? Math.max(...a.otherPri) : null;
+  return { wThis, wLast, rows, keyTw, keyLw, anyNew, lfl, lflTw, lflLw, other: [a.other, b.other], otherPri: op == null ? "—" : op + " and below", total: [a.total, b.total], hasB }; }
+const ogwChg = (d, cmp) => !cmp ? "Not comparable" : d === 0 ? "—" : (d < 0 ? "▼ " : "▲ ") + Math.abs(d).toLocaleString("en-US");
+const ogwFmtD = t => { const d = new Date(t + 8 * 3600e3); return d.toLocaleString("en-US", { month: "long", day: "numeric", timeZone: "UTC" }); };
+const ogwFmtY = t => new Date(t + 8 * 3600e3).getUTCFullYear();
+function ogwHtml(T, forCopy){ const n = v => v.toLocaleString("en-US"), hr = String(CFG.ogw.startHour).padStart(2, "0") + "00";
+  const cap = `Alarms acknowledged by ${esc(CFG.ogw.region)} PSOC operators in Lenel OnGuard. This week covers ${ogwFmtD(T.wThis)} – ${ogwFmtD(T.wThis + 7 * 864e5)}, ${ogwFmtY(T.wThis + 7 * 864e5)}, and last week covers ${ogwFmtD(T.wLast)} – ${ogwFmtD(T.wThis)}, ${ogwFmtY(T.wThis)} (${hr} hrs SGT).`;
+  const S = forCopy ? { t: 'style="border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;font-size:13px;min-width:640px"', h: 'style="background:#12284B;color:#fff;text-align:left;padding:8px 10px"', hn: 'style="background:#12284B;color:#fff;text-align:right;padding:8px 10px"', d: 'style="padding:7px 10px;border-bottom:1px solid #E3E6EA"', dn: 'style="padding:7px 10px;border-bottom:1px solid #E3E6EA;text-align:right"', tot: 'style="padding:8px 10px;background:#EAF1FA;font-weight:700;border-bottom:1px solid #D5DEEA"', totn: 'style="padding:8px 10px;background:#EAF1FA;font-weight:700;text-align:right;border-bottom:1px solid #D5DEEA"' } : { t: 'class="ogwt"', h: "", hn: 'class="num"', d: "", dn: 'class="num"', tot: 'class="tot"', totn: 'class="tot num"' };
+  const tr = r => `<tr><td ${S.d}>${esc(r.c)}</td><td ${S.d}>${esc(String(r.pri))}</td><td ${S.dn}>${n(r.tw)}</td><td ${S.dn}>${r.lw || !T.hasB ? n(r.lw) : "—"}</td><td ${S.dn}>${r.isNew ? "New" : T.hasB ? ogwChg(r.diff, true) : "—"}</td></tr>`;
+  return `${forCopy ? `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;font-weight:700;margin:0 0 4px">Key Operational Alarm Categories</p>` : ""}<p ${forCopy ? 'style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#555;margin:0 0 10px"' : 'class="s ogwcap"'}>${cap}</p>
+  <table ${S.t}><thead><tr><th ${S.h}>Alarm category</th><th ${S.h}>Priority</th><th ${S.hn}>This week</th><th ${S.hn}>Last week</th><th ${S.hn}>Change</th></tr></thead><tbody>${T.rows.map(tr).join("")}
+    <tr><td ${S.tot} colspan="2">Total key operational alarms (${T.rows.length} categories)</td><td ${S.totn}>${n(T.keyTw)}</td><td ${S.totn}>${T.hasB ? n(T.keyLw) : "—"}</td><td ${S.totn}>${ogwChg(T.keyTw - T.keyLw, T.hasB && !T.anyNew)}</td></tr>
+    ${T.anyNew ? `<tr><td ${S.tot} colspan="2">Like-for-like total (${T.lfl.length} categories tracked both weeks)</td><td ${S.totn}>${n(T.lflTw)}</td><td ${S.totn}>${n(T.lflLw)}</td><td ${S.totn}>${ogwChg(T.lflTw - T.lflLw, true)}</td></tr>` : ""}
+    <tr><td ${S.d}>Other alarm definitions and system events</td><td ${S.d}>${esc(T.otherPri)}</td><td ${S.dn}>${n(T.other[0])}</td><td ${S.dn}>${T.hasB ? n(T.other[1]) : "—"}</td><td ${S.dn}>${ogwChg(T.other[0] - T.other[1], T.hasB && !T.anyNew)}</td></tr>
+    <tr><td ${S.d}>Category total used for classification</td><td ${S.d}></td><td ${S.dn}>${n(T.total[0])}</td><td ${S.dn}>${T.hasB ? n(T.total[1]) : "—"}</td><td ${S.dn}>${ogwChg(T.total[0] - T.total[1], T.hasB && !T.anyNew)}</td></tr></tbody></table>`; }
+function ogwSummary(T){ const n = v => v.toLocaleString("en-US"), up = T.rows.filter(r => !r.isNew && r.lw && r.diff > 0).sort((a, b) => b.diff - a.diff), dn = T.rows.filter(r => !r.isNew && r.lw && r.diff < 0).sort((a, b) => a.diff - b.diff), nw = T.rows.filter(r => r.isNew);
+  return [`PSOC operators acknowledged ${n(T.keyTw)} key operational alarms in Lenel OnGuard in the week ending ${ogwFmtD(T.wThis + 7 * 864e5)} ${ogwFmtY(T.wThis + 7 * 864e5)}.`,
+    T.anyNew ? `On a like-for-like basis (${T.lfl.length} categories tracked both weeks), alarms ${T.lflTw <= T.lflLw ? "fell" : "rose"} by ${n(Math.abs(T.lflTw - T.lflLw))} to ${n(T.lflTw)}.` : T.hasB ? `This is ${T.keyTw <= T.keyLw ? "a decrease" : "an increase"} of ${n(Math.abs(T.keyTw - T.keyLw))} on the previous week.` : "",
+    T.rows[0] ? `${T.rows[0].c} remained the largest category (${n(T.rows[0].tw)}).` : "",
+    dn[0] ? `The largest decrease was ${dn[0].c} (down ${n(-dn[0].diff)}).` : "", up[0] ? `The largest increase was ${up[0].c} (up ${n(up[0].diff)}).` : "",
+    nw.length ? `${nw.map(r => r.c).join(", ")} ${nw.length === 1 ? "is" : "are"} tracked from this week, so the overall total is not comparable with last week.` : ""].filter(Boolean).join(" "); }
+function ogwPanel(){ const weeks = Object.keys(OGW.weeks).map(Number).sort((a, b) => b - a), now = Date.now(), lastDone = ogwWeekStart(now) - 7 * 864e5;
+  const sel = +UI.ogwWeek || (weeks.includes(lastDone) ? lastDone : weeks[0]), T = weeks.length ? ogwTable(sel) : null;
+  return `<div class="pbody">${OGW.sample ? `<div class="banner train">SAMPLE WEEKS — made-up numbers to show the report. Import an OnGuard export to replace them.</div>` : ""}
+    <div class="ogwbar"><b>Key Operational Alarm Categories</b><span class="sp"></span>${weeks.length ? `<label class="ctl">Week <select data-ogwweek>${weeks.map(w => `<option value="${w}"${w === sel ? " selected" : ""}>${ogwFmtD(w)} – ${ogwFmtD(w + 7 * 864e5)} ${ogwFmtY(w + 7 * 864e5)}</option>`).join("")}</select></label>` : ""}
+      <button class="tab-mini" data-ogwimp>Import OnGuard export…</button>${weeks.length ? `<button class="tab-mini" data-ogwcopy>Copy table for email</button><button class="tab-mini" data-ogwsum>Copy summary</button>` : `<button class="tab-mini" data-ogwsample>Load sample weeks</button>`}<button class="tab-mini" data-ogwset>Categories…</button>${weeks.length ? `<button class="tab-mini" data-ogwclear>Clear</button>` : ""}</div>
+    ${T ? ogwHtml(T, false) + `<div class="ogwsum"><div class="sec">Summary</div><p>${esc(ogwSummary(T))}</p></div>` : `<div class="empty">Import an alarm export from OnGuard Alarm Monitoring (or an OnGuard report saved as CSV/Excel) with the alarm description, priority and acknowledged time. The console counts each week (${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][CFG.ogw.startDay]} ${String(CFG.ogw.startHour).padStart(2, "0")}00 hrs SGT to the same time a week later) and compares it with the week before.</div>`}
+    <p class="help" style="margin-top:12px">Imported files are read in this browser and only weekly counts per alarm description and priority are kept (no cardholder names, readers or panels). ${OGW.file ? `Last import: ${esc(OGW.file)}, ${esc(sgt(OGW.at))}.` : ""} Rows with an empty "acknowledged by" column are left out when that column exists.</p>
+    <input type="file" id="ogwFile" accept=".csv,.xlsx,.xls,.txt" hidden></div>`; }
+{ const _ap = accessPanel; accessPanel = function(){ const f = UI.accFilter || "open"; let h;
+    if (f === "weekly"){ h = _ap.call(this); const i = h.indexOf('<div class="pbody">'); h = (i > 0 ? h.slice(0, i) : h) + ogwPanel(); }
+    else h = _ap.call(this);
+    return h.replace(/(<button class="tab-mini" data-accf="all"[^>]*>All<\/button>)/, `$1<button class="tab-mini" data-accf="weekly" aria-pressed="${f === "weekly"}">Weekly categories</button>`); }; }
+function ogwSample(){ OGW = { weeks: {}, file: "sample", at: Date.now(), sample: true }; const w1 = ogwWeekStart(Date.now()) - 7 * 864e5, w0 = w1 - 7 * 864e5, rnd = (a, b) => Math.round(a + Math.random() * (b - a));
+  const put = (w, desc, pri, n) => { const W = OGW.weeks[w] = OGW.weeks[w] || {}; W[desc + "|" + pri] = n; };
+  [["Alarm Active", 253, 3000, 4200], ["Door Forced Open", 253, 900, 1400], ["Door Held Open", 253, 600, 900], ["Anti-Passback Violation", 200, 120, 240], ["Alarm - Emergency Exit Only", 253, 80, 160], ["Biometric Mismatch", 200, 20, 60]].forEach(([d, p, a, b]) => { put(w0, d, p, rnd(a, b)); put(w1, d, p, rnd(a, b)); });
+  [["Granted No Entry", 400, 700], ["Invalid Badge", 350, 650], ["Invalid Access Level", 120, 260], ["Invalid Card Format", 20, 50]].forEach(([d, a, b]) => put(w1, d, "", rnd(a, b)));
+  put(w0, "Communications Lost", 150, rnd(20000, 40000)); put(w1, "Communications Lost", 150, rnd(15000, 25000)); put(w0, "Reader Mode Change", 50, rnd(5000, 9000)); put(w1, "Reader Mode Change", 50, rnd(3000, 6000));
+  lsSet(OGW_KEY, OGW); UI.ogwWeek = w1; saveUI(); renderPanel(); }
+document.getElementById("panel").addEventListener("change", e => { if (e.target.matches("[data-ogwweek]")){ UI.ogwWeek = +e.target.value; saveUI(); renderPanel(); }
+  if (e.target.id === "ogwFile"){ const f = e.target.files[0]; if (!f) return; ogwParseFile(f).then(({ rows, cols }) => { if (OGW.sample) OGW = { weeks: {}, file: "", at: 0, sample: false };
+      const n = ogwAdd(rows); OGW.file = f.name; OGW.at = Date.now(); lsSet(OGW_KEY, OGW); audit("OnGuard alarm export imported", f.name, n + " rows"); UI.ogwWeek = 0; saveUI(); renderPanel();
+      toast("Imported " + n.toLocaleString("en-US") + " alarms", `Columns used: ${cols.time} · ${cols.desc}${cols.pri ? " · " + cols.pri : ""}${cols.ack ? " · " + cols.ack : ""}`, "var(--green)"); })
+    .catch(err => toast("Could not read that file", err.message, "var(--red)")); } });
+document.getElementById("panel").addEventListener("click", async e => { const t = e.target.closest("[data-ogwimp],[data-ogwcopy],[data-ogwsum],[data-ogwsample],[data-ogwset],[data-ogwclear]"); if (!t) return; const d = t.dataset;
+  const weeks = Object.keys(OGW.weeks).map(Number).sort((a, b) => b - a), lastDone = ogwWeekStart(Date.now()) - 7 * 864e5, sel = +UI.ogwWeek || (weeks.includes(lastDone) ? lastDone : weeks[0]);
+  if (d.ogwimp !== undefined) $("#ogwFile").click();
+  if (d.ogwsample !== undefined) ogwSample();
+  if (d.ogwcopy !== undefined){ const T = ogwTable(sel); copyRich(ogwHtml(T, true), ogwSummary(T)); toast("Table copied", "Paste it into the email — it keeps its formatting", "var(--green)"); }
+  if (d.ogwsum !== undefined){ const T = ogwTable(sel); let s = ogwSummary(T);
+    if (await llmReady()){ try{ s = await llm(llmwSystem("weekly alarm summaries") + "\nWrite two or three sentences. Use only the numbers given.", "Weekly figures:\n" + ogwSummary(T) + "\n\nTable rows:\n" + T.rows.map(r => `${r.c}: ${r.tw} this week, ${r.isNew ? "new category" : r.lw + " last week"}`).join("\n")); const bad = llmwFactGuard(s, [ogwSummary(T), JSON.stringify(T)]); if (bad.length) s = ogwSummary(T); }catch(err){} }
+    try{ await navigator.clipboard.writeText(s); toast("Summary copied", trunc(s, 160), "var(--green)"); }catch(err){ toast("Summary", s, "var(--teal)"); } }
+  if (d.ogwclear !== undefined && await confirmBox("Clear the weekly alarm counts?", "Imported weeks are removed from this browser.")){ OGW = { weeks: {}, file: "", at: 0, sample: false }; lsSet(OGW_KEY, OGW); renderPanel(); }
+  if (d.ogwset !== undefined){ openModal(head("Weekly alarm categories") + `<div class="bd"><label class="fld">Key operational alarm categories (one per line, as named in OnGuard)<textarea id="ogC" style="min-height:200px">${esc(CFG.ogw.cats.join("\n"))}</textarea></label>
+      <div class="fgrid3"><label class="fld">Week starts<select id="ogD">${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((x, i) => `<option value="${i}"${i === CFG.ogw.startDay ? " selected" : ""}>${x}</option>`).join("")}</select></label><label class="fld">at (hour, SGT)<input id="ogH" type="number" min="0" max="23" value="${CFG.ogw.startHour}"></label><label class="fld">Region name<input id="ogR" value="${esc(CFG.ogw.region)}"></label></div></div>
+      <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="ogGo">Save</button></div>`);
+    $("#ogGo").onclick = () => { CFG.ogw.cats = $("#ogC").value.split("\n").map(s => s.trim()).filter(Boolean); CFG.ogw.startDay = +$("#ogD").value; CFG.ogw.startHour = Math.max(0, Math.min(23, +$("#ogH").value || 0)); CFG.ogw.region = $("#ogR").value.trim() || "APAC"; saveCfg(); $("#ov").classList.remove("show"); renderPanel(); }; } });
+{ const st = document.createElement("style"); st.textContent = `
+.ogwbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px}.ogwbar>b{font-size:15px}.ogwcap{margin:0 0 10px;font-size:12.5px}
+.ogwt{width:100%;max-width:980px;border-collapse:collapse;font-size:13px}.ogwt th{background:#12284B;color:#fff;text-align:left;padding:9px 12px;font-weight:700}.ogwt th.num,.ogwt td.num{text-align:right}
+.ogwt td{padding:8px 12px;border-bottom:1px solid var(--line)}.ogwt tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--text) 3%,transparent)}
+.ogwt td.tot{background:color-mix(in srgb,#2F7BD9 12%,var(--panel));font-weight:700}.ogwsum{max-width:980px;margin-top:12px}.ogwsum p{margin:4px 0;line-height:1.55}`; document.head.appendChild(st); }
+
+
 boot();
 
 </script>
