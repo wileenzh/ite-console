@@ -13,6 +13,20 @@ This hosted copy runs entirely in your browser:
 Features that need a server (shared data, background monitoring, relaying news sources that browsers block) are
 described in the hosting guide that ships with the full package.
 
+## Security gateways
+
+Administrator › **Security** shows and controls them:
+- **Inbound data gateway** — every response from an outside API, feed, relay or server is checked before the console
+  uses it: executable content and oversized responses are refused; JSON, XML/RSS/CAP, HTML and text are cleaned of
+  script blocks, frames and plugins, inline event handlers, `javascript:` links and `__proto__` keys.
+- **Output guard** — anything that still tries to add a script, plugin, inline handler or script link to the page is
+  removed before it can run.
+- **Library fingerprints** — Leaflet, SheetJS and the libraries loaded on demand only run if they match a pinned
+  SHA-384 fingerprint (jsDelivr, then unpkg).
+- **Content Security Policy** and a **connection gateway** (Monitor or Enforce: only approved hosts).
+- **Access gateway** — optional passcode (PBKDF2-SHA-256), auto-lock when idle, lock-out after wrong tries.
+- A **self-test** runs real malicious samples through the gateway and shows what the console received.
+
 ## iPhone app
 
 **Install:** open https://wileenzh.github.io/ite-console/app/ in **Safari** on the iPhone, tap **Share**, then
