@@ -14627,6 +14627,238 @@ VCC_BASES.splice(0, VCC_BASES.length, ...vccBaseList());
     sel.onchange = () => { UI.vccBase = sel.value; saveUI(); VCC_BASES.splice(0, VCC_BASES.length, ...vccBaseList()); vccSetBase(0); }; }; }
 
 
+
+/* =====================================================================
+   PHONE MODE (15 Oct)
+   On a phone-sized screen the console switches to a phone layout:
+   - a slim top bar (screen name, alarm state, SGT clock)
+   - a bottom tab bar: Home · Map · Queue · Incidents · More
+   - Home: what needs you now, hazards now, the latest alerts, quick actions
+   - Map: the hazard map full screen with the site bar (filters folded away)
+   - every other screen full width, with a Map / List button where the
+     screen has a map
+   - More: every section and tab of the console, searchable, plus the
+     header controls (alarm, sound, theme, sites, settings, sign out)
+   Same sign-in, data and settings as the full console. "Full console"
+   in More switches back; the choice is remembered on this device.
+   ===================================================================== */
+const PH = { mq: matchMedia("(max-width:760px)"), on: false, view: UI.phView || "home", next: null };
+UI.phoneView = UI.phoneView || "auto";
+const phNomap = () => { const m = $("#main"); return !m || m.classList.contains("nomap"); };
+function phTabLabel(m){ for (const g of GROUPS){ const t = g.tabs.find(x => x[0] === m); if (t) return [t[1], g.label]; } return [m, ""]; }
+function phBuild(){ if ($("#ptop")) return;
+  document.body.insertAdjacentHTML("beforeend", `
+    <header id="ptop"><button id="ptTitle" aria-label="Open the menu"><span class="pt1"></span><span class="pt2"></span></button><span class="sp"></span>
+      <button id="ptArm" class="ptchip" aria-label="Earthquake alarm"></button><span id="ptClk" class="num"></span></header>
+    <section id="phome" aria-label="Home"></section>
+    <button id="pflip" hidden></button>
+    <nav id="pnav" aria-label="Phone navigation">${[["home", "Home", '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>'], ["map", "Map", '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>'],
+      ["queue", "Queue", '<path d="M4 6h16M4 12h16M4 18h10"/>'], ["incidents", "Incidents", '<path d="M12 3 2 20h20zM12 10v4M12 17v.5"/>'], ["more", "More", '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>']]
+      .map(([k, l, d]) => `<button data-pnav="${k}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg><span>${l}</span><i class="pb" hidden></i></button>`).join("")}</nav>
+    <div id="pmore" role="dialog" aria-label="Menu" hidden></div>
+    <button id="pback" hidden>📱 Phone view</button>`); }
+function phApply(){ const want = PH.mq.matches && UI.phoneView !== "full" && !!ME; PH.on = want; phBuild();
+  document.body.classList.toggle("phone", want); $("#pback").hidden = !(PH.mq.matches && UI.phoneView === "full" && ME);
+  if (!want){ ["pv-home", "pv-map", "pv-panel"].forEach(c => document.body.classList.remove(c)); if (map) setTimeout(() => map.invalidateSize(), 60); return; }
+  if (PH.view === "map" && phNomap()) PH.view = "panel";
+  ["home", "map", "panel"].forEach(v => document.body.classList.toggle("pv-" + v, PH.view === v)); UI.phView = PH.view; saveUI();
+  if (PH.view === "map" && map) setTimeout(() => { map.invalidateSize(); safe(redrawMap, "map"); }, 80);
+  if (PH.view === "home") phHome();
+  if (typeof sbRender === "function" && !$("#sbTog")) sbRender();
+  phChrome(); }
+function phChrome(){ if (!PH.on) return; const menu = !$("#pmore").hidden; const [t, g] = menu ? ["Menu", "Every screen in the console"] : PH.view === "home" ? ["Home", "PSOC · Intelligence to the Edge"] : PH.view === "map" && UI.mode === "overview" ? ["Map", "Hazards and sites"] : phTabLabel(UI.mode);
+  $("#ptop .pt1").textContent = t; $("#ptop .pt2").textContent = g;
+  const arm = typeof ARMED === "undefined" || ARMED; $("#ptArm").textContent = arm ? "Armed" : "Alarm off"; $("#ptArm").className = "ptchip " + (arm ? "on" : "off");
+  $("#ptClk").textContent = fSgtClock.format(Date.now()).slice(0, 5) + " SGT";
+  const navOn = menu ? "more" : PH.view === "home" ? "home" : PH.view === "map" ? "map" : UI.mode === "actions" ? "queue" : UI.mode === "incidents" ? "incidents" : "more";
+  $$("#pnav [data-pnav]").forEach(b => b.setAttribute("aria-current", b.dataset.pnav === navOn ? "page" : "false"));
+  let c = {}; try{ c = flowCounts(); }catch(e){}
+  const badge = (k, n, hot) => { const i = $(`#pnav [data-pnav="${k}"] .pb`); if (!i) return; i.hidden = !n; i.textContent = n > 99 ? "99+" : n; i.classList.toggle("hot", !!hot); };
+  badge("queue", c.pend || 0, c.late); badge("incidents", c.inc || 0, c.sev12);
+  let todo = 0; try{ todo = todoItems().count; }catch(e){} badge("home", todo, false);
+  const fl = $("#pflip"); fl.hidden = PH.view === "home" || phNomap() || !!$("#pmore:not([hidden])");
+  fl.textContent = PH.view === "map" ? "☰ List" : "🗺 Map"; }
+function phGo(mode, view){ PH.next = view || "panel"; if (UI.mode === mode){ PH.view = PH.next; PH.next = null; phApply(); renderPanel(); return; } setMode(mode); }
+{ const _sm = setMode; setMode = function(m){ const r = _sm.apply(this, arguments); if (PH.on){ const pm = $("#pmore"); if (pm && !pm.hidden) pm.hidden = true; PH.view = PH.next || "panel"; PH.next = null; const p = $("#panel"); if (p) p.scrollTop = 0; phApply(); } return r; }; }
+{ const _ra = renderAll; renderAll = function(){ const r = _ra.apply(this, arguments); if (PH.on !== (PH.mq.matches && UI.phoneView !== "full" && !!ME)) phApply(); else if (PH.on){ phChrome(); if (PH.view === "home") phHome(); } return r; }; }
+// signing in does not go through boot(): watch for it
+setInterval(() => { if (PH.on !== (PH.mq.matches && UI.phoneView !== "full" && !!ME)) phApply(); }, 700);
+
+/* ---------- Home ---------- */
+function phHome(){ const el = $("#phome"); if (!el || !PH.on) return; const now = Date.now(), n = v => (v || 0).toLocaleString("en-US");
+  let c = {}, todo = { count: 0, decide: [], esc: [], tri: [], q: [] }; try{ c = flowCounts(); }catch(e){} try{ todo = todoItems(); }catch(e){}
+  const tile = (go, label, big, sub, col) => `<button class="phtile" data-phgo="${go}" style="--c:${col}"><span class="l">${esc(label)}</span><b>${big}</b><span class="s">${sub}</span></button>`;
+  const ok = "#2FB170";
+  let q24 = [], inRange = [], adv = [], tc = 0, vol = 0, pr = 0;
+  try{ q24 = DATA.quakes.filter(q => q.mag >= 4.5 && now - q.time < 864e5 && inAPAC(q.lat, q.lon)); inRange = DATA.quakes.filter(q => q.nearCount > 0 && q.mag >= CFG.quake.nearMag); }catch(e){}
+  try{ adv = (DATA.alerts || []).filter(a => (a.start || 0) > now - 864e5); }catch(e){}
+  try{ tc = TCS.list.length; }catch(e){} try{ vol = VOL.list.filter(v => v.risk).length; }catch(e){}
+  try{ pr = SHARED.protests.filter(p => !p.deleted && p.status !== "ended").length; }catch(e){}
+  let latest = []; try{ latest = asEvents().slice().sort((a, b) => b.score - a.score || b.last - a.last).slice(0, 8); }catch(e){}
+  const sc = s => s >= 80 ? "#E5484D" : s >= 60 ? "#E8873A" : "#C9A227";
+  const arm = typeof ARMED === "undefined" || ARMED;
+  el.innerHTML = `<div class="phwrap">
+    <div class="phhello"><b>${esc(ME ? ME.name.split(/\s+/)[0] : "")}</b>, ${todo.count ? `${n(todo.count)} thing${todo.count === 1 ? "" : "s"} need${todo.count === 1 ? "s" : ""} you` : "nothing is waiting for you"}.<span class="s">${arm ? "Earthquake alarm armed" : "Earthquake alarm OFF"} · ${esc(fSgtClock.format(now).slice(0, 5))} SGT</span></div>
+    <div class="phsec">Needs you now</div>
+    <div class="phgrid">${tile("actions", "Decisions", n(c.pend), c.late ? `<b class="hot">${n(c.late)} late</b>` : c.pend ? "waiting for a decision" : "nothing waiting", c.late ? "#E5484D" : c.pend ? "#E8873A" : ok)}
+      ${tile("escalations", "Escalations", n(c.open), c.over ? `<b class="hot">${n(c.over)} update overdue</b>` : c.open ? "open, updates on time" : "none open", c.over ? "#E5484D" : c.open ? "#E8873A" : ok)}
+      ${tile("incidents", "Incidents", n(c.inc), c.sev12 ? `<b class="hot">${n(c.sev12)} SEV 1–2</b>` : c.inc ? "active" : "none active", c.sev12 ? "#E5484D" : c.inc ? "#E8873A" : ok)}
+      ${tile("todo", "To triage", n(todo.tri.length), "warnings, quakes, news", todo.tri.length ? "#C9A227" : ok)}
+      ${tile("todo", "Shift checklist", n((todo.chk || []).filter(x => x.overdue).length), (todo.chk || []).some(x => x.overdue) ? "due now" : "all done", (todo.chk || []).some(x => x.overdue) ? "#C9A227" : ok)}
+      ${tile("query", "PSOC queries", n(todo.q.length), todo.q.length ? "awaiting a response" : "none waiting", todo.q.length ? "#E8873A" : ok)}</div>
+    <div class="phsec">Hazards now</div>
+    <div class="phgrid three">${tile("quake", "Quakes 24 h", n(q24.length), "M4.5+ Asia-Pacific", q24.length ? "#D97757" : ok)}
+      ${tile("quake", "Sites in range", n(inRange.reduce((s, q) => s + q.nearCount, 0)), inRange.length ? `${inRange.length} quake${inRange.length === 1 ? "" : "s"}` : "none", inRange.length ? "#E5484D" : ok)}
+      ${tile("disasters", "Warnings 24 h", n(adv.length), adv.length ? "official" : "agencies quiet", adv.length ? "#35C1D6" : ok)}
+      ${tile("typhoon", "Typhoons", n(tc), tc ? "active" : "none", tc ? "#2BB3C0" : ok)}
+      ${tile("volcano", "Volcanoes", n(vol), "near sites", vol ? "#E0603A" : ok)}
+      ${tile("protests", "Protests", n(pr), "tracked", pr ? "#8764B8" : ok)}</div>
+    <div class="phsec">Latest alerts <button class="linkbtn" data-phgo="alertstream">all</button></div>
+    <div class="phlist">${latest.map(e => `<button class="phrow" data-phgo="alertstream" style="--c:${sc(e.score)}"><span class="sc">${Math.round(e.score)}</span><span class="tx"><b>${esc(trunc(e.title, 90))}</b><span class="s">${esc(e.cat || "")}${e.near && e.near.s ? ` · ${esc(e.near.s.code)} ${e.near.d < 1 ? "on site" : Math.round(e.near.d) + " km"}` : ""} · ${esc(ago(e.last || e.first))}</span></span></button>`).join("") || `<div class="s phempty">No scored alerts right now.</div>`}</div>
+    <div class="phsec">Quick actions</div>
+    <div class="phacts"><button data-phact="inc">＋ New incident</button><button data-phact="esc">＋ New escalation</button><button data-phact="site">🔍 Find a site</button><button data-phact="hand">Shift handover</button><button data-phact="news">📺 Live news</button><button data-phact="ai">PSOC Chatbot</button></div>
+    <p class="s phfoot">Phone view of the ITE console. Everything else is under More.</p></div>`; }
+setInterval(() => { if (PH.on){ phChrome(); if (PH.view === "home") phHome(); } }, 30e3);
+// the red "attention" strip sits under the top bar and pushes the screen down while it shows
+function phAttn(){ const el = $("#attn"), h = PH.on && el && el.style.display !== "none" ? el.offsetHeight : 0; document.body.style.setProperty("--pa", h + "px"); }
+setInterval(phAttn, 500); if (typeof ResizeObserver !== "undefined") setTimeout(() => { const el = $("#attn"); if (el) new ResizeObserver(phAttn).observe(el); }, 1000);
+{ const _ra2 = renderAttn; renderAttn = function(){ const r = _ra2.apply(this, arguments); setTimeout(phAttn, 0); return r; }; }
+// wide tables become cards on a phone: each cell carries its column name
+function phCards(){ if (!PH.on) return; $$("#panel table").forEach(t => { if (t.dataset.pc) return; const th = [...t.querySelectorAll("thead tr:first-child > th")]; const wide = t.closest(".ltable") || (t.classList.contains("acc") && th.length >= 5);
+    if (!wide || t.closest(".ogwt") || t.classList.contains("ogwt")) return; t.dataset.pc = 1; t.classList.add("pcards");
+    const names = th.map(x => (x.childNodes[0] && x.childNodes[0].nodeType === 3 ? x.childNodes[0].textContent : x.textContent).trim());
+    t.querySelectorAll("tbody > tr").forEach(tr => { if (tr.children.length !== th.length) return; [...tr.children].forEach((td, i) => { if (names[i]) td.dataset.l = names[i]; }); }); }); }
+{ const _rp = renderPanel; renderPanel = function(){ const r = _rp.apply(this, arguments); try{ phCards(); }catch(e){} return r; }; }
+new MutationObserver(() => { if (PH.on) try{ phCards(); }catch(e){} }).observe(document.getElementById("panel"), { childList: true, subtree: true });
+
+/* ---------- More ---------- */
+function phMore(open){ const el = $("#pmore"); if (!open){ el.hidden = true; phChrome(); return; }
+  const tabs = GROUPS.filter(g => g.id !== "admin" || can("admin")).map(g => ({ g, tabs: g.tabs.filter(t => t[0] !== "releases" && (!isLimited() || canSee(t[0]))) })).filter(x => x.tabs.length);
+  const arm = typeof ARMED === "undefined" || ARMED, snd = /on/i.test(($("#soundBtn") || {}).textContent || ""), light = document.body.classList.contains("light");
+  el.innerHTML = `<div class="pmh"><input id="pmQ" type="search" placeholder="Find a screen…" aria-label="Find a screen"><button class="pmx" data-pmx aria-label="Close">✕</button></div>
+    <div class="pmb"><div class="pmctl">
+      <button data-pmc="arm" class="${arm ? "on" : ""}"><b>${arm ? "Armed" : "Off"}</b><span>Earthquake alarm</span></button>
+      <button data-pmc="sound" class="${snd ? "on" : ""}"><b>${snd ? "On" : "Off"}</b><span>Sound</span></button>
+      <button data-pmc="theme"><b>${light ? "Light" : "Dark"}</b><span>Theme</span></button>
+      <button data-pmc="sites"><b>${n2(SITES.filter(isLive).length)}</b><span>Sites</span></button></div>
+    ${tabs.map(({ g, tabs }) => `<div class="pmg" data-pmg><div class="pmgh">${esc(g.label)}</div>${tabs.map(t => `<button class="pmt${t[0] === UI.mode && PH.view === "panel" ? " on" : ""}" data-pmgo="${t[0]}" data-k="${esc((g.label + " " + t[1]).toLowerCase())}">${esc(t[1])}</button>`).join("")}</div>`).join("")}
+    <div class="pmg"><div class="pmgh">Console</div>
+      ${can("settings") ? `<button class="pmt" data-pmc="settings">Settings</button><button class="pmt" data-pmc="int">Integrations</button>` : ""}
+      <button class="pmt" data-pmc="test">Test the earthquake alarm</button><button class="pmt" data-pmc="full">Full console view</button>
+      <button class="pmt" data-pmc="out">Sign out${ME ? " (" + esc(ME.name) + ")" : ""}</button></div></div>`;
+  el.hidden = false; phChrome(); }
+const n2 = v => (v || 0).toLocaleString("en-US");
+document.addEventListener("input", e => { if (e.target.id !== "pmQ") return; const q = e.target.value.trim().toLowerCase();
+  $$("#pmore [data-pmgo]").forEach(b => b.hidden = !!q && !b.dataset.k.includes(q)); $$("#pmore [data-pmg]").forEach(g => g.hidden = !!q && !g.querySelector("[data-pmgo]:not([hidden])")); });
+
+/* ---------- taps ---------- */
+document.addEventListener("click", e => { const t = e.target;
+  const nv = t.closest("[data-pnav]"); if (nv){ const k = nv.dataset.pnav; if (k !== "more") phMore(false);
+    if (k === "home"){ PH.view = "home"; phApply(); $("#phome").scrollTop = 0; }
+    else if (k === "map"){ phGo("overview", "map"); }
+    else if (k === "queue") phGo("actions");
+    else if (k === "incidents") phGo("incidents");
+    else phMore($("#pmore").hidden); return; }
+  if (t.closest("#ptTitle")){ phMore($("#pmore").hidden); return; }
+  if (t.closest("#ptArm")){ const b = $("#armBtn"); if (b) b.click(); setTimeout(phChrome, 50); return; }
+  if (t.closest("#pflip")){ PH.view = PH.view === "map" ? "panel" : "map"; phApply(); return; }
+  if (t.closest("#pback")){ UI.phoneView = "auto"; saveUI(); phApply(); return; }
+  const go = t.closest("[data-phgo]"); if (go){ phGo(go.dataset.phgo); return; }
+  const pg = t.closest("[data-pmgo]"); if (pg){ phMore(false); phGo(pg.dataset.pmgo); return; }
+  if (t.closest("[data-pmx]")){ phMore(false); return; }
+  const c = t.closest("[data-pmc]"); if (c){ const k = c.dataset.pmc, click = id => { const b = document.getElementById(id); if (b) b.click(); };
+    if (k === "arm"){ click("armBtn"); phMore(true); } if (k === "sound"){ click("soundBtn"); phMore(true); }
+    if (k === "theme"){ applyTheme(document.body.classList.contains("light") ? "dark" : "light"); phMore(true); }
+    if (k === "sites"){ phMore(false); openSites(); } if (k === "settings"){ phMore(false); openSettings(); } if (k === "int"){ phMore(false); openIntegrations(); }
+    if (k === "test"){ phMore(false); click("testBtn"); } if (k === "full"){ phMore(false); UI.phoneView = "full"; saveUI(); phApply(); toast("Full console view", "Tap \"Phone view\" at the bottom to switch back.", "var(--teal)"); }
+    if (k === "out"){ phMore(false); signOut("phone"); } return; }
+  const a = t.closest("[data-phact]"); if (a){ const k = a.dataset.phact;
+    if (k === "inc" && guard("escalate")) openIncidentForm(); if (k === "esc" && guard("escalate")) openEventModal(null, {});
+    if (k === "site"){ phGo("overview", "map"); setTimeout(() => { const i = $("#sbQ"); if (i) i.focus(); }, 300); }
+    if (k === "hand") openHandover(); if (k === "news") phGo("livenews"); if (k === "ai") phGo("ai"); return; } });
+PH.mq.addEventListener ? PH.mq.addEventListener("change", phApply) : PH.mq.addListener(phApply);
+{ const _boot = boot; boot = function(){ const r = _boot.apply(this, arguments); setTimeout(phApply, 0); return r; }; }
+setTimeout(phApply, 400);
+// the site bar folds its filters behind one button on a phone
+{ const _sr = sbRender; sbRender = function(){ _sr.apply(this, arguments); const bar = $("#siteBar"); if (!bar || bar.querySelector("#sbTog")) return;
+    const f = UI.sbar.cls || UI.sbar.st || UI.sbar.cc; bar.querySelector(".sbq").insertAdjacentHTML("afterend", `<button type="button" class="sbb" id="sbTog" aria-expanded="${!!PH.sbOpen}">${f ? "Filters •" : "Filters"}</button>`);
+    bar.classList.toggle("open", !!PH.sbOpen); }; }
+document.addEventListener("click", e => { if (!e.target.closest("#sbTog")) return; PH.sbOpen = !PH.sbOpen; sbRender(); });
+
+{ const st = document.createElement("style"); st.textContent = `
+#ptop,#pnav,#phome,#pflip,#pmore,#sbTog{display:none}body.phone #sbTog{display:block}
+#pback{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:950;background:#2F7BD9;color:#fff;border:0;border-radius:20px;padding:10px 16px;font:700 14px var(--font);box-shadow:0 4px 14px rgba(0,0,0,.4)}
+body.phone{--pt:calc(52px + env(safe-area-inset-top,0px));--pn:calc(62px + env(safe-area-inset-bottom,0px));overflow:hidden;padding:0;font-size:14px}
+body.phone .hdr,body.phone #subnav,body.phone .keybar,body.phone #flowbar,body.phone #tvbtn,body.phone .layout{display:none !important}
+body.phone #ptop{display:flex;position:fixed;left:0;right:0;top:0;height:var(--pt);padding:env(safe-area-inset-top,0px) 10px 0 6px;z-index:1600;align-items:center;gap:8px;background:var(--hdr-bg);border-bottom:1px solid var(--line)}
+#ptTitle{display:flex;flex-direction:column;align-items:flex-start;min-width:0;background:none;border:0;padding:4px 6px;text-align:left;cursor:pointer}
+#ptTitle .pt1{font:700 17px var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52vw}#ptTitle .pt2{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52vw}
+#ptop .sp{flex:1}#ptClk{font:700 15px var(--font);color:var(--teal);white-space:nowrap}
+.ptchip{border-radius:14px;padding:4px 10px;font:700 12px var(--font);border:1px solid;background:none;cursor:pointer;white-space:nowrap}.ptchip.on{color:#5CD17A;border-color:#2E9E4A}.ptchip.off{color:#fff;background:#C4314B;border-color:#C4314B}
+body.phone #pnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--pn);padding-bottom:env(safe-area-inset-bottom,0px);z-index:1600;background:var(--hdr-bg);border-top:1px solid var(--line)}
+#pnav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:0;color:var(--muted);font:600 11.5px var(--font);position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#pnav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}#pnav [data-pnav="more"] svg{fill:currentColor;stroke:none}
+#pnav button[aria-current="page"]{color:var(--teal)}#pnav button[aria-current="page"]::before{content:"";position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--teal)}
+#pnav .pb{position:absolute;top:6px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#E8873A;color:#111;font:800 11px/18px var(--font);font-style:normal;text-align:center}#pnav .pb.hot{background:#E5484D;color:#fff}
+body.phone #main{position:fixed;left:0;right:0;top:calc(var(--pt) + var(--pa,0px));bottom:var(--pn);display:block !important;height:auto}
+body.phone #main .divider{display:none}
+body.phone #main .mapwrap{position:absolute;inset:0;display:none;border:0}
+body.phone.pv-map #main .mapwrap{display:block !important}body.phone .maphidden .mapwrap > *{visibility:visible}
+body.phone #main .panel{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;display:block}
+body.phone.pv-map #main .panel{display:none}
+body.phone.pv-home #main{display:none !important}
+body.phone.pv-home #phome{display:block;position:fixed;left:0;right:0;top:calc(var(--pt) + var(--pa,0px));bottom:var(--pn);overflow:auto;-webkit-overflow-scrolling:touch}
+body.phone #pflip:not([hidden]){display:block;position:fixed;right:12px;bottom:calc(var(--pn) + 12px);z-index:1550;background:#2F7BD9;color:#fff;border:0;border-radius:22px;padding:11px 18px;font:700 14px var(--font);box-shadow:0 4px 14px rgba(0,0,0,.45)}
+body.phone #pmore:not([hidden]){display:flex;flex-direction:column;position:fixed;left:0;right:0;top:var(--pt);bottom:var(--pn);z-index:1580;background:var(--bg)}
+.pmh{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.pmh input{flex:1;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);padding:0 12px;font-size:16px}
+.pmx{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:16px;cursor:pointer}
+.pmb{flex:1;overflow:auto;padding:4px 12px 20px;-webkit-overflow-scrolling:touch}
+.pmctl{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 6px}.pmctl button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border-radius:12px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.pmctl b{font-size:15px}.pmctl span{font-size:11px;color:var(--muted)}.pmctl button.on b{color:var(--teal)}
+.pmgh{font:800 11.5px var(--font);letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:16px 2px 6px}
+.pmt{display:block;width:100%;text-align:left;padding:13px 14px;margin:0;background:var(--panel);border:0;border-bottom:1px solid var(--line);font:500 15px var(--font);cursor:pointer}
+.pmg .pmt:first-of-type{border-radius:12px 12px 0 0}.pmg .pmt:last-child{border-radius:0 0 12px 12px;border-bottom:0}.pmg .pmt:only-of-type{border-radius:12px}.pmt.on{color:var(--teal);font-weight:700}
+.phwrap{padding:12px 12px 24px;max-width:640px;margin:0 auto}
+.phhello{font-size:17px;line-height:1.4;margin:2px 2px 4px}.phhello .s{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.phsec{display:flex;align-items:center;justify-content:space-between;font:800 11.5px var(--font);letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:18px 2px 8px}.phsec .linkbtn{text-transform:none;letter-spacing:0;font-size:13px}
+.phgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.phgrid.three{grid-template-columns:repeat(3,1fr)}
+.phtile{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:84px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);border-left:4px solid var(--c);background:var(--panel);text-align:left;cursor:pointer}
+.phtile .l{font:800 10.5px var(--font);letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}.phtile b{font-size:26px;line-height:1.15}.phtile .s{font-size:12px;color:var(--muted);line-height:1.3}.phtile .hot{font-size:12px;color:#F07A86}
+.phgrid.three .phtile{min-height:74px;padding:8px 9px}.phgrid.three .phtile b{font-size:22px}.phgrid.three .phtile .l{font-size:9.5px}.phgrid.three .phtile .s{font-size:11px}
+.phlist{display:flex;flex-direction:column;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.phrow{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--panel);border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer}.phrow:last-child{border-bottom:0}
+.phrow .sc{flex:none;min-width:34px;height:24px;border-radius:12px;background:var(--c);color:#fff;font:800 12px/24px var(--font);text-align:center}.phrow .tx{display:flex;flex-direction:column;gap:2px;min-width:0}.phrow b{font-size:14px;font-weight:600;line-height:1.35}.phrow .s{font-size:12px;color:var(--muted)}
+.phempty{padding:14px;background:var(--panel)}
+.phacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}.phacts button{padding:13px 10px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font:600 14px var(--font);cursor:pointer}.phacts button:first-child{background:#2F7BD9;border-color:#2F7BD9;color:#fff}
+.phfoot{text-align:center;margin-top:18px;font-size:12px}
+body.phone .ov{padding:0;align-items:stretch}body.phone .box{width:100%;max-width:none !important;max-height:none;height:100%;border-radius:0;border:0}
+body.phone .toasts{left:10px;right:10px;bottom:calc(var(--pn) + 10px);max-width:none;z-index:2600}
+body.phone .sitebar .sbq{flex:1 1 0}body.phone .sitebar > select,body.phone .sitebar #sbAddr,body.phone .sitebar #sbReset{display:none}
+body.phone .sitebar.open > select,body.phone .sitebar.open #sbAddr,body.phone .sitebar.open #sbReset{display:block;flex:1 1 45%;max-width:none}
+body.phone .sitebar input,body.phone .sitebar select,body.phone .sbb{height:38px;font-size:15px}
+body.phone .quickbar{flex-wrap:nowrap;overflow-x:auto;pointer-events:auto;scrollbar-width:none}body.phone .quickbar::-webkit-scrollbar{display:none}body.phone .quickbar .qb{flex:none}
+body.phone .leaflet-control-zoom{display:none}
+body.phone #panel .ptools{position:sticky;top:0;z-index:5}
+body.phone #panel .pbody{padding-bottom:80px}
+body.phone #gate .in{max-width:100%}
+@media (min-width:761px){#pback{display:none}}
+body.phone .box .fgrid,body.phone .box .fgrid2,body.phone .box .fgrid3,body.phone .box .fgrid4{grid-template-columns:1fr !important}body.phone .box input,body.phone .box select,body.phone .box textarea{max-width:100%;font-size:16px}
+body.phone #attn{position:fixed;top:var(--pt);left:0;right:0;z-index:1590;flex-wrap:wrap;gap:4px 10px;padding:8px 12px;font-size:13.5px;line-height:1.35}
+body.phone #attn b{flex:1 1 100%}body.phone #attn span{flex:1 1 100%}body.phone #attn .act{padding:7px 14px;font-size:13.5px}
+body.phone .pcards,body.phone .pcards tbody{display:block;min-width:0 !important;width:100%;border-spacing:0}body.phone .pcards thead{display:none}
+body.phone .pcards tbody > tr{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 12px;margin:0 0 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+body.phone .pcards tbody > tr > td{display:block;border:0 !important;padding:0 !important;background:none !important;box-shadow:none !important;min-width:0 !important;font-size:13px;text-align:left !important;white-space:normal}
+body.phone .pcards td[data-l]::before{content:attr(data-l);display:block;font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+body.phone .pcards td:empty,body.phone .pcards td.lx{display:none}
+body.phone .ltable .pcards td.lt,body.phone .pcards td:nth-child(2):not(.lst){flex:1 1 100%;font-size:14px;font-weight:600}
+body.phone .ltable .pcards td.lst{flex:1 1 100%;display:flex;align-items:center;gap:8px;border-left:4px solid var(--sc) !important;padding-left:8px !important}body.phone .ltable .pcards td.lst::before{display:none}body.phone .ltable .pcards td.lst b{display:inline}
+body.phone .ltable{padding:0 10px}body.phone .ltable .pcards tr.ldet{display:block}
+body.phone .iws-banner{flex-wrap:wrap;gap:6px 10px;font-size:13px;line-height:1.4}body.phone .iws-banner > *{flex:0 1 auto}
+body.phone .lfilters{gap:8px 12px;padding:10px 12px}body.phone .lfilters .sp{display:none}body.phone .ltool{padding:8px 12px}
+body.phone .iws-head,body.phone .iws-bar,body.phone .iws-tabs,body.phone .iws-tabbody{padding-left:12px;padding-right:12px}body.phone .iws-tabs{overflow-x:auto;flex-wrap:nowrap}body.phone .iws-tabs button{flex:none}
+body.phone .iws-f{padding:0 12px 0 0;border-left:0}body.phone .rptgrid{grid-template-columns:1fr}body.phone .rptgrid textarea{min-height:320px}`; document.head.appendChild(st); }
+
+
 boot();
 
 </script>
