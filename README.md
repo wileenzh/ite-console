@@ -13,6 +13,16 @@ This hosted copy runs entirely in your browser:
 Features that need a server (shared data, background monitoring, relaying news sources that browsers block) are
 described in the hosting guide that ships with the full package.
 
+## Satellite view and Drone watch (Security Operations)
+
+- **Satellite view**: high-resolution imagery with labels; past imagery (Esri Wayback) with a fade to compare dates;
+  NASA daily satellite (VIIRS); live clouds every 10 minutes (Himawari); night lights for power checks; fire hotspots;
+  your own commercial provider by tile address. "🛰 Satellite view" is also on every site's popup and card.
+- **Drone watch**: drones from sensor feeds (Remote ID receivers, RF detectors, radar — any JSON over HTTPS, OpenDroneID
+  field names understood), from cameras set to watch the sky, and from guard sightings. Alert and critical zones around
+  every site, loitering alerts, tracks and pilot positions, alerts into the Action queue, and a training scenario.
+  Detection only — stopping a drone is for authorised agencies.
+
 ## Security gateways
 
 Administrator › **Security** shows and controls them:

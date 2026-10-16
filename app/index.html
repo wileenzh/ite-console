@@ -15196,6 +15196,316 @@ body.light .sgok{color:#1E7D45}body.light .sgbad{color:#B4232A}body.light .sgwar
 .sgpage table.acc td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}.sgpage table.acc .num{text-align:right}.sgpage code{white-space:pre-wrap;word-break:break-all;font-size:11.5px}.sgpage .help{line-height:1.5;max-width:1000px}.sgmode{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}.sgmode .s{margin-left:6px}.sgmsg{color:#F07A86;margin-top:6px;min-height:1.2em}`; document.head.appendChild(st); }
 
 
+
+/* =====================================================================
+   BASE MAPS THAT WORK, SATELLITE VIEW, DRONE WATCH (16 Oct)
+   - OpenStreetMap refuses tiles to a page opened from a file (no web
+     address is sent); the console now says so and shows Esri streets
+     instead. CARTO basemaps now need a CARTO-issued key (terms of
+     23 Sep 2026), so they are replaced by Esri's equivalent grey maps.
+     Any base map whose tiles all fail falls back to Esri topographic.
+   - Security Operations › Satellite view: high-resolution imagery with
+     labels, past imagery (Esri Wayback) with a fade to compare dates,
+     NASA daily satellite (VIIRS), live clouds every 10 min (Himawari),
+     night lights for power checks, fire hotspots; your own imagery
+     provider by tile address.
+   - Security Operations › Drone watch: detections from drone sensors
+     (Remote ID receivers, RF detectors, radar — any JSON feed), from
+     cameras watching the sky, and from guard sightings; geofences per
+     site; alerts to the Action queue; tracks and pilot positions;
+     a training scenario.
+   ===================================================================== */
+const ESRI2 = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+const GIBS_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
+const utcDay = d => new Date(Date.now() - (d || 0) * 864e5).toISOString().slice(0, 10);
+["gibs.earthdata.nasa.gov", "*.earthdata.nasa.gov", "s3-us-west-2.amazonaws.com", "wayback.maptiles.arcgis.com"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+
+/* ---------- base maps ---------- */
+delete BASE_EXTRA["carto-dark"]; delete BASE_EXTRA["carto-light"]; delete BASES["carto-dark"]; delete BASES["carto-light"];
+BASE_EXTRA["osm"].label = BASES["osm"].label = location.protocol === "file:" ? "OpenStreetMap (needs the console on a website)" : "OpenStreetMap";
+Object.assign(BASE_EXTRA, {
+  "gibs-viirs": { label: "NASA daily satellite (VIIRS, yesterday)", wms: "VIIRS_NOAA20_CorrectedReflectance_TrueColor", fmt: "image/jpeg", time: () => utcDay(1), attr: "Imagery: NASA GIBS / NOAA-20 VIIRS", max: 9 },
+  "gibs-himawari": { label: "Live clouds (Himawari infrared, 10 min)", wms: "Himawari_AHI_Band13_Clean_Infrared", fmt: "image/jpeg", attr: "Imagery: NASA GIBS / JMA Himawari", max: 7 } });
+["gibs-viirs", "gibs-himawari"].forEach(id => BASES[id] = { label: BASE_EXTRA[id].label });
+if (/^carto-/.test(UI.ly.base || "")){ UI.ly.base = /light/.test(UI.ly.base) ? "esri-light" : "esri-dark"; saveUI(); }
+function satLayer(def, opts){ opts = opts || {};
+  if (def.wms) return L.tileLayer.wms(GIBS_WMS, Object.assign({ layers: def.wms, format: def.fmt || "image/png", transparent: def.fmt !== "image/jpeg", version: "1.3.0", uppercase: true, attribution: def.attr, maxNativeZoom: def.max || 9, maxZoom: 19 }, def.time ? { time: typeof def.time === "function" ? def.time() : def.time } : {}, opts));
+  return L.tileLayer(def.url, Object.assign({ maxZoom: 19, maxNativeZoom: def.max || 18, attribution: def.attr }, opts)); }
+{ const _bl = baseLayerFor; baseLayerFor = function(id, onFail){
+    if (id === "osm" && location.protocol === "file:"){ setBase.skipCheck = true; setTimeout(() => toast("OpenStreetMap needs a web address", "OpenStreetMap refuses map tiles to pages opened from a file. Showing Esri streets instead — OpenStreetMap works once the console is served from a website.", "var(--amber)"), 50); id = "esri-street"; }
+    const d = BASE_EXTRA[id]; if (d && d.wms) return satLayer(d);
+    return _bl(id, onFail); }; }
+// any base map that produces only errors falls back to Esri topographic, and says which one failed
+{ const _sb = setBase; setBase = async function(id){ const r = await _sb.apply(this, arguments);
+    try{ if (setBase.skipCheck || (/^g-/.test(id) && !CFG.gKey)){ setBase.skipCheck = false; } else if (typeof baseTiles !== "undefined" && baseTiles && id !== "esri-topo"){ let ok = 0, bad = 0; const lyr = baseTiles, layers = lyr.eachLayer ? (() => { const a = []; lyr.eachLayer(x => a.push(x)); return a; })() : [lyr];
+      layers.forEach(l => { l.on("tileload", () => ok++); l.on("tileerror", () => bad++); });
+      setTimeout(() => { if (baseTiles === lyr && !ok && bad >= 6){ toast("That base map isn't loading here", `${(BASES[id] || {}).label || id} returned no tiles on this network. Switched to Esri topographic.`, "var(--amber)"); setBase("esri-topo"); } }, 7000); } }catch(e){}
+    return r; }; }
+if (typeof sbRender === "function") setTimeout(sbRender, 100);
+
+/* ---------- shared pieces: a map that survives panel refreshes ---------- */
+function keepMap(store, slot, center, zoom){ if (typeof L === "undefined"){ slot.innerHTML = `<div class="vccmapmsg">The map library could not load on this network.</div>`; return null; }
+  if (!store.host){ store.host = document.createElement("div"); store.host.className = "vccmaphost"; store.host.innerHTML = `<div class="vccmapel"></div><div class="satmsg" hidden></div>`; }
+  if (store.host.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(store.host); }
+  if (!store.map){ const el = store.host.querySelector(".vccmapel"); store.map = L.map(el, { zoomControl: true, worldCopyJump: true, zoomSnap: .5 }).setView(center, zoom); el.style.position = "absolute"; el.style.inset = "0"; store.layers = L.layerGroup().addTo(store.map); }
+  setTimeout(() => { try{ store.map.invalidateSize(false); }catch(e){} }, 60); return store.map; }
+function findPlace(q){ q = (q || "").trim(); if (!q) return null; const s = SITES.find(x => x.code.toLowerCase() === q.toLowerCase()) || sbSites(q)[0]; return s ? { lat: s.lat, lon: s.lon, label: s.code + (s.name ? " — " + s.name : ""), site: s } : null; }
+const FULLW = ["protests", "volcano", "satview", "drones"];
+{ const _sm = setMode; setMode = function(m){ const was = UI.mode; if (FULLW.includes(m) && !FULLW.includes(was)) UI.layoutBeforeFull = UI.layout;
+    const r = _sm(m); try{ if (FULLW.includes(m)) setLayout("panel"); else if (FULLW.includes(was) && UI.layoutBeforeFull && UI.layoutBeforeFull !== "panel"){ setLayout(UI.layoutBeforeFull); UI.layoutBeforeFull = null; } }catch(e){} return r; }; }
+if (typeof phChrome === "function"){ const _pc = phChrome; phChrome = function(){ _pc.apply(this, arguments); const f = $("#pflip"); if (f && FULLW.includes(UI.mode)) f.hidden = true; }; }
+{ const g = G("secops"); if (g){ const i = g.tabs.findIndex(t => t[0] === "siteplan"); const at = i >= 0 ? i + 1 : g.tabs.length;
+    if (!g.tabs.some(t => t[0] === "satview")) g.tabs.splice(at, 0, ["satview", "Satellite view"], ["drones", "Drone watch"]); } }
+Object.assign(KEYS, { satview: ["SATELLITE VIEW", [], "Satellite and aerial imagery for any site: high-resolution, past images, daily NASA imagery, live clouds, night lights, fires"],
+  drones: ["DRONE WATCH", [[3, "inside a site's critical zone"], [2, "inside the alert zone"], [1, "detected nearby"]], "Drones detected by sensors, cameras and guards, with geofences around every site"] });
+NON_CITY_MODES.push("satview", "drones");
+
+/* =====================================================================
+   SATELLITE VIEW
+   ===================================================================== */
+const SAT = { host: null, map: null, layers: null, base: null, past: null, over: {}, wb: null, wbErr: "", tileErr: 0, tileOk: 0 };
+CFG.sat = Object.assign({ custom: "", customName: "", customAttr: "" }, CFG.sat || {});
+UI.sat = Object.assign({ src: "hires", day: utcDay(1), nightDay: utcDay(1), labels: true, sites: true, fires: false, drones: true, fade: 100, wbRel: "" }, UI.sat || {});
+const SAT_SRC = {
+  hires: { label: "High resolution", what: "Esri World Imagery — aerial and satellite photos, down to about 30–50 cm in cities. Images are mosaics captured over the past months to years, not live.", def: { url: ESRI2 + "World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "Imagery © Esri, Maxar, Earthstar Geographics", max: 19 } },
+  past: { label: "Past imagery", what: "Esri World Imagery Wayback — earlier versions of the high-resolution imagery. Pick a release and fade between it and today's to see what changed at a site.", def: null },
+  daily: { label: "Daily (NASA)", what: "NASA VIIRS true colour, one image per day, about 375 m per pixel — shows clouds, smoke, haze, floods and large burn scars, not buildings or people.", def: () => ({ wms: "VIIRS_NOAA20_CorrectedReflectance_TrueColor", fmt: "image/jpeg", time: UI.sat.day, attr: "NASA GIBS / NOAA-20 VIIRS", max: 9 }) },
+  clouds: { label: "Live clouds", what: "Himawari geostationary infrared over Asia-Pacific, refreshed every 10 minutes — follow typhoons, storms and cloud cover as they move. Brighter is colder cloud top (stronger storm).", def: () => ({ wms: "Himawari_AHI_Band13_Clean_Infrared", fmt: "image/jpeg", attr: "NASA GIBS / JMA Himawari", max: 7 }) },
+  night: { label: "Night lights", what: "NASA VIIRS day/night band — city lights at night, about 750 m per pixel. Compare a night before and after an event to spot large power outages around a site.", def: () => ({ wms: "VIIRS_SNPP_DayNightBand_ENCC", fmt: "image/png", time: UI.sat.nightDay, attr: "NASA GIBS / Suomi NPP VIIRS", max: 8 }) },
+  custom: { label: "Your provider", what: "Imagery from your own provider (Planet, Maxar/Vantor, Airbus or a company imagery server) by tile address with your key — set it under ⚙ Imagery source.", def: () => CFG.sat.custom ? { url: CFG.sat.custom, attr: CFG.sat.customAttr || CFG.sat.customName || "Imagery: your provider", max: 20 } : null } };
+async function satWayback(){ if (SAT.wb || SAT.wbBusy) return; SAT.wbBusy = true;
+  try{ const j = await getJSON("https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json", 15000);
+    SAT.wb = Object.entries(j).map(([k, v]) => ({ id: k, url: String(v.itemURL || "").replace("{level}", "{z}").replace("{row}", "{y}").replace("{col}", "{x}"), date: ((/(\d{4}-\d{2}-\d{2})/.exec(v.itemTitle || v.title || "") || [])[1]) || "" })).filter(x => /^https:\/\/wayback\.maptiles\.arcgis\.com\//.test(x.url) && x.date).sort((a, b) => b.date.localeCompare(a.date));
+    if (!UI.sat.wbRel && SAT.wb.length) UI.sat.wbRel = (SAT.wb.find(x => x.date <= utcDay(365)) || SAT.wb[SAT.wb.length - 1]).id; }
+  catch(e){ SAT.wbErr = e.message; } SAT.wbBusy = false; if (UI.mode === "satview") renderPanel(); }
+function satPanel(){ const s = UI.sat, src = SAT_SRC[s.src] || SAT_SRC.hires, place = UI.satPlace;
+  if (s.src === "past" && !SAT.wb && !SAT.wbErr) setTimeout(satWayback, 10);
+  const srcBtns = Object.entries(SAT_SRC).map(([k, v]) => `<button class="tab-mini" data-satsrc="${k}" aria-pressed="${s.src === k}">${esc(v.label)}</button>`).join("");
+  const extra = s.src === "daily" ? `<label class="ctl">Day (UTC) <input type="date" data-satday value="${esc(s.day)}" max="${utcDay(0)}" min="2018-01-01"></label><button class="tab-mini" data-satstep="-1">◀</button><button class="tab-mini" data-satstep="1">▶</button>`
+    : s.src === "night" ? `<label class="ctl">Night of (UTC) <input type="date" data-satnight value="${esc(s.nightDay)}" max="${utcDay(0)}" min="2018-01-01"></label><button class="tab-mini" data-satnstep="-1">◀</button><button class="tab-mini" data-satnstep="1">▶</button>`
+    : s.src === "past" ? (SAT.wb ? `<label class="ctl">Release <select data-satrel>${SAT.wb.map(r => `<option value="${esc(r.id)}"${r.id === s.wbRel ? " selected" : ""}>${esc(r.date)}</option>`).join("")}</select></label><label class="ctl">Past <input type="range" min="0" max="100" value="${s.fade}" data-satfade style="width:120px"> Today</label>` : SAT.wbErr ? `<span class="s">Past imagery list unavailable (${esc(SAT.wbErr)})</span>` : `<span class="s">Loading the list of past imagery…</span>`)
+    : s.src === "custom" && !CFG.sat.custom ? `<button class="tab-mini" data-satcfg>Set the tile address…</button>` : "";
+  return `<div class="ptools"><span class="label">Satellite view</span><span class="satfind"><input id="satQ" placeholder="Site, city or address…" value="${esc(UI.satQ || "")}" autocomplete="off"><button class="tab-mini" data-satgo>Go</button></span>
+      <span class="sp"></span><label class="ctl"><input type="checkbox" data-satov="labels"${s.labels ? " checked" : ""}> Labels</label><label class="ctl"><input type="checkbox" data-satov="sites"${s.sites ? " checked" : ""}> Sites</label><label class="ctl"><input type="checkbox" data-satov="fires"${s.fires ? " checked" : ""}> Fires (24 h)</label><label class="ctl"><input type="checkbox" data-satov="drones"${s.drones ? " checked" : ""}> Drones</label><button class="tab-mini" data-satcfg title="Add your own imagery provider">⚙ Imagery source</button></div>
+    <div class="pbody satbody"><div class="satsrc">${srcBtns}<span class="satextra">${extra}</span></div>
+      <div class="satwhat"><b>${esc(src.label)}:</b> ${esc(src.what)}${place ? ` <span class="s">· centred on ${esc(place.label)}</span>` : ""}</div>
+      <div id="satmap" class="satmap"></div>
+      <div class="s satfoot">Free imagery is not live video: the sharpest images are months to years old, and daily or 10-minute imagery is too coarse to see people, vehicles or drones. For fresh high-resolution images of a site (tasked within a day), connect a commercial provider under ⚙ Imagery source.</div></div>`; }
+function satMsg(t){ const m = SAT.host && SAT.host.querySelector(".satmsg"); if (m){ m.hidden = !t; m.textContent = t || ""; } }
+function satDraw(){ const slot = $("#satmap"); if (!slot) return; const c = UI.satPlace ? [UI.satPlace.lat, UI.satPlace.lon] : [1.3521, 103.8198];
+  const map = keepMap(SAT, slot, c, UI.satPlace ? 16 : 5); if (!map) return;
+  const s = UI.sat, want = s.src + "|" + s.day + "|" + s.nightDay + "|" + s.wbRel + "|" + CFG.sat.custom;
+  if (SAT.key !== want){ SAT.key = want; [SAT.base, SAT.past].forEach(l => { if (l) map.removeLayer(l); }); SAT.base = SAT.past = null; SAT.tileErr = SAT.tileOk = 0; satMsg("");
+    const src = SAT_SRC[s.src] || SAT_SRC.hires;
+    if (s.src === "past"){ SAT.base = satLayer(SAT_SRC.hires.def).addTo(map); const rel = (SAT.wb || []).find(r => r.id === s.wbRel);
+      if (rel){ SAT.past = L.tileLayer(rel.url, { maxZoom: 19, maxNativeZoom: 19, attribution: "Imagery © Esri World Imagery Wayback, " + rel.date, opacity: 1 - s.fade / 100 }).addTo(map); } }
+    else { const def = typeof src.def === "function" ? src.def() : src.def; if (!def){ satMsg("Set your provider's tile address under ⚙ Imagery source."); } else SAT.base = satLayer(def).addTo(map);
+      if (def && def.max && map.getZoom() > def.max + 2 && s.src !== "custom") map.setZoom(Math.max(4, def.max), { animate: false }); }
+    [SAT.base, SAT.past].filter(Boolean).forEach(l => { l.on("tileload", () => { SAT.tileOk++; satMsg(""); }); l.on("tileerror", () => { SAT.tileErr++; if (SAT.tileErr >= 8 && !SAT.tileOk) satMsg("This imagery isn't loading on this network right now — try another source."); }); });
+    if (SAT.base) SAT.base.bringToBack();
+    if (UI.satPlace && ["hires", "past", "custom"].includes(s.src) && map.getZoom() < 12) map.setView([UI.satPlace.lat, UI.satPlace.lon], 16, { animate: false }); }
+  if (SAT.past) SAT.past.setOpacity(1 - s.fade / 100);
+  // overlays
+  const ov = (k, make) => { if (s[k] && !SAT.over[k]) SAT.over[k] = make().addTo(map); if (!s[k] && SAT.over[k]){ map.removeLayer(SAT.over[k]); SAT.over[k] = null; } };
+  ov("labels", () => L.tileLayer(ESRI2 + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, maxNativeZoom: 19, pane: "overlayPane", opacity: .95 }));
+  ov("fires", () => satLayer({ wms: "VIIRS_NOAA20_Thermal_Anomalies_375m_All", fmt: "image/png", time: utcDay(0), attr: "Fires: NASA FIRMS / GIBS", max: 9 }, { transparent: true, opacity: .95 }));
+  SAT.layers.clearLayers();
+  if (s.sites) SITES.filter(x => isFinite(x.lat)).forEach(x => L.circleMarker([x.lat, x.lon], { radius: 6, color: "#fff", weight: 1.5, fillColor: isOffice(x) ? "#E8A23A" : "#4FC4BE", fillOpacity: .95 })
+      .bindTooltip(`<b>${esc(x.code)}</b>${x.name ? " " + esc(x.name) : ""}`, { className: "vcctip", permanent: map.getZoom() >= 15, direction: "right" }).on("click", () => { UI.satPlace = { lat: x.lat, lon: x.lon, label: x.code }; map.setView([x.lat, x.lon], Math.max(map.getZoom(), 16)); }).addTo(SAT.layers));
+  if (s.drones) dwDrawOn(SAT.layers, map, true);
+  if (UI.satPlace && UI.satPlaceFly){ UI.satPlaceFly = false; map.setView([UI.satPlace.lat, UI.satPlace.lon], s.src === "daily" || s.src === "clouds" || s.src === "night" ? 8 : 16, { animate: false }); } }
+async function satGo(){ const q = ($("#satQ") || {}).value || ""; UI.satQ = q; let p = findPlace(q);
+  if (!p && q.trim().length >= 3){ try{ const j = await getJSON("https://photon.komoot.io/api/?limit=1&q=" + encodeURIComponent(q), 10000); const f = (j.features || [])[0]; if (f) p = { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], label: [f.properties.name, f.properties.city, f.properties.country].filter(Boolean).join(", ") }; }catch(e){} }
+  if (!p){ toast("Not found", `No site or address matches "${q}".`, "var(--amber)"); return; } UI.satPlace = p; UI.satPlaceFly = true; saveUI(); renderPanel(); }
+document.getElementById("panel").addEventListener("click", e => { const t = e.target.closest("[data-satsrc],[data-satgo],[data-satstep],[data-satnstep],[data-satcfg]"); if (!t) return; const d = t.dataset;
+  if (d.satsrc){ UI.sat.src = d.satsrc; saveUI(); renderPanel(); if (d.satsrc === "custom" && !CFG.sat.custom) satConfig(); return; }
+  if (d.satgo !== undefined){ satGo(); return; }
+  if (d.satstep){ const n = new Date(UI.sat.day + "T00:00:00Z").getTime() + (+d.satstep) * 864e5; if (n <= Date.now()){ UI.sat.day = new Date(n).toISOString().slice(0, 10); saveUI(); renderPanel(); } return; }
+  if (d.satnstep){ const n = new Date(UI.sat.nightDay + "T00:00:00Z").getTime() + (+d.satnstep) * 864e5; if (n <= Date.now()){ UI.sat.nightDay = new Date(n).toISOString().slice(0, 10); saveUI(); renderPanel(); } return; }
+  if (d.satcfg !== undefined) satConfig(); });
+document.getElementById("panel").addEventListener("change", e => { const t = e.target;
+  if (t.matches("[data-satday]")){ UI.sat.day = t.value || utcDay(1); saveUI(); renderPanel(); }
+  if (t.matches("[data-satnight]")){ UI.sat.nightDay = t.value || utcDay(1); saveUI(); renderPanel(); }
+  if (t.matches("[data-satrel]")){ UI.sat.wbRel = t.value; saveUI(); renderPanel(); }
+  if (t.matches("[data-satov]")){ UI.sat[t.dataset.satov] = t.checked; saveUI(); satDraw(); } });
+document.getElementById("panel").addEventListener("input", e => { if (e.target.matches("[data-satfade]")){ UI.sat.fade = +e.target.value; if (SAT.past) SAT.past.setOpacity(1 - UI.sat.fade / 100); clearTimeout(satDraw.t); satDraw.t = setTimeout(saveUI, 400); } });
+document.addEventListener("keydown", e => { if (e.target.id === "satQ" && e.key === "Enter"){ e.preventDefault(); satGo(); } });
+function satConfig(){ openModal(head("Your imagery provider") + `<div class="bd"><p class="help" style="margin-top:0">Commercial providers can deliver fresh high-resolution images of a site, often within a day: for example Planet (daily 3 m, and 50 cm tasking), Maxar/Vantor and Airbus (30–50 cm tasking). Most give you a tile address (XYZ) with your key in it — paste it here. It is kept in this browser and listed under Administrator › Security › Keys &amp; data.</p>
+    <label class="fld">Tile address (with {z}, {x} and {y})<input id="scU" value="${esc(CFG.sat.custom)}" placeholder="https://tiles.provider.com/basemaps/{z}/{x}/{y}.png?api_key=…"></label>
+    <div class="fgrid"><label class="fld">Name<input id="scN" value="${esc(CFG.sat.customName)}" placeholder="e.g. Planet daily"></label><label class="fld">Attribution shown on the map<input id="scA" value="${esc(CFG.sat.customAttr)}" placeholder="e.g. © Planet Labs"></label></div></div>
+    <div class="ft"><button class="pill" id="scClr">Remove</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="scGo">Save</button></div>`);
+  $("#scGo").onclick = () => { const u = $("#scU").value.trim(); if (u && !/^https:\/\/.+\{z\}.+\{[xy]\}.+\{[xy]\}/i.test(u)){ toast("Check the address", "It must start with https:// and contain {z}, {x} and {y}.", "var(--amber)"); return; }
+    Object.assign(CFG.sat, { custom: u, customName: $("#scN").value.trim(), customAttr: $("#scA").value.trim() }); saveCfg(); audit("Imagery provider " + (u ? "set" : "removed"), CFG.sat.customName || sgHostOf(u), ""); SAT.key = null; $("#ov").classList.remove("show"); if (u){ UI.sat.src = "custom"; saveUI(); } renderPanel(); };
+  $("#scClr").onclick = () => { Object.assign(CFG.sat, { custom: "", customName: "", customAttr: "" }); saveCfg(); SAT.key = null; $("#ov").classList.remove("show"); if (UI.sat.src === "custom"){ UI.sat.src = "hires"; saveUI(); } renderPanel(); }; }
+// "Satellite" from a site's popup or card
+{ const _sp2 = sitePopup; sitePopup = function(s, ll){ _sp2(s, ll); const p = map && map._popup; if (!p || !p.isOpen()) return; p.setContent(p.getContent() + `<div style="margin-top:4px"><button class="act" data-satsite="${esc(s.code)}">🛰 Satellite view</button> <button class="act" data-dwsite="${esc(s.code)}">Drone watch</button></div>`); }; }
+document.addEventListener("click", e => { const a = e.target.closest("[data-satsite]"), b = e.target.closest("[data-dwsite]"); const code = (a || b || {}).dataset; if (!a && !b) return; const s = SITES.find(x => x.code === (a ? code.satsite : code.dwsite)); if (!s) return;
+  if ($("#ov").classList.contains("show")) $("#ov").classList.remove("show"); if (map) map.closePopup();
+  if (a){ UI.satPlace = { lat: s.lat, lon: s.lon, label: s.code + (s.name ? " — " + s.name : "") }; UI.satPlaceFly = true; saveUI(); setMode("satview"); } else { UI.dwSite = s.code; saveUI(); setMode("drones"); } });
+if (typeof openSiteCard === "function"){ const _osc = openSiteCard; openSiteCard = function(code){ _osc(code); const ft = $("#box .ft"); if (ft && !ft.querySelector("[data-satsite]")) ft.insertAdjacentHTML("afterbegin", `<button class="pill" data-satsite="${esc(code)}">🛰 Satellite</button>`); }; }
+
+/* =====================================================================
+   DRONE WATCH
+   ===================================================================== */
+SH_KEYS.drones = "psoc.uni.drones.v1"; SHARED.drones = lsGet(SH_KEYS.drones, []); RETAIN_DAYS.drones = 30; LOCAL_CAP.drones = 2000; SYNC_TYPES.push("drones");
+CFG.drone = Object.assign({ alertM: 500, critM: 150, loiterMin: 3, activeSec: 120, feeds: [], skyCams: [], camSite: true, siteRadius: {} }, CFG.drone || {});
+const DW = { live: {}, timers: {}, train: null, feedState: {}, map: { host: null, map: null, layers: null } };
+const DW_SRC = { rid: "Remote ID", rf: "RF detector", radar: "Radar", camera: "Camera", sighting: "Guard sighting", feed: "Sensor feed", training: "TRAINING" };
+// read any drone sensor's JSON: arrays, {detections|drones|tracks|items|data:[…]}, or one object per line; field names matched loosely (also OpenDroneID / ASTM F3411 names)
+function dwFlat(o, pre, out){ out = out || {}; if (o && typeof o === "object" && !Array.isArray(o)) Object.entries(o).forEach(([k, v]) => { const p = (pre ? pre + "." : "") + k.toLowerCase(); if (v && typeof v === "object" && !Array.isArray(v)) dwFlat(v, p, out); else out[p] = v; }); return out; }
+function dwNorm(raw, feed){ const f = dwFlat(raw), get = (names, test) => { for (const [k, v] of Object.entries(f)){ const last = k.split(".").pop().replace(/[_\s-]/g, ""); if (names.includes(last) && (!test || test(k)) && v !== "" && v != null) return v; } return null; };
+  const notOp = k => !/operator|pilot|home|takeoff|controller|remote\b/.test(k), isOp = k => /operator|pilot|controller/.test(k);
+  const lat = +get(["lat", "latitude", "dronelat", "uavlat"], notOp), lon = +get(["lon", "lng", "long", "longitude", "dronelon", "dronelng", "uavlon"], notOp);
+  if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  let olat = get(["operatorlatitude", "operatorlat", "oplat", "pilotlat", "pilotlatitude"]), olon = get(["operatorlongitude", "operatorlon", "operatorlng", "oplon", "oplng", "pilotlon", "pilotlng", "pilotlongitude"]);
+  if (olat == null) olat = get(["lat", "latitude"], isOp); if (olon == null) olon = get(["lon", "lng", "longitude"], isOp);
+  const id = String(get(["uasid", "serial", "serialnumber", "remoteid", "droneid", "uavid", "basicid", "trackid", "id", "mac", "macaddress"]) || "").slice(0, 60) || "UNKNOWN-" + Math.round(lat * 1e4) + "," + Math.round(lon * 1e4);
+  let t = get(["timestamp", "time", "ts", "detectedat", "lastseen", "datetime", "seen"]); t = typeof t === "number" ? (t < 1e12 ? t * 1000 : t) : t ? Date.parse(t) : Date.now(); if (!isFinite(t) || t > Date.now() + 60e3) t = Date.now();
+  const tech = String(get(["sensor", "sensortype", "detectiontype", "source", "technology"]) || feed.type || "feed").toLowerCase();
+  return { id, lat, lon, t, alt: +get(["altitude", "alt", "altitudegeo", "altitudebaro", "height", "heightagl", "elevation"]) || null, speed: +get(["speed", "speedhorizontal", "groundspeed", "velocity", "spd"]) || null,
+    heading: +get(["heading", "direction", "track", "course", "bearing"]) || null, model: String(get(["model", "make", "uatype", "uastype", "type", "dronetype", "product"]) || "").slice(0, 60),
+    oplat: olat != null && isFinite(+olat) && +olat !== 0 ? +olat : null, oplon: olon != null && isFinite(+olon) && +olon !== 0 ? +olon : null,
+    src: /rid|remote|odid|astm|ble|wifi|beacon/.test(tech) ? "rid" : /rf|radio/.test(tech) ? "rf" : /radar/.test(tech) ? "radar" : /cam|video|optic|eo|ir/.test(tech) ? "camera" : "feed", feed: feed.name || "" }; }
+function dwNearest(lat, lon){ let best = null; SITES.forEach(s => { if (!isFinite(s.lat)) return; const d = km(lat, lon, s.lat, s.lon) * 1000; if (!best || d < best.d) best = { s, d }; }); return best; }
+const dwR = code => Object.assign({ alertM: CFG.drone.alertM, critM: CFG.drone.critM }, (CFG.drone.siteRadius || {})[code] || {});
+function dwLevel(det){ const n = det.near; if (!n) return 0; const R = dwR(n.s ? n.s.code : n.code); return n.d <= R.critM ? 3 : n.d <= R.alertM ? 2 : n.d <= 3 * R.alertM ? 1 : 0; }
+function dwIngest(x){ if (!x) return; const now = Date.now(), near = dwNearest(x.lat, x.lon);
+  let rec = SHARED.drones.find(r => r.uas === x.id && now - (r.last || 0) < 20 * 60e3);
+  if (!rec){ rec = { id: nid("dr"), uas: x.id, first: x.t, last: x.t, status: "new", src: x.src, feed: x.feed, model: x.model, pts: [], peak: 0, sites: [], training: x.src === "training" }; SHARED.drones.unshift(rec); }
+  rec.last = Math.max(rec.last, x.t); Object.assign(rec, { lat: x.lat, lon: x.lon, alt: x.alt, speed: x.speed, heading: x.heading, oplat: x.oplat != null ? x.oplat : rec.oplat, oplon: x.oplon != null ? x.oplon : rec.oplon, model: x.model || rec.model, src: rec.src === "training" ? "training" : x.src, near: near ? { code: near.s.code, d: Math.round(near.d) } : null });
+  const lp = rec.pts[rec.pts.length - 1]; if (!lp || km(lp[0], lp[1], x.lat, x.lon) > .005 || x.t - lp[2] > 30e3) rec.pts.push([+x.lat.toFixed(6), +x.lon.toFixed(6), x.t, x.alt]); rec.pts = rec.pts.slice(-240);
+  const lvl = near ? dwLevel({ near }) : 0; if (lvl >= 2){ rec.inSince = rec.inSince || x.t; if (!rec.sites.includes(near.s.code)) rec.sites.push(near.s.code); } else rec.inSince = null;
+  if (lvl > rec.peak) rec.peak = lvl; DW.live[rec.id] = rec;
+  // alerts: entering a zone, going deeper, or loitering
+  const R = near ? dwR(near.s.code) : null, tag = rec.training ? " (TRAINING)" : "";
+  const raise = (pri, why, key) => { enqueueAction({ srcKey: "drone:" + rec.uas + ":" + near.s.code + ":" + key + ":" + new Date(rec.first).toISOString().slice(0, 13), source: "Drone watch" + tag, pri,
+      title: `Drone ${why} — ${near.s.code}${tag}`, detail: `${DW_SRC[rec.src] || rec.src}${rec.uas && !/^UNKNOWN/.test(rec.uas) ? " · ID " + rec.uas : ""} · ${Math.round(near.d)} m from ${near.s.code}${rec.alt != null ? " · " + Math.round(rec.alt) + " m altitude" : ""}${rec.oplat != null ? " · pilot " + Math.round(km(rec.oplat, rec.oplon, near.s.lat, near.s.lon) * 1000) + " m from site" : ""}`,
+      site: near.s.code, city: metroOf(near.s), suggested: ["notify", "dispatch", "escalate"], payload: { cat: "operational_security", sev: pri === "P1" ? "P2" : "P3", desc: `${near.s.country || ""} | Operational Security | Drone ${why} at ${near.s.code}`, sites: [near.s.code], lat: rec.lat, lon: rec.lon, country: near.s.country, src: "drone:" + rec.id } });
+    if (typeof attention === "function") attention(`Drone ${why} — ${near.s.code}${tag}`, `${Math.round(near.d)} m from the site · ${DW_SRC[rec.src] || rec.src}`, () => { UI.dwSel = rec.id; setMode("drones"); }); };
+  if (lvl === 3 && !(rec.raised || {}).crit){ rec.raised = Object.assign({}, rec.raised, { crit: 1, alert: 1 }); raise("P1", `inside the critical zone (${R.critM} m)`, "crit"); }
+  else if (lvl === 2 && !(rec.raised || {}).alert){ rec.raised = Object.assign({}, rec.raised, { alert: 1 }); raise("P2", `inside the alert zone (${R.alertM} m)`, "alert"); }
+  if (lvl >= 2 && rec.inSince && x.t - rec.inSince > CFG.drone.loiterMin * 60e3 && !(rec.raised || {}).loiter){ rec.raised = Object.assign({}, rec.raised, { loiter: 1 }); raise("P1", `loitering over ${CFG.drone.loiterMin} min`, "loiter"); }
+  clearTimeout(DW.timers[rec.id]); DW.timers[rec.id] = setTimeout(() => putShared("drones", rec), rec.training ? 4000 : 1500);
+  if (UI.mode === "drones" || (UI.mode === "satview" && UI.sat.drones)){ clearTimeout(DW.rt); DW.rt = setTimeout(() => { if (UI.mode === "drones") dwRefresh(); else satDraw(); }, 400); } }
+const dwActive = () => SHARED.drones.filter(r => !r.deleted && Date.now() - (r.last || 0) < CFG.drone.activeSec * 1000 && r.status !== "cleared");
+// sensor feeds (polled through the security gateway, or through the PSOC server when a sensor is only reachable inside the network)
+async function dwPoll(feed){ const st = DW.feedState[feed.url] = DW.feedState[feed.url] || {};
+  try{ const txt = await fetchVia(feed.url, feed.header ? { headers: { [feed.header.split(":")[0].trim()]: feed.header.split(":").slice(1).join(":").trim() } } : undefined, 15000); let rows = [];
+    try{ const j = JSON.parse(txt); rows = Array.isArray(j) ? j : j.detections || j.drones || j.tracks || j.items || j.data || j.results || j.features || [j]; }
+    catch(e){ rows = txt.split(/\n/).map(l => { try{ return JSON.parse(l); }catch(e2){ return null; } }).filter(Boolean); }
+    let n = 0; rows.slice(0, 500).forEach(r => { const x = dwNorm(r.properties ? Object.assign({}, r.properties, { lon: r.geometry && r.geometry.coordinates && r.geometry.coordinates[0], lat: r.geometry && r.geometry.coordinates && r.geometry.coordinates[1] }) : r, feed); if (x && Date.now() - x.t < 10 * 60e3){ dwIngest(x); n++; } });
+    Object.assign(st, { ok: true, at: Date.now(), n, err: "" }); }
+  catch(e){ Object.assign(st, { ok: false, at: Date.now(), err: e.message }); } }
+setInterval(() => { if (!ME || isLimited()) return; (CFG.drone.feeds || []).filter(f => f.on !== false && f.url).forEach(f => { const st = DW.feedState[f.url] || {}; if (!st.busy && Date.now() - (st.at || 0) >= Math.max(3, +f.every || 5) * 1000){ st.busy = true; DW.feedState[f.url] = st; dwPoll(f).finally(() => { DW.feedState[f.url].busy = false; }); } }); }, 2000);
+// cameras that watch the sky: aircraft, birds and kites the camera AI sees there are flagged as possible drones
+CV_TYPES.drone = ["Aerial object — possible drone", "var(--red)"];
+{ const _ov = cvOverlay; cvOverlay = function(S){ _ov(S); try{ if (!S || !S.cam || !(CFG.drone.skyCams || []).includes(S.cam.id)) return; const air = (S.boxes || []).filter(d => /airplane|bird|kite/.test(d.class) && d.score >= .45);
+    if (!air.length) return; const best = air.sort((a, b) => b.score - a.score)[0], now = Date.now(); if (S.lastDrone && now - S.lastDrone < 20e3) return; S.lastDrone = now;
+    cvRaise(S, "drone", `${air.length} aerial object${air.length === 1 ? "" : "s"} in view (seen as "${best.class}", ${(best.score * 100).toFixed(0)}%) — check for a drone`, best.score);
+    const s = SITES.find(x => x.code === S.cam.site); if (s && CFG.drone.camSite) dwIngest({ id: "CAM-" + S.cam.id, lat: s.lat, lon: s.lon, t: now, alt: null, speed: null, heading: null, model: "seen by " + S.cam.name, oplat: null, oplon: null, src: "camera", feed: S.cam.name }); }catch(e){} }; }
+// training: three drones around one site, clearly marked
+function dwTrain(on){ clearInterval(DW.train); DW.train = null; if (!on){ SHARED.drones.filter(r => r.training).forEach(r => { r.status = "cleared"; r.deleted = true; putShared("drones", r); }); renderPanel(); return; }
+  const s = SITES.find(x => x.code === UI.dwSite) || SITES.filter(x => isFinite(x.lat) && isLive(x) && !isOffice(x))[0]; if (!s){ toast("No site to train on", "", "var(--amber)"); return; } UI.dwSite = s.code; saveUI();
+  const off = (dn, de) => [s.lat + dn / 111320, s.lon + de / (111320 * Math.cos(s.lat * Math.PI / 180))], t0 = Date.now();
+  const D = [{ id: "TRAINING-RID-01", model: "Quadcopter (Remote ID)", src: "training", op: off(-820, 640), f: t => { const a = t / 50; return off(Math.max(90, 2200 - t * 18) * Math.cos(a / 6), Math.max(90, 2200 - t * 18) * Math.sin(a / 6)); }, alt: t => 110 - Math.min(60, t / 3) },
+    { id: "TRAINING-RID-02", model: "Quadcopter (Remote ID)", src: "training", op: off(1200, -300), f: t => off(320 * Math.cos(t / 25), 320 * Math.sin(t / 25)), alt: () => 75 },
+    { id: "TRAINING-RF-03", model: "Unknown (RF detection, no ID)", src: "training", op: null, f: t => off(-1400 + t * 12, 1300 - t * 3), alt: () => 140 }];
+  DW.train = setInterval(() => { const t = (Date.now() - t0) / 1000; if (t > 600){ dwTrain(false); toast("Training scenario finished", "", "var(--teal)"); return; }
+    D.forEach(d => { const [lat, lon] = d.f(t), [plat, plon] = d.f(Math.max(0, t - 2)); dwIngest({ id: d.id, lat, lon, t: Date.now(), alt: d.alt(t), speed: Math.round(km(plat, plon, lat, lon) * 1000 / 2 * 10) / 10, heading: Math.round((Math.atan2(lon - plon, lat - plat) * 180 / Math.PI + 360) % 360), model: d.model, oplat: d.op ? d.op[0] : null, oplon: d.op ? d.op[1] : null, src: "training", feed: "Training" }); }); }, 2000);
+  toast("Training scenario started", `Three simulated drones around ${s.code} for 10 minutes — marked TRAINING everywhere.`, "var(--teal)"); setTimeout(() => { UI.dwFit = true; renderPanel(); }, 2500); }
+// a guard reports a drone they can see
+function dwSighting(){ const near = SITES.find(x => x.code === UI.dwSite);
+  openModal(head("Report a drone sighting") + `<div class="bd"><p class="help" style="margin-top:0">Click the map where the drone is after you press "Place on the map", or enter a site and the distance and direction from it.</p>
+    <div class="fgrid3"><label class="fld">Near site<input id="dsS" list="dsSites" value="${esc(near ? near.code : "")}"></label><datalist id="dsSites">${SITES.filter(x => isFinite(x.lat)).map(x => `<option value="${esc(x.code)}">`).join("")}</datalist><label class="fld">Distance from it (m)<input id="dsD" type="number" value="150"></label><label class="fld">Direction from it<select id="dsB">${["N", "NE", "E", "SE", "S", "SW", "W", "NW"].map(x => `<option>${x}</option>`).join("")}</select></label></div>
+    <div class="fgrid3"><label class="fld">Height (estimate, m)<input id="dsA" type="number" value="60"></label><label class="fld">What it looked like<input id="dsM" placeholder="e.g. small quadcopter, white, lights on"></label><label class="fld">Pilot seen? (where)<input id="dsP" placeholder="optional"></label></div></div>
+    <div class="ft"><button class="pill" data-x>Cancel</button><button class="pill primary" id="dsGo">Report</button></div>`);
+  $("#dsGo").onclick = () => { const s = SITES.find(x => x.code.toLowerCase() === $("#dsS").value.trim().toLowerCase()); if (!s){ toast("Choose a site", "", "var(--amber)"); return; }
+    const d = +$("#dsD").value || 0, b = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315 }[$("#dsB").value] * Math.PI / 180;
+    const lat = s.lat + d * Math.cos(b) / 111320, lon = s.lon + d * Math.sin(b) / (111320 * Math.cos(s.lat * Math.PI / 180));
+    dwIngest({ id: "SIGHTING-" + nid("s").slice(-5).toUpperCase(), lat, lon, t: Date.now(), alt: +$("#dsA").value || null, speed: null, heading: null, model: $("#dsM").value.trim() + ($("#dsP").value.trim() ? " · pilot: " + $("#dsP").value.trim() : ""), oplat: null, oplon: null, src: "sighting", feed: ME ? ME.name : "" });
+    audit("Drone sighting reported", s.code, `${d} m ${$("#dsB").value}`); $("#ov").classList.remove("show"); UI.dwSite = s.code; UI.dwFit = true; saveUI(); renderPanel(); }; }
+function dwSetup(){ const f = CFG.drone.feeds || [], cams = (typeof CV !== "undefined" ? CV.cams : []) || [];
+  openModal(head("Drone watch — sensors and zones") + `<div class="bd">
+    <div class="sec" style="margin-top:0">Zones around every site</div><div class="fgrid3"><label class="fld">Alert zone (m)<input id="dzA" type="number" min="50" value="${CFG.drone.alertM}"></label><label class="fld">Critical zone (m)<input id="dzC" type="number" min="20" value="${CFG.drone.critM}"></label><label class="fld">Loitering alert after (min)<input id="dzL" type="number" min="1" value="${CFG.drone.loiterMin}"></label></div>
+    <div class="sec">Drone sensors</div><p class="help">Any drone detection system that can publish its detections as JSON over HTTPS: Remote ID receivers (open-source ESP32/Android OpenDroneID receivers, or commercial ones), RF detectors and radar (DroneShield, Dedrone, Aaronia and others, usually through their API or your middleware). Positions, height, speed, heading, the drone's ID and the pilot's position are read from the usual field names. Sensors inside your network can be reached through the PSOC server under Integrations.</p>
+    <div id="dfList">${(f.length ? f : [{}]).map((x, i) => dwFeedRow(x, i)).join("")}</div><button class="tab-mini" id="dfAdd">+ Add a sensor</button>
+    <div class="sec">Cameras that watch the sky</div><p class="help">Camera analytics flags aircraft, birds and kites it sees on these cameras as possible drones (the general AI model has no drone class; small or distant drones are often missed — a dedicated sensor is far more reliable).</p>
+    ${cams.length ? `<div class="fgrid">${cams.map(c => `<label class="chkline"><input type="checkbox" data-skycam="${esc(c.id)}"${(CFG.drone.skyCams || []).includes(c.id) ? " checked" : ""}> ${esc(c.name)}${c.site ? " · " + esc(c.site) : ""}</label>`).join("")}</div>` : `<div class="s">No cameras in Camera analytics yet.</div>`}</div>
+    <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="dfGo">Save</button></div>`, true);
+  $("#dfAdd").onclick = () => { $("#dfList").insertAdjacentHTML("beforeend", dwFeedRow({}, $$("#dfList .dfrow").length)); };
+  $("#dfGo").onclick = () => { CFG.drone.alertM = Math.max(50, +$("#dzA").value || 500); CFG.drone.critM = Math.min(CFG.drone.alertM, Math.max(20, +$("#dzC").value || 150)); CFG.drone.loiterMin = Math.max(1, +$("#dzL").value || 3);
+    CFG.drone.feeds = $$("#dfList .dfrow").map(r => ({ name: r.querySelector("[data-fn]").value.trim(), url: r.querySelector("[data-fu]").value.trim(), type: r.querySelector("[data-ft]").value, every: +r.querySelector("[data-fe]").value || 5, header: r.querySelector("[data-fh]").value.trim(), on: true })).filter(x => /^https:\/\//.test(x.url));
+    CFG.drone.skyCams = $$("[data-skycam]").filter(i => i.checked).map(i => i.dataset.skycam); saveCfg(); audit("Drone watch settings changed", `${CFG.drone.feeds.length} sensor(s)`, `alert ${CFG.drone.alertM} m, critical ${CFG.drone.critM} m`); $("#ov").classList.remove("show"); renderPanel(); }; }
+const dwFeedRow = (x, i) => `<div class="dfrow fgrid"><label class="fld">Name<input data-fn value="${esc(x.name || "")}" placeholder="e.g. SG DC roof Remote ID"></label><label class="fld">Address (https, JSON)<input data-fu value="${esc(x.url || "")}" placeholder="https://psoc-server/drones/sg1.json"></label>
+  <label class="fld">Kind<select data-ft>${[["rid", "Remote ID receiver"], ["rf", "RF detector"], ["radar", "Radar"], ["feed", "Other / mixed"]].map(([k, l]) => `<option value="${k}"${x.type === k ? " selected" : ""}>${l}</option>`).join("")}</select></label><label class="fld">Check every (s)<input data-fe type="number" min="3" value="${x.every || 5}"></label><label class="fld">Auth header (optional)<input data-fh value="${esc(x.header || "")}" placeholder="Authorization: Bearer …"></label></div>`;
+function dwPanel(){ const act = dwActive().sort((a, b) => dwLevel(b) - dwLevel(a) || (a.near ? a.near.d : 1e9) - (b.near ? b.near.d : 1e9)), sel = SHARED.drones.find(r => r.id === UI.dwSel) || act[0];
+  const recent = SHARED.drones.filter(r => !r.deleted && !act.includes(r) && Date.now() - (r.last || 0) < 24 * 3600e3).slice(0, 20), feeds = CFG.drone.feeds || [];
+  const lvlC = ["#5B9BD5", "#C9A227", "#E8873A", "#E5484D"], lvlL = ["nearby", "within 3× alert zone", "in alert zone", "in critical zone"];
+  const row = r => { const l = dwLevel(r); return `<button class="vccal${r === sel ? " on" : ""}" data-dwsel="${r.id}" style="border-left:4px solid ${lvlC[l]}"><div><span class="vccsev" style="--c:${lvlC[l]}">${esc(lvlL[l])}</span> ${r.training ? `<span class="tag">TRAINING</span>` : `<span class="tag">${esc(DW_SRC[r.src] || r.src)}</span>`}</div>
+    <b>${esc(r.near ? `${r.near.d} m from ${r.near.code}` : "Position only")}</b><div class="s">${esc(/^UNKNOWN/.test(r.uas) ? "no ID" : r.uas)}${r.alt != null ? ` · ${Math.round(r.alt)} m up` : ""}${r.speed != null ? ` · ${r.speed} m/s` : ""} · ${esc(ago(r.last))}</div></button>`; };
+  const det = sel ? (() => { const n = sel.near, s = n && SITES.find(x => x.code === n.code), op = sel.oplat != null && s ? Math.round(km(sel.oplat, sel.oplon, s.lat, s.lon) * 1000) : null, inz = sel.inSince ? Math.round((Date.now() - sel.inSince) / 60e3) : 0;
+    return `<div class="dwcard"><div class="dwh"><b>${esc(/^UNKNOWN/.test(sel.uas) ? "Drone without ID" : sel.uas)}</b>${sel.training ? ` <span class="tag">TRAINING</span>` : ""}<span class="sp"></span><span class="s">${esc(DW_SRC[sel.src] || sel.src)}${sel.feed ? " · " + esc(sel.feed) : ""}</span></div>
+      <div class="dwgrid"><div><span>Distance</span><b>${n ? n.d + " m" : "—"}</b><small>${n ? "from " + esc(n.code) : ""}</small></div><div><span>Height</span><b>${sel.alt != null ? Math.round(sel.alt) + " m" : "—"}</b></div><div><span>Speed</span><b>${sel.speed != null ? sel.speed + " m/s" : "—"}</b><small>${sel.heading != null ? "heading " + Math.round(sel.heading) + "°" : ""}</small></div><div><span>Pilot</span><b>${op != null ? op + " m" : "—"}</b><small>${op != null ? "from the site" : "not broadcast"}</small></div><div><span>In zone</span><b>${sel.inSince ? inz + " min" : "—"}</b></div><div><span>First seen</span><b>${esc(fSgtClock.format(sel.first).slice(0, 5))}</b><small>${esc(ago(sel.first))}</small></div></div>
+      ${sel.model ? `<div class="s" style="margin:6px 0">${esc(sel.model)}</div>` : ""}
+      <div class="acts"><button class="act on" data-dwesc="${sel.id}">Escalate</button><button class="act" data-dwnotify="${sel.id}">Copy alert message</button><button class="act" data-dwclear="${sel.id}">Clear (no threat)</button>${sel.oplat != null ? `<button class="act" data-dwop="${sel.id}">Show the pilot</button>` : ""}</div>
+      <p class="s dwlegal">Detection only. Stopping or taking down a drone is restricted to authorised agencies in most countries — report it to the police or aviation authority, protect people and record what you see.</p></div>`; })() : `<div class="empty">No drones detected right now.</div>`;
+  const feedTxt = feeds.length ? feeds.map(f => { const st = DW.feedState[f.url] || {}; return `<span class="dwfeed"><i class="${st.ok === true ? "ok" : st.ok === false ? "bad" : "wait"}"></i>${esc(f.name || sgHostOf(f.url))}${st.ok === false ? " — " + esc(trunc(st.err, 50)) : st.at ? " · " + esc(ago(st.at)) : ""}</span>`; }).join("") : `<span class="s">No drone sensor connected — Remote ID receivers, RF detectors or radar plug in under ⚙ Sensors &amp; zones.</span>`;
+  return `<div class="ptools"><span class="label">Drone watch</span><span class="ctl">${act.length} active · zones ${CFG.drone.critM} m / ${CFG.drone.alertM} m</span><span class="sp"></span>
+      <button class="tab-mini" data-dwsight>+ Report a sighting</button>${DW.train ? `<button class="tab-mini" data-dwtrain="0">Stop training</button>` : `<button class="tab-mini" data-dwtrain="1">Training scenario</button>`}<button class="tab-mini" data-dwsetup>⚙ Sensors &amp; zones</button></div>
+    <div class="pbody"><div class="dwfeeds">${feedTxt}${(CFG.drone.skyCams || []).length ? `<span class="dwfeed"><i class="ok"></i>${CFG.drone.skyCams.length} camera${CFG.drone.skyCams.length === 1 ? "" : "s"} watching the sky</span>` : ""}</div>
+      <div class="dwlayout"><div class="dwlist"><div class="sec">Active</div>${act.map(row).join("") || `<div class="empty">Nothing in the air near your sites.</div>`}${recent.length ? `<div class="sec" style="margin-top:12px">Last 24 h</div>${recent.map(row).join("")}` : ""}</div>
+        <div class="dwmain"><div id="dwmap" class="satmap dwmap"></div>${det}</div></div></div>`; }
+function dwDrawOn(layer, m, compact){ const lvlC = ["#5B9BD5", "#C9A227", "#E8873A", "#E5484D"];
+  dwActive().forEach(r => { const l = dwLevel(r), on = r.id === UI.dwSel;
+    if (r.pts.length > 1) L.polyline(r.pts.map(p => [p[0], p[1]]), { color: lvlC[l], weight: on ? 3 : 2, opacity: .8, dashArray: r.training ? "4 4" : null }).addTo(layer);
+    L.marker([r.lat, r.lon], { icon: L.divIcon({ className: "", html: `<div class="dwico${on ? " on" : ""}" style="--c:${lvlC[l]}"><svg viewBox="0 0 24 24" style="transform:rotate(${r.heading || 0}deg)"><path d="M12 2l3 7h-6zM5 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm14 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM5 17a3 3 0 1 0 0 6M19 17a3 3 0 1 0 0 6"/></svg></div>`, iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: 900 })
+      .bindTooltip(`<b>${esc(/^UNKNOWN/.test(r.uas) ? "Drone (no ID)" : r.uas)}</b>${r.training ? " · TRAINING" : ""}<br>${r.near ? r.near.d + " m from " + esc(r.near.code) : ""}${r.alt != null ? " · " + Math.round(r.alt) + " m up" : ""}`, { className: "vcctip" }).on("click", () => { UI.dwSel = r.id; saveUI(); if (UI.mode === "drones") renderPanel(); }).addTo(layer);
+    if (r.oplat != null && !compact){ L.circleMarker([r.oplat, r.oplon], { radius: 6, color: "#fff", weight: 2, fillColor: "#8764B8", fillOpacity: 1 }).bindTooltip("Pilot of " + esc(r.uas), { className: "vcctip" }).addTo(layer); if (on) L.polyline([[r.oplat, r.oplon], [r.lat, r.lon]], { color: "#8764B8", weight: 1.5, dashArray: "3 5" }).addTo(layer); } }); }
+function dwRefresh(){ const slot = $("#dwmap"); if (!slot) return; const st = DW.map, s = SITES.find(x => x.code === UI.dwSite);
+  const m = keepMap(st, slot, s ? [s.lat, s.lon] : [1.3521, 103.8198], s ? 14 : 11); if (!m) return;
+  if (!st.base){ st.base = satLayer(SAT_SRC.hires.def).addTo(m); st.lbl = L.tileLayer(ESRI2 + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, pane: "overlayPane", opacity: .9 }).addTo(m); }
+  st.layers.clearLayers(); const act = dwActive(), near = new Set(act.map(r => r.near && r.near.code).filter(Boolean)); if (s) near.add(s.code);
+  SITES.filter(x => isFinite(x.lat) && (near.has(x.code) || (m.getBounds().pad(.2).contains([x.lat, x.lon]) && m.getZoom() >= 11))).forEach(x => { const R = dwR(x.code), hot = near.has(x.code);
+    L.circle([x.lat, x.lon], { radius: R.alertM, color: "#E8873A", weight: hot ? 2 : 1, fillColor: "#E8873A", fillOpacity: hot ? .08 : .03, dashArray: "6 5", interactive: false }).addTo(st.layers);
+    L.circle([x.lat, x.lon], { radius: R.critM, color: "#E5484D", weight: hot ? 2 : 1, fillColor: "#E5484D", fillOpacity: hot ? .14 : .05, interactive: false }).addTo(st.layers);
+    L.circleMarker([x.lat, x.lon], { radius: 6, color: "#fff", weight: 1.5, fillColor: "#4FC4BE", fillOpacity: 1 }).bindTooltip(`<b>${esc(x.code)}</b> · zones ${R.critM} / ${R.alertM} m`, { className: "vcctip", permanent: hot, direction: "right" }).addTo(st.layers); });
+  dwDrawOn(st.layers, m, false);
+  if (UI.dwFit){ UI.dwFit = false; const pts = act.flatMap(r => [[r.lat, r.lon]].concat(r.oplat != null ? [[r.oplat, r.oplon]] : [])).concat(s ? [[s.lat, s.lon]] : []); if (pts.length > 1) m.fitBounds(L.latLngBounds(pts).pad(.25), { maxZoom: 16, animate: false }); else if (pts.length) m.setView(pts[0], 15, { animate: false }); } }
+document.getElementById("panel").addEventListener("click", async e => { const t = e.target.closest("[data-dwsel],[data-dwtrain],[data-dwsight],[data-dwsetup],[data-dwesc],[data-dwnotify],[data-dwclear],[data-dwop]"); if (!t) return; const d = t.dataset, r = SHARED.drones.find(x => x.id === (d.dwesc || d.dwnotify || d.dwclear || d.dwop));
+  if (d.dwsel){ UI.dwSel = d.dwsel; saveUI(); renderPanel(); const x = SHARED.drones.find(y => y.id === d.dwsel); if (x && DW.map.map) DW.map.map.setView([x.lat, x.lon], Math.max(DW.map.map.getZoom(), 15)); return; }
+  if (d.dwtrain){ dwTrain(d.dwtrain === "1"); renderPanel(); return; }
+  if (d.dwsight !== undefined){ dwSighting(); return; } if (d.dwsetup !== undefined){ dwSetup(); return; }
+  if (d.dwesc && r && guard("escalate")){ const s = r.near && SITES.find(x => x.code === r.near.code); openEventModal(null, { cat: "operational_security", sev: dwLevel(r) >= 3 ? "P2" : "P3", desc: `${s ? s.country || "" : ""} | Operational Security | Drone ${r.near ? r.near.d + " m from " + r.near.code : ""}${r.training ? " (TRAINING)" : ""}`, sites: s ? [s.code] : [], lat: r.lat, lon: r.lon, country: s ? s.country : "", src: "drone:" + r.id }); return; }
+  if (d.dwnotify && r){ const s = r.near && SITES.find(x => x.code === r.near.code), op = r.oplat != null && s ? Math.round(km(r.oplat, r.oplon, s.lat, s.lon) * 1000) : null;
+    const msg = `${r.training ? "TRAINING — " : ""}DRONE ALERT${s ? " — " + s.code : ""}\nA drone was detected ${r.near ? r.near.d + " m from " + r.near.code : ""} at ${fSgtClock.format(r.last).slice(0, 5)} hrs SGT${r.alt != null ? ", about " + Math.round(r.alt) + " m high" : ""}.${op != null ? `\nThe pilot appears to be about ${op} m from the site (${r.oplat.toFixed(5)}, ${r.oplon.toFixed(5)}).` : ""}\nSource: ${DW_SRC[r.src] || r.src}${/^UNKNOWN/.test(r.uas) ? "" : ", ID " + r.uas}.\nActions: keep people clear of open areas, note the drone's direction, do not try to bring it down, report to the PSOC.`;
+    try{ await navigator.clipboard.writeText(msg); toast("Alert message copied", "Paste it into the site's chat or email", "var(--green)"); }catch(err){ toast("Alert message", msg.slice(0, 180), "var(--teal)"); } return; }
+  if (d.dwclear && r){ r.status = "cleared"; r.clearedBy = ME ? ME.name : ""; r.clearedAt = Date.now(); putShared("drones", r); audit("Drone cleared (no threat)", r.uas, r.near ? r.near.code : ""); UI.dwSel = null; renderPanel(); return; }
+  if (d.dwop && r && DW.map.map) DW.map.map.fitBounds(L.latLngBounds([[r.lat, r.lon], [r.oplat, r.oplon]]).pad(.3), { maxZoom: 17 }); });
+setInterval(() => { if (UI.mode === "drones" && !$("#ov.show")){ const a = document.activeElement; if (!a || !a.closest || !a.closest("#panel")) renderPanel(); } }, 5000);
+
+/* ---------- render ---------- */
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){
+    if (UI.mode === "satview" || UI.mode === "drones"){ if (isLimited() && !canSee(UI.mode)){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+      p.innerHTML = UI.mode === "satview" ? satPanel() : dwPanel(); setTimeout(UI.mode === "satview" ? satDraw : dwRefresh, 20); return; }
+    return _rpi(p); }; }
+{ const st = document.createElement("style"); st.textContent = `
+.satbody{display:flex;flex-direction:column;gap:8px;height:calc(100% - 4px);box-sizing:border-box}.satsrc{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.satextra{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:6px}
+.satwhat{font-size:12.5px;line-height:1.45}.satmap{position:relative;flex:1;min-height:440px;border-radius:8px;border:1px solid var(--line);overflow:hidden;background:#0b1114}
+.satmsg{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:600;background:rgba(20,26,30,.92);color:#fff;border:1px solid #3a4246;border-radius:6px;padding:6px 12px;font-size:12.5px}
+.satfoot{line-height:1.45}.satfind{display:inline-flex;gap:4px}.satfind input{width:min(280px,40vw);height:28px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:0 8px}
+.dwfeeds{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 10px;font-size:12.5px}.dwfeed i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--muted)}.dwfeed i.ok{background:#2FB170}.dwfeed i.bad{background:#E5484D}
+.dwlayout{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:12px;align-items:start}.dwlist{display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 260px);overflow:auto}
+.dwmain{display:flex;flex-direction:column;gap:10px}.dwmap{min-height:460px;height:calc(100vh - 420px)}
+.dwcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.dwh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.dwh b{font-size:15px}
+.dwgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0}.dwgrid div{display:flex;flex-direction:column}.dwgrid span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}.dwgrid b{font-size:18px}.dwgrid small{color:var(--muted);font-size:11.5px}
+.dwlegal{margin:8px 0 0;font-size:11.5px}.dwico{width:30px;height:30px;border-radius:50%;background:color-mix(in srgb,var(--c) 30%,rgba(10,14,16,.6));border:2px solid var(--c);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 0 var(--c);animation:dwp 1.6s infinite}
+.dwico.on{border-color:#fff}.dwico svg{width:18px;height:18px;fill:#fff}@keyframes dwp{70%{box-shadow:0 0 0 10px transparent}}@media (prefers-reduced-motion:reduce){.dwico{animation:none}}
+.dfrow{grid-template-columns:1fr 2fr 1fr .7fr 1.4fr !important;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:6px}
+@media (max-width:900px){.dwlayout{grid-template-columns:1fr}.dwlist{max-height:none}.dwmap{height:380px}}`; document.head.appendChild(st); }
+// the Security page lists the imagery key too
+{ const _ss = sgSecrets; sgSecrets = function(){ const r = _ss(); if (CFG.sat && CFG.sat.custom) r.push({ l: "Imagery provider address" + (CFG.sat.customName ? " (" + CFG.sat.customName + ")" : ""), p: "sat.custom", mask: CFG.sat.custom.replace(/(key|token|api_key)=([^&]{3})[^&]*/gi, "$1=$2•••") }); return r; }; }
+
+
 boot();
 
 </script>
