@@ -28,8 +28,23 @@ described in the hosting guide that ships with the full package.
 A satellite "camera" per site: **Sentinel-2** (10 m, a pass every few days — every pass with its cloud cover from the
 public Copernicus catalogue, the latest clear picture once a free Copernicus account is linked, the next pass
 estimated, and a change check between the two latest clear pictures that can raise an action), a **high-resolution
-reference** of the building, **weather over the site** every 10 minutes, and **your own provider** for fresh sharp
-pictures. Add them from Camera wall › 🛰 + Satellite feed, Camera sources, or a site's Site plan.
+reference** of the building, a **live satellite loop** (the last two hours over the site from Himawari-9, or GOES over
+the Americas, a new frame every 10 minutes, infrared day and night or 1 km visible by day), and **your own provider**
+for fresh sharp pictures. Add them from Camera wall › 🛰 + Satellite feed, Camera sources, or a site's Site plan.
+No public satellite streams live video of a building; the live loop is the closest to a traffic camera.
+
+## Reports (Response › Reports)
+
+- **Daily Shift Report** in the PSOC's format: staff on duty, overall status and counts, Observations, Information,
+  Intelligence, Pending actions, Things to note (by role and items), upcoming A/B Class and PE sites, and sign-off.
+  "Fill from the console" brings in open escalations, active incidents, tracked protests and pending actions; anything
+  still open carries over from the previous day's report. Every entry can be edited, reordered, or reworded with AI
+  (facts are checked so nothing new is added).
+- **Spot reports** (for example "Civil Unrest (Developing)"): from a protest in the Protest tracker (📝 Spot report),
+  with the BLUF written from the tracker (local and UTC times, organiser, start and finish, nearest site and its
+  distances), impact and monitoring lines, source and confidence, and numbered figures (route map, poster or photos).
+- Both export a self-contained **HTML file**, copy into an email with their formatting, and can be filed in the
+  repositories. Team name, organisation and footer marking are set under ⚙.
 
 ## Security gateways
 

@@ -2044,11 +2044,13 @@ function renderFeeds(){
     const tip = na ? `${f.name}: not set up (${f.err}). Add a key in Settings.` : f.ok === true ? `${f.name}: updated ${fSgtClock.format(f.at).slice(0, 5)} SGT` : f.ok === false ? `${f.name}: ${f.err}` : `${f.name}: loading`;
     return `<span class="feed" title="${esc(tip)}"><i class="${cls}"></i>${esc(f.name)}</span>`; }).join("");
 }
+// fly when the map is on screen; jump when it is hidden (a hidden map has no size, and flying it fails)
+function mapFlySafe(c, z){ try{ const s = map.getSize(); if (!s.x || !s.y) map.setView(c, z, { animate: false }); else map.flyTo(c, z, { duration: .6 }); }catch(e){} }
 function setMode(m){ const wasTravel = UI.mode === "travel";
   if (m === "bau-lenel" && UI.mode !== "bau-lenel" && typeof applyMapWidth === "function"){ UI.preLenelPct = UI.mapPct || 50; applyMapWidth(Math.min(UI.mapPct || 50, 28)); }
   if (m !== "bau-lenel" && UI.mode === "bau-lenel" && UI.preLenelPct && typeof applyMapWidth === "function"){ applyMapWidth(UI.preLenelPct); UI.preLenelPct = null; }
-  if (map && m === "travel" && !wasTravel) setTimeout(() => map.flyTo([18, 100], 2, { duration: .6 }), 50);
-  if (map && wasTravel && m !== "travel") setTimeout(() => map.flyTo([12, 112], 4, { duration: .6 }), 50);
+  if (map && m === "travel" && !wasTravel) setTimeout(() => mapFlySafe([18, 100], 2), 50);
+  if (map && wasTravel && m !== "travel") setTimeout(() => mapFlySafe([12, 112], 4), 50);
   UI.mode = m; UI.cityDetail = null; if (UI.sel && !selValidFor(UI.sel, m)) UI.sel = null; saveUI(); renderAll(); safe(() => { if (UI.sel) highlightOnMap(UI.sel, false); else highlightOnMap(null); }, "highlight"); }
 function selValidFor(sel, m){ const k = sel.split(":")[0]; return k === "c" ? !["quake", "disasters", "escalations"].includes(m) : k === "q" ? m === "quake" : (k === "d" || k === "a") ? m === "disasters" : k === "ev" ? m === "escalations" : k === "n" ? m === "news" : false; }
 function selectItem(id, silent, fromMap){
@@ -7317,7 +7319,7 @@ async function loadClimate(city){
 }
 function trendsPanel(){
   const city = UI.trCity || "Singapore", C = CLIMATE[city];
-  if (!C && !UI.trLoading){ UI.trLoading = city; loadClimate(city).then(() => { UI.trLoading = null; if (UI.mode === "trends") renderPanel(); }).catch(e => { UI.trLoading = null; FEEDS.archive.ok = false; FEEDS.archive.err = e.message; UI.trErr = e.message; if (UI.mode === "trends") renderPanel(); }); }
+  if (!C && !UI.trLoading && !(UI.trErr && Date.now() - (UI.trErrAt || 0) < 2 * 60e3)){ UI.trLoading = city; UI.trErr = null; loadClimate(city).then(() => { UI.trLoading = null; if (UI.mode === "trends") renderPanel(); }).catch(e => { UI.trLoading = null; FEEDS.archive.ok = false; FEEDS.archive.err = e.message; UI.trErr = e.message; UI.trErrAt = Date.now(); if (UI.mode === "trends") renderPanel(); }); }
   const cc = CITY_CC[city], adv = SHARED.advisories.filter(a => a.cc === cc || (a.points || []).includes(city)).sort((a, b) => b.firstSeen - a.firstSeen);
   const last12 = []; { const d = new Date(); for (let i = 11; i >= 0; i--){ const x = new Date(d.getFullYear(), d.getMonth() - i, 1); last12.push(x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0")); } }
   const advM = {}; adv.forEach(a => { const k = new Date(a.firstSeen).toISOString().slice(0, 7); advM[k] = (advM[k] || 0) + 1; });
@@ -11906,7 +11908,7 @@ async function tcLoad(force){
     TCS.list = (j.features || []).map(f => { const p = f.properties || {}, c = (f.geometry || {}).coordinates || []; return { eventid: p.eventid, episodeid: p.episodeid, name: p.name || p.eventname || "Tropical cyclone", level: p.alertlevel || "Green", lat: c[1], lon: c[0], current: p.iscurrent === undefined || String(p.iscurrent) === "true", sev: (p.severitydata || {}).severitytext || "", geomUrl: (p.url && p.url.geometry) || "", report: (p.url && p.url.report) || "https://www.gdacs.org/", to: Date.parse(p.todate || "") }; })
       .filter(e => e.current && isFinite(e.lat) && e.lon >= 60 && e.lat >= -45 && e.lat <= 60 || (e.current && e.lon <= -150));
     for (const e of TCS.list) await tcGeom(e); TCS.at = Date.now(); tcAlerts(); }
-  catch(e){ TCS.err = e.message; }
+  catch(e){ TCS.err = e.message; TCS.failAt = Date.now(); }   // no redraw loop when the service is unreachable
   TCS.busy = false; if (UI.mode === "typhoon") renderPanel(); }
 async function tcGeom(e){ if (TCS.geo[e.eventid] && Date.now() - TCS.geo[e.eventid].at < 15 * 60e3) return TCS.geo[e.eventid];
   try{ const url = e.geomUrl || `https://www.gdacs.org/gdacsapi/api/polygons/getgeometry?eventtype=TC&eventid=${e.eventid}${e.episodeid ? "&episodeid=" + e.episodeid : ""}`; const gj = await getJSON(url);
@@ -11932,7 +11934,7 @@ const refit = (store, fn) => { setTimeout(() => { try{ store.map.invalidateSize(
 /* ---------- typhoon tracker panel ---------- */
 const TCM = {};
 function typhoonPanel(){
-  if (!TCS.at && !TCS.busy) setTimeout(() => tcLoad(true), 20);
+  if (!TCS.at && !TCS.busy && Date.now() - (TCS.failAt || 0) > 2 * 60e3) setTimeout(() => tcLoad(true), 20);
   const sel = TCS.list.find(e => String(e.eventid) === String(UI.tcSel)) || TCS.list[0], imp = sel ? tcImpacts(sel) : [], g = sel && TCS.geo[sel.eventid];
   const now = g && g.obs.length ? g.obs[g.obs.length - 1] : null, cat = now && now.kmh != null ? tcCat(now.kmh) : null;
   return `<div class="ptools"><span class="label">Typhoon tracker</span><span class="ctl">${TCS.busy ? "loading GDACS…" : TCS.at ? `${TCS.list.length} active cyclone${TCS.list.length === 1 ? "" : "s"} in Asia-Pacific · updated ${esc(ago(TCS.at))}` : ""}</span>
@@ -13983,7 +13985,7 @@ async function volLoad(force){ if (VOL.busy || (!force && Date.now() - VOL.at < 
       const nv = { key: key(x), name: x.name, country: x.country, lat: x.lat, lon: x.lon, kind: "LISTED", period: "", summary: "", sources: "", vn: x.vn, pub: 0, eo: x.date }; by[nv.key] = nv; out.push(nv); }); }
   catch(e){ VOL.err.push("NASA EONET: " + e.message); }
   if (out.length || VOL.err.length < 2){ VOL.list = out; VOL.at = Date.now(); volRecompute(); volAlerts(); }
-  FEEDS.volcano.ok = VOL.err.length < 2; FEEDS.volcano.err = VOL.err.join("; ") || null; FEEDS.volcano.at = Date.now(); VOL.busy = false; if (UI.mode === "volcano") renderPanel(); }
+  FEEDS.volcano.ok = VOL.err.length < 2; FEEDS.volcano.err = VOL.err.join("; ") || null; FEEDS.volcano.at = Date.now(); VOL.busy = false; if (!VOL.at) VOL.failAt = Date.now(); if (UI.mode === "volcano") renderPanel(); }
 function volRecompute(){ const S = SITES.filter(s => isFinite(s.lat) && (isLive(s) || isBuild(s) || isOffice(s)));
   VOL.list.forEach(v => { const all = S.map(s => ({ s, km: km(v.lat, v.lon, s.lat, s.lon) })).sort((a, b) => a.km - b.km); v.nearest = all[0] || null; v.near = all.filter(x => x.km <= VNEAR); v.nClose = v.near.filter(x => x.km <= VCLOSE).length; v.risk = v.nClose ? "CLOSE" : v.near.length ? "NEAR" : ""; }); }
 const volShown = () => VOL.list.filter(v => VOL.scope === "world" || volApac(v)).sort((a, b) => { const r = v => v.risk === "CLOSE" ? 0 : v.risk === "NEAR" ? 1 : 2, k = v => v.kind === "NEW" ? 0 : v.kind === "ONGOING" ? 1 : 2; return r(a) - r(b) || k(a) - k(b) || (b.pub || b.eo) - (a.pub || a.eo) || a.name.localeCompare(b.name); });
@@ -14001,7 +14003,7 @@ function volAlerts(){ const fired = new Set(lsGet("psoc.uni.volfired.v1", []));
 FEEDS.volcano = { name: "Volcano watch", ok: null, err: null, at: 0, busy: false };
 SOURCE_CATALOG.push(["volcano", "Volcano watch", "Smithsonian GVP / USGS weekly report and NASA EONET", "Erupting volcanoes, new activity this week, and tracked sites within 100 km and 250 km", "volcanic", "No (relay)", "30 min"]);
 const VOLM = {};
-function volcanoPanel(){ if (!VOL.at && !VOL.busy) setTimeout(() => volLoad(true), 20);
+function volcanoPanel(){ if (!VOL.at && !VOL.busy && Date.now() - (VOL.failAt || 0) > 2 * 60e3) setTimeout(() => volLoad(true), 20);
   const list = volShown(), sel = list.find(v => v.key === UI.volSel) || list[0], close = list.filter(v => v.risk === "CLOSE").length, nw = list.filter(v => v.kind === "NEW").length;
   return `<div class="ptools"><span class="label">Volcanoes</span><span class="ctl">${VOL.busy ? "loading…" : VOL.at ? `${list.length} active · ${nw} with new activity · ${close} within ${VCLOSE} km of a site · updated ${esc(ago(VOL.at))}` : ""}</span><span class="sp"></span>
       <button class="tab-mini" data-volscope="apac" aria-pressed="${VOL.scope !== "world"}">Asia-Pacific</button><button class="tab-mini" data-volscope="world" aria-pressed="${VOL.scope === "world"}">Worldwide</button><button class="tab-mini" data-volrefresh>↻</button></div>
@@ -14041,7 +14043,7 @@ function gprClass(t){ t = String(t || "").toLowerCase();
   if (/clash(es|ed)?|violence|tear gas|injured|wounded|arrest(ed|s)?|crackdown|\briot(s|ing)?\b|baton|water cannon|curfew|detain(ed|s)?/.test(t)) return ["warning", "Clashes / unrest", "P3"];
   if (/protest(s|ers|ing)?|demonstrat(ion|ors|e)|\brally\b|\brallies\b|\bmarch(es|ed|ing)?\b|strike(s)?|sit-in|picket(ing)?|walkout|boycott/.test(t)) return ["advisory", "Protest / demonstration", "P4"];
   return ["advisory", "Mentions unrest", "P4"]; }
-async function gprLoad(force, attempt){ attempt = attempt || 1; if (CFG.pulse.gdeltProtest === false || (GPR.busy && attempt === 1) || (!force && Date.now() - GPR.at < 15 * 60e3)) return; GPR.busy = true; GPR.err = "";
+async function gprLoad(force, attempt){ attempt = attempt || 1; if (CFG.pulse.gdeltProtest === false || (GPR.busy && attempt === 1) || (!force && Date.now() - GPR.at < 15 * 60e3) || (!force && Date.now() - (GPR.failAt || 0) < 2 * 60e3)) return; GPR.busy = true; GPR.err = "";
   const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])); if (!cs.length){ GPR.busy = false; return; }
   const q = '(protest OR demonstration OR rally OR "civil unrest" OR riot OR strike OR picket OR "tear gas") (' + cs.map(c => "sourcecountry:" + c[0]).join(" OR ") + ")";
   try{ const r = await fetch("https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q) + "&mode=artlist&maxrecords=250&timespan=24h&sort=datedesc&format=json", { cache: "no-store" });
@@ -14053,12 +14055,12 @@ async function gprLoad(force, attempt){ attempt = attempt || 1; if (CFG.pulse.gd
     Object.entries(by).forEach(([sc, arts]) => arts.filter(a => a.isNew && a.cls[0] === "severe").slice(0, 3).forEach(a => { const c = PROTEST_COUNTRIES.find(x => x[0] === sc);
       enqueueAction({ srcKey: "gpr:" + a.key, source: "Protest monitor (GDELT)", pri: "P3", title: `${c[1]}: ${a.title}`.slice(0, 180), detail: `${a.domain || ""} · ${a.cls[1]} (automated, unverified) · ${a.url || ""}`, suggested: ["monitor", "escalate"],
         payload: { cat: "protest", sev: "P3", desc: `${c[1]} | Civil Unrest | ${a.title}`.slice(0, 200), country: COUNTRY_NAME && COUNTRY_NAME[c[2]] || c[1], src: "gpr:" + a.key } }); })); }
-  catch(e){ GPR.err = e.message; }
+  catch(e){ GPR.err = e.message; GPR.failAt = Date.now(); }   // wait 2 min before trying again (no redraw loop when the service is unreachable)
   FEEDS.gdeltpr.ok = !GPR.err; FEEDS.gdeltpr.err = GPR.err || null; FEEDS.gdeltpr.at = Date.now(); GPR.busy = false; if (UI.mode === "protests") renderPanel(); }
 const gdeltDate = s => { const m = /^(\d{4})(\d\d)(\d\d)T?(\d\d)(\d\d)(\d\d)/.exec(String(s || "")); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : Date.now(); };
 FEEDS.gdeltpr = { name: "GDELT protest monitor", ok: null, err: null, at: 0, busy: false };
 SOURCE_CATALOG.push(["gdeltpr", "GDELT protest monitor", "GDELT Project (DOC 2.0)", "News coverage of protests, demonstrations and unrest in the countries chosen in Settings, last 24 h, classified by severity", "unrest", "No", "15 min"]);
-function gprHtml(){ if (CFG.pulse.gdeltProtest === false) return ""; if (!GPR.at && !GPR.busy) setTimeout(() => gprLoad(true), 30);
+function gprHtml(){ if (CFG.pulse.gdeltProtest === false) return ""; if (!GPR.at && !GPR.busy && Date.now() - (GPR.failAt || 0) > 2 * 60e3) setTimeout(() => gprLoad(true), 30);
   const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])), open = UI.gprOpen || "";
   return `<div class="sec" style="margin-top:14px">News monitor — protests and unrest by country <small>GDELT, last 24 h · ${GPR.busy ? "checking…" : GPR.at ? "checked " + esc(ago(GPR.at)) : ""} · countries in Settings · classification is automated and unverified</small><span class="sp"></span><button class="tab-mini" data-gprrefresh>↻ Check now</button></div>
     ${GPR.err ? `<div class="banner bad">${esc(GPR.err)}</div>` : ""}
@@ -15634,6 +15636,288 @@ document.addEventListener("click", e => { if (e.target.closest("[data-sfadd]")){
 .sfgrid figure{margin:0}.sfbox{position:relative;aspect-ratio:16/10;border-radius:6px;overflow:hidden;border:1px solid var(--line)}.sfgrid figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 .sfpasses{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px}.sfp{border:1px solid var(--line);border-radius:10px;padding:1px 7px;color:var(--muted)}.sfp.clear{border-color:#2FB170;color:var(--text)}.sfp small{opacity:.75}`; document.head.appendChild(st); }
 
+
+
+/* =====================================================================
+   REPORTS (16 Oct) — Response › Reports
+   - Daily Shift Report in the PSOC's format: staff on duty, overall
+     status, counts, Observations, Information, Intelligence, Pending
+     actions, Things to note (by role and items), Site related matters
+     (upcoming A/B Class and PE sites), Sign-off & acknowledgement.
+     "Fill from the console" brings in open escalations, active incidents,
+     tracked protests and pending actions; anything still active is
+     carried over from the previous report. Every line is editable.
+   - Spot report (e.g. "Civil Unrest (Developing)") from a protest in the
+     Protest tracker: BLUF written from the tracker (date, local and UTC
+     times, organiser, start and finish, nearest site and its distances),
+     impact and monitoring lines, source and confidence, the route map and
+     any pictures (e.g. the organiser's poster) as numbered figures.
+   - Both export a self-contained HTML file and copy into an email with
+     their formatting; both can be filed in the Operations repository.
+   ===================================================================== */
+CFG.reports = Object.assign({ team: "THE APAC PSOC", org: "the company", footer: "INTERNAL" }, CFG.reports || {});
+const DSR_KEY = "psoc.uni.dsr.v1", SPOT_KEY = "psoc.uni.spot.v1";
+let DSR = lsGet(DSR_KEY, {}), SPOTS = lsGet(SPOT_KEY, []);
+const dsrSave = () => { clearTimeout(dsrSave.t); dsrSave.t = setTimeout(() => lsSet(DSR_KEY, DSR), 400); }, spotSave = () => lsSet(SPOT_KEY, SPOTS.slice(0, 200));
+const DSR_SECTIONS = [["obs", "Observations"], ["info", "Information"], ["intel", "Intelligence"], ["pending", "Pending Actions"], ["notes", "Things To Note"]];
+const DSR_STATUS = ["Monitoring", "Ongoing", "Active", "Released", "Disseminated", "Informational", "Pending", "Closed"];
+const DSR_CATS = { obs: ["Weather / Natural", "Security Posture", "Access Control", "Systems", "Incident", "Health & Safety"], info: ["Management", "Process", "Lessons Learned", "Staffing"], intel: ["Situational Awareness Update", "Information", "Threat Assessment"], pending: ["Action", "Follow-up"], notes: ["Admin", "Training", "System / Tool", "Facilities"] };
+const DSR_ROLES = ["PSOC Leader, APAC", "PSOC Operations Manager", "Regional PSOC Manager", "Snr. Intelligence Analyst", "PSOC Supervisor"];
+const DSR_LEVELS = { green: ["Green — Normal", "#1E7D45"], amber: ["Amber — Degraded", "#B7791F"], red: ["Red — Critical", "#B4232A"] };
+const sgDate = (t) => new Date((t || Date.now()) + 8 * 3600e3).toISOString().slice(0, 10);
+const longDate = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+const shortDate = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric", timeZone: "UTC" });
+function dsrNew(date){ const prev = Object.keys(DSR).filter(d => d < date).sort().pop(), P = prev ? DSR[prev] : null, carry = list => (list || []).filter(x => !/closed|released|disseminated/i.test(x.status)).map(x => Object.assign({}, x, { id: nid("i"), carried: true }));
+  return { date, shift: "Day Shift", staff: [{ name: ME ? ME.name : "", role: "Intel Analyst" }], status: { level: "green", text: "All systems operational." },
+    sec: { obs: [], info: carry(P && P.sec.info), intel: [], pending: [], notes: carry(P && P.sec.notes) }, roles: DSR_ROLES.map(r => ({ role: r, text: ((P && P.roles || []).find(x => x.role === r) || {}).text || "Nil" })),
+    ab: P ? JSON.parse(JSON.stringify(P.ab || [])) : [], pe: P ? JSON.parse(JSON.stringify(P.pe || [])) : [],
+    sign: [{ shift: "Day Shift Handover", out: "", outT: "1845", in: "", inT: "1845", ok: false }, { shift: "Grave Shift Handover", out: "", outT: "0640", in: "", inT: "0640", ok: false }], createdAt: Date.now(), by: ME ? ME.name : "" }; }
+function dsrCur(){ const d = UI.dsrDate || sgDate(); UI.dsrDate = d; if (!DSR[d]) DSR[d] = dsrNew(d); return DSR[d]; }
+const kmTxt = d => d < 1 ? Math.max(50, Math.round(d * 20) * 50) + " m" : d < 10 ? d.toFixed(1) + " km" : Math.round(d) + " km";
+const clsTxt = s => !s ? "" : isOffice(s) ? "Office" : /edge/i.test(s.cls || "") ? "EDGE" : String(s.cls || "").replace(/^class\s*/i, "Class ");
+// bring in what the console knows
+function dsrFill(){ const R = dsrCur(), has = (sec, key) => R.sec[sec].some(x => x.src === key); let n = 0;
+  openEvents().forEach(e => { const key = "ev:" + e.id; if (has("obs", key) || has("intel", key)) return; const parts = String(e.desc || "").split("|").map(x => x.trim()), last = (e.log || []).slice(-1)[0];
+    const sec = /protest|unrest|demonstr|strike|riot/i.test(e.cat + " " + e.desc) ? "intel" : "obs";
+    R.sec[sec].push({ id: nid("i"), src: key, loc: (e.sites || [])[0] || parts[0] || e.country || "", cat: sec === "intel" ? "Situational Awareness Update" : /weather|flood|quake|earthquake|heat|air|typhoon|cyclone|volcan|tsunami/i.test(e.cat) ? "Weather / Natural" : (CATS[e.cat] || {}).label || "Incident",
+      status: "Monitoring", title: ((CATS[e.cat] || {}).label || parts[1] || "Event").toUpperCase(), text: String(parts.slice(2).join(" | ") || e.desc || "").trim().replace(/([^.!?])$/, "$1.") + (last && !/^(Auto-)?opened/i.test(last.m) ? " " + last.m : "") }); n++; });
+  SHARED.incidents.filter(x => !x.deleted && x.status !== "resolved").forEach(x => { const key = "inc:" + x.id; if (has("obs", key)) return;
+    R.sec.obs.push({ id: nid("i"), src: key, loc: x.site || "", cat: (SERV[x.domain] || {}).label || "Incident", status: x.status === "mitigated" ? "Released" : "Monitoring", title: String((x.title || "").split("|").pop() || "Incident").trim().toUpperCase(), text: x.summary && !/^sample/i.test(x.summary) ? x.summary : (x.scenario || x.title || "") }); n++; });
+  SHARED.protests.filter(p => !p.deleted && p.status !== "ended").forEach(p => { const key = "pr:" + p.id; if (has("intel", key)) return; const near = protestSites(p)[0];
+    R.sec.intel.push({ id: nid("i"), src: key, loc: (COUNTRY_NAME[CITY_CC[p.city]] || p.city || ""), cat: "Information", status: "Monitoring", title: /march/i.test(p.title) ? "MARCH" : /strike/i.test(p.title) ? "STRIKE" : /rally/i.test(p.title) ? "RALLY" : "PROTEST",
+      text: `${p.when ? new Date(p.when).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: spotTz(p) }) + ", " + spotHM(p.when, spotTz(p)) + " hrs local: " : ""}${p.title}${p.start && p.start.name ? `, from ${p.start.name}` : ""}${p.end && p.end.name ? ` to ${p.end.name}` : ""}.${near ? ` ${near.s.code} (${clsTxt(near.s)}) is about ${kmTxt(near.d / 1000)} away.` : ""}${p.notes ? " " + trunc(p.notes, 200) : ""}` }); n++; });
+  SHARED.actions.filter(a => a.status === "pending").forEach(a => { const key = "act:" + a.id; if (has("pending", key)) return;
+    R.sec.pending.push({ id: nid("i"), src: key, loc: a.site || a.city || "", cat: a.source || "Action", status: "Pending", title: String(a.title || "").toUpperCase().slice(0, 90), text: `${a.pri} · ${a.detail || ""}` }); n++; });
+  if (ME && !R.staff.some(s => s.name === ME.name)) R.staff.push({ name: ME.name, role: (ROLES && ROLES[ME.role]) || "" });
+  R.updatedAt = Date.now(); dsrSave(); toast(n ? `${n} item${n === 1 ? "" : "s"} brought in` : "Nothing new to bring in", "From open escalations, active incidents, tracked protests and pending actions. Edit or remove any of them.", "var(--teal)"); }
+// the report itself, as HTML that keeps its look in a browser, in print and pasted into email (inline styles only)
+function dsrHtml(R){ const F = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;", navy = "#12284B", lv = DSR_LEVELS[R.status.level] || DSR_LEVELS.green, cnt = k => (R.sec[k] || []).length;
+  const secHead = t => `<tr><td style="${F}padding:22px 0 8px;font-size:15px;font-weight:700;color:${navy};border-bottom:2px solid ${navy};text-transform:uppercase;letter-spacing:.6px">${esc(t)}</td></tr>`;
+  const item = (x, i) => `<tr><td style="${F}padding:12px 0;border-bottom:1px solid #E3E6EA"><div style="font-size:11.5px;color:#5F6B78;letter-spacing:.3px">${String(i + 1).padStart(2, "0")} · ${esc(x.loc || "—")} · ${esc(x.cat || "")} · <b style="color:${/closed|released/i.test(x.status) ? "#1E7D45" : /pending|active/i.test(x.status) ? "#B4232A" : "#B7791F"}">${esc(x.status || "")}</b></div>
+    <div style="font-size:14px;font-weight:700;color:#111;margin:3px 0 4px">${esc(x.title || "")}</div><div style="font-size:13px;line-height:1.55;color:#222">${esc(x.text || "").replace(/\n/g, "<br>")}</div></td></tr>`;
+  const list = (k, t) => secHead(t) + (cnt(k) ? R.sec[k].map(item).join("") : `<tr><td style="${F}padding:10px 0;font-size:13px;color:#5F6B78">Nil — nothing reported under this section.</td></tr>`);
+  const table = (rows, head) => `<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:6px 0 4px"><tr>${head.map(h => `<th style="${F}text-align:left;background:${navy};color:#fff;font-size:12px;padding:7px 9px">${esc(h)}</th>`).join("")}</tr>${rows.map((r, i) => `<tr>${r.map(c => `<td style="${F}font-size:12.5px;padding:7px 9px;border-bottom:1px solid #E3E6EA;background:${i % 2 ? "#F7F9FB" : "#fff"}">${esc(c || "")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${head.length}" style="${F}font-size:12.5px;padding:8px 9px;color:#5F6B78">Nil</td></tr>`}</table>`;
+  const tile = (n, l) => `<td style="${F}width:20%;padding:10px 6px;text-align:center;border:1px solid #E3E6EA;background:#F7F9FB"><div style="font-size:24px;font-weight:700;color:${navy}">${n}</div><div style="font-size:10.5px;letter-spacing:.6px;color:#5F6B78;font-weight:700">${esc(l)}</div></td>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(CFG.reports.team)} — Daily Shift Report — ${esc(longDate(R.date))}</title></head>
+<body style="margin:0;background:#EEF1F4"><table cellpadding="0" cellspacing="0" style="width:100%;background:#EEF1F4"><tr><td align="center" style="padding:20px 10px">
+<table cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background:#fff;color:#1A1A1A;border:1px solid #D5DBE1">
+<tr><td style="${F}background:${navy};color:#fff;padding:22px 26px"><div style="font-size:12px;letter-spacing:1.5px;opacity:.85">${esc(CFG.reports.team)}</div><div style="font-size:26px;font-weight:700;margin:4px 0">Daily Shift Report</div><div style="font-size:14px">${esc(longDate(R.date))}</div>
+<div style="font-size:11px;letter-spacing:1.2px;margin-top:10px;opacity:.85">OPERATIONAL STATUS &nbsp;•&nbsp; INTELLIGENCE &nbsp;•&nbsp; ACTIONS &nbsp;•&nbsp; PASSDOWN</div></td></tr>
+<tr><td style="padding:6px 26px 26px"><table cellpadding="0" cellspacing="0" style="width:100%">
+${secHead("Staff on Duty")}<tr><td style="${F}padding:8px 0;font-size:13px"><b>${esc(R.shift)}</b><br>${R.staff.filter(s => s.name).map(s => `${esc(s.name)} — ${esc(s.role || "")}`).join("<br>") || "—"}</td></tr>
+${secHead("Overall Status & Summary")}<tr><td style="${F}padding:10px 0"><table cellpadding="0" cellspacing="0" style="width:100%"><tr><td style="${F}border-left:6px solid ${lv[1]};background:#F7F9FB;padding:10px 12px"><div style="font-size:11px;color:#5F6B78;font-weight:700;letter-spacing:.5px">OVERALL SITE / SYSTEMS STATUS</div><div style="font-size:16px;font-weight:700;color:${lv[1]};margin:2px 0">${esc(lv[0])}</div><div style="font-size:13px">${esc(R.status.text || "")}</div></td></tr></table>
+<table cellpadding="0" cellspacing="6" style="width:100%;margin-top:8px"><tr>${tile(cnt("obs"), "OBSERVATIONS")}${tile(cnt("info"), "INFORMATION")}${tile(cnt("intel"), "INTELLIGENCE")}${tile(cnt("pending"), "PENDING ACTIONS")}${tile(cnt("notes"), "THINGS TO NOTE")}</tr></table></td></tr>
+${list("obs", "Observations")}${list("info", "Information")}${list("intel", "Intelligence")}${list("pending", "Pending Actions")}
+${secHead("Things To Note")}<tr><td style="padding:6px 0">${table(R.roles.map(r => [r.role, r.text]), ["By", "Instructions"])}</td></tr>${(R.sec.notes || []).map(item).join("")}
+${secHead("Site Related Matters")}<tr><td style="${F}padding:8px 0 0;font-size:13px;font-weight:700">Upcoming A/B Class Sites</td></tr><tr><td>${table(R.ab.map(r => [r.country, r.site, r.remark, r.date ? shortDate(r.date) : ""]), ["Country", "Site", "Status / Remarks", "Lockdown Date"])}</td></tr>
+<tr><td style="${F}padding:10px 0 0;font-size:13px;font-weight:700">Upcoming PE Sites</td></tr><tr><td>${table(R.pe.map(r => [r.country, r.site, r.remark, r.date ? shortDate(r.date) : ""]), ["Country", "Site", "Status / Remarks", "Lockdown Date"])}</td></tr>
+${secHead("Sign-Off & Acknowledgement")}${R.sign.map(s => `<tr><td style="${F}padding:8px 0;font-size:13px"><b>${esc(s.shift)}</b><br>Outgoing: ${esc(s.out || "—")} · ${esc(s.outT || "")} · ${s.ok ? "Confirmed" : "Pending"}<br>Incoming: ${esc(s.in || "—")} · ${esc(s.inT || "")} · ${s.ok ? "Confirmed" : "Pending"}</td></tr>`).join("")}
+</table></td></tr><tr><td style="${F}background:${navy};color:#fff;font-size:11px;letter-spacing:1.2px;text-align:center;padding:10px">${esc(CFG.reports.team)} &nbsp;|&nbsp; DAILY SHIFT REPORT &nbsp;|&nbsp; ${esc(CFG.reports.footer)}</td></tr></table></td></tr></table></body></html>`; }
+function dsrText(R){ const L = [`${CFG.reports.team} — DAILY SHIFT REPORT — ${longDate(R.date)}`, "", `Overall status: ${(DSR_LEVELS[R.status.level] || DSR_LEVELS.green)[0]}. ${R.status.text}`];
+  DSR_SECTIONS.forEach(([k, t]) => { L.push("", t.toUpperCase()); (R.sec[k] || []).forEach((x, i) => L.push(`${String(i + 1).padStart(2, "0")} · ${x.loc} · ${x.cat} · ${x.status}`, x.title, x.text)); if (!(R.sec[k] || []).length) L.push("Nil"); }); return L.join("\n"); }
+function downloadHtml(name, html){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], { type: "text/html" })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+const bodyOf = html => (/<body[^>]*>([\s\S]*)<\/body>/i.exec(html) || [0, html])[1];
+
+/* ---------- spot report from a protest ---------- */
+const spotTz = p => ((CITIES.find(c => c.name === p.city) || {}).tz) || "Asia/Singapore";
+const spotHM = (t, tz) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(t).replace(":", "");
+function spotFromProtest(p){ const tz = spotTz(p), near = protestSites(p)[0], s = near && near.s, cc = CITY_CC[p.city], country = COUNTRY_NAME[cc] || "";
+  const dStart = s && p.start ? km(p.start.ll[0], p.start.ll[1], s.lat, s.lon) : null, dEnd = s && p.end ? km(p.end.ll[0], p.end.ll[1], s.lat, s.lon) : null;
+  const t0 = p.when, t1 = p.when ? p.when + 2 * 3600e3 : null, date = t0 ? new Date(t0).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: tz }) : "[date]";
+  const verb = /march/i.test(p.title) ? "hold a march" : /strike/i.test(p.title) ? "strike" : /rally/i.test(p.title) ? "hold a rally" : "hold a demonstration";
+  const bluf = `On ${date}${t0 ? `, from ${spotHM(t0, tz)} to ${spotHM(t1, tz)} hours local time (${spotHM(t0, "UTC")} to ${spotHM(t1, "UTC")} UTC)` : ""}, ${p.organiser ? `${p.organiser} is` : "a group is"} scheduled to ${verb} (${p.title}) in ${p.city || "[city]"}.${p.start && p.start.name ? ` The ${/march/i.test(p.title) ? "march" : "event"} will begin at ${p.start.name}${p.end && p.end.name ? ` and finish at ${p.end.name}` : ""}.` : ""}${p.notes && !/^From (news|.*usembassy)/i.test(p.notes) ? " " + p.notes.trim().replace(/([^.])$/, "$1.") : ""}`;
+  const prox = s ? `The nearest site, ${s.code} (${clsTxt(s)}), is approximately ${dEnd != null ? kmTxt(dEnd) + " from the finish point" : kmTxt(near.d / 1000) + " from the route"}${dStart != null && dEnd != null ? ` and approximately ${kmTxt(dStart)} from the start point` : ""}. Road closures, increased pedestrian activity and a heightened security presence are likely along the route${p.end && p.end.name ? ` and around ${p.end.name}` : ""}, which may affect access for site staff and deliveries.` : "";
+  return { id: nid("sr"), createdAt: Date.now(), by: ME ? ME.name : "", pr: p.id, cat: "Civil Unrest", stage: "Developing", loc: [p.city, country].filter(Boolean).join(", "), t0, t1, tz,
+    bluf: bluf + (prox ? "\n\n" + prox : ""), impact: `No impact to ${CFG.reports.org} personnel, assets or operations has been identified at this time.`, monitor: "Monitoring is ongoing for any escalation in protest activity, associated disruptions, and government or security advisories.",
+    source: "", conf: "Medium", figs: [], site: s ? s.code : "", siteCls: s ? clsTxt(s) : "", start: p.start && p.start.name || "", end: p.end && p.end.name || "" }; }
+function spotHtml(S){ const F = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;", navy = "#12284B";
+  const figs = (S.figs || []).map((f, i) => `<div style="margin:16px 0 6px"><img src="${f.src}" alt="${esc(f.cap || "")}" style="max-width:100%;border:1px solid #D5DBE1;display:block"><div style="${F}font-size:12px;color:#444;margin-top:6px"><b>Figure ${i + (+S.figStart || 1)}:</b> ${esc(f.cap || "")}</div></div>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(S.cat)} (${esc(S.stage)}) — ${esc(S.loc)}</title></head>
+<body style="margin:0;background:#EEF1F4"><table cellpadding="0" cellspacing="0" style="width:100%;background:#EEF1F4"><tr><td align="center" style="padding:20px 10px"><table cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background:#fff;color:#1A1A1A;border:1px solid #D5DBE1">
+<tr><td style="${F}background:${navy};color:#fff;padding:18px 24px"><div style="font-size:12px;letter-spacing:1.4px;opacity:.85">${esc(CFG.reports.team)}</div><div style="font-size:22px;font-weight:700;margin-top:4px">${esc(S.cat)} (${esc(S.stage)})</div><div style="font-size:14px;margin-top:2px">${esc(S.loc)}</div></td></tr>
+<tr><td style="${F}padding:18px 24px 6px;font-size:13.5px;line-height:1.6;color:#1A1A1A"><div style="font-size:12px;font-weight:700;letter-spacing:1px;color:${navy};margin-bottom:6px">BLUF</div>
+${String(S.bluf || "").split(/\n\s*\n/).map(x => `<p style="margin:0 0 10px">${esc(x)}</p>`).join("")}<p style="margin:0 0 10px">${esc(S.impact || "")} ${esc(S.monitor || "")}</p>
+<p style="margin:12px 0 0;font-size:12.5px"><b>Source &amp; Confidence:</b> ${esc(S.source || "—")}, ${esc(S.conf || "")}</p>${figs}</td></tr>
+<tr><td style="${F}background:${navy};color:#fff;font-size:11px;letter-spacing:1.2px;text-align:center;padding:9px">${esc(CFG.reports.team)} &nbsp;|&nbsp; ${esc(S.cat.toUpperCase())} &nbsp;|&nbsp; ${esc(CFG.reports.footer)}</td></tr></table></td></tr></table></body></html>`; }
+const spotText = S => `${S.cat} (${S.stage})\n${S.loc}\nBLUF\n${S.bluf}\n${S.impact} ${S.monitor}\nSource & Confidence: ${S.source || "—"}, ${S.conf}` + (S.figs || []).map((f, i) => `\nFigure ${i + 1}: ${f.cap}`).join("");
+async function spotNewFromSelected(){ const p = SHARED.protests.find(x => x.id === UI.prSel) || SHARED.protests.filter(x => !x.deleted)[0]; if (!p){ toast("Select a protest first", "Add or pick one in the Protest tracker.", "var(--amber)"); return; }
+  const S = spotFromProtest(p); let img = null; try{ img = await protestImage(p); }catch(e){}
+  if (img) S.figs.push({ src: img, cap: `Announced ${/march/i.test(p.title) ? "March Route" : "Location"}${S.start ? ` From ${S.start}` : ""}${S.end ? ` to ${S.end}` : ""}${S.site ? ` and Proximity to ${S.site} (${S.siteCls})` : ""}.` });
+  SPOTS.unshift(S); spotSave(); audit("Spot report drafted", S.cat + " — " + S.loc, p.title); UI.repTab = "spot"; UI.spotSel = S.id; saveUI(); setMode("reports"); }
+
+/* ---------- Response › Reports ---------- */
+{ const g = G("respond"); if (g && !g.tabs.some(t => t[0] === "reports")) g.tabs.push(["reports", "Reports"]); }
+KEYS.reports = ["REPORTS", [], "Daily Shift Report and spot reports in the PSOC's format — filled from the console, edited here, exported as HTML or pasted into email"]; NON_CITY_MODES.push("reports"); if (!FULLW.includes("reports")) FULLW.push("reports");
+const inp = (attr, v, ph, cls) => `<input ${attr} value="${esc(v || "")}" placeholder="${esc(ph || "")}"${cls ? ` class="${cls}"` : ""}>`;
+function dsrEditor(R){ const lv = DSR_LEVELS[R.status.level] || DSR_LEVELS.green;
+  const itemRow = (k, x, i) => `<div class="rpitem" data-rpsec="${k}" data-rpi="${x.id}"><div class="rpih"><span class="rpn">${String(i + 1).padStart(2, "0")}</span>
+      ${inp(`data-rpf="loc"`, x.loc, "Site / country / team")}<input data-rpf="cat" list="rpcat-${k}" value="${esc(x.cat || "")}" placeholder="Category"><select data-rpf="status">${DSR_STATUS.map(s => `<option${s === x.status ? " selected" : ""}>${s}</option>`).join("")}</select>
+      <span class="sp"></span>${x.carried ? `<span class="tag" title="Carried over from the previous report">carried</span>` : ""}${x.src ? `<span class="tag" title="Brought in from the console">from console</span>` : ""}<button class="tab-mini" data-rpup aria-label="Move up">↑</button><button class="tab-mini" data-rpdown aria-label="Move down">↓</button><button class="tab-mini" data-rpai title="Improve the wording with AI (facts unchanged)">✦</button><button class="tab-mini" data-rpdel aria-label="Remove">×</button></div>
+      ${inp(`data-rpf="title"`, x.title, "TITLE IN CAPITALS", "rptitle")}<textarea data-rpf="text" rows="3" placeholder="What happened, where, when, impact, what is being done">${esc(x.text || "")}</textarea></div>`;
+  const sec = (k, t) => `<div class="rpsec"><div class="rpsech"><b>${esc(t)}</b><span class="s">${(R.sec[k] || []).length}</span><span class="sp"></span><button class="tab-mini" data-rpadd="${k}">+ Add</button></div><datalist id="rpcat-${k}">${(DSR_CATS[k] || []).map(c => `<option>${esc(c)}</option>`).join("")}</datalist>${(R.sec[k] || []).map((x, i) => itemRow(k, x, i)).join("") || `<div class="s rpnil">Nil — nothing reported under this section.</div>`}</div>`;
+  const siteRows = k => `<div class="rpsec"><div class="rpsech"><b>${k === "ab" ? "Upcoming A/B Class Sites" : "Upcoming PE Sites"}</b><span class="sp"></span><button class="tab-mini" data-rpsadd="${k}">+ Add site</button></div>
+    ${R[k].map((r, i) => `<div class="rpsite" data-rps="${k}" data-rpsi="${i}">${inp(`data-rpsf="country"`, r.country, "Country")}${inp(`data-rpsf="site"`, r.site, "Site")}${inp(`data-rpsf="remark"`, r.remark, "Status / remarks")}<input type="date" data-rpsf="date" value="${esc(r.date || "")}"><button class="tab-mini" data-rpsdel aria-label="Remove">×</button></div>`).join("") || `<div class="s rpnil">Nil</div>`}</div>`;
+  return `<div class="rpgrid"><div class="rpedit">
+    <div class="rpsec"><div class="rpsech"><b>Report</b></div><div class="rpline"><label class="ctl">Date <input type="date" data-rpdate value="${esc(R.date)}"></label><label class="ctl">Shift <select data-rptop="shift">${["Day Shift", "Grave Shift"].map(s => `<option${s === R.shift ? " selected" : ""}>${s}</option>`).join("")}</select></label>
+      <label class="ctl">Status <select data-rptop="level">${Object.entries(DSR_LEVELS).map(([k, v]) => `<option value="${k}"${k === R.status.level ? " selected" : ""}>${esc(v[0])}</option>`).join("")}</select></label></div>
+      <input data-rptop="statustext" value="${esc(R.status.text)}" placeholder="Summary of site / systems status" class="rpwide" style="border-left:5px solid ${lv[1]}">
+      <div class="rpstaff">${R.staff.map((s, i) => `<span class="rpst" data-rpst="${i}">${inp(`data-rpstf="name"`, s.name, "Name")}${inp(`data-rpstf="role"`, s.role, "Role")}<button class="tab-mini" data-rpstdel aria-label="Remove">×</button></span>`).join("")}<button class="tab-mini" data-rpstadd>+ Staff</button></div></div>
+    ${sec("obs", "Observations")}${sec("info", "Information")}${sec("intel", "Intelligence")}${sec("pending", "Pending Actions")}
+    <div class="rpsec"><div class="rpsech"><b>Things To Note — by role</b></div>${R.roles.map((r, i) => `<div class="rprole" data-rpr="${i}">${inp(`data-rprf="role"`, r.role, "Role")}${inp(`data-rprf="text"`, r.text, "Instructions or Nil")}</div>`).join("")}</div>
+    ${sec("notes", "Things To Note — items")}${siteRows("ab")}${siteRows("pe")}
+    <div class="rpsec"><div class="rpsech"><b>Sign-Off &amp; Acknowledgement</b></div>${R.sign.map((s, i) => `<div class="rpsign" data-rpsg="${i}"><b>${esc(s.shift)}</b>${inp(`data-rpsgf="out"`, s.out, "Outgoing")}${inp(`data-rpsgf="outT"`, s.outT, "HHMM")}${inp(`data-rpsgf="in"`, s.in, "Incoming")}${inp(`data-rpsgf="inT"`, s.inT, "HHMM")}<label class="ctl"><input type="checkbox" data-rpsgok${s.ok ? " checked" : ""}> Confirmed</label></div>`).join("")}</div>
+  </div><div class="rpprev"><div class="rpprevh"><b>Preview</b><span class="s">as it will look in the HTML file and in email</span></div><div class="rpdoc">${bodyOf(dsrHtml(R))}</div></div></div>`; }
+function spotEditor(S){ return `<div class="rpgrid"><div class="rpedit"><div class="rpsec"><div class="rpline"><input data-spf="cat" value="${esc(S.cat)}" list="spcats" placeholder="Category"><datalist id="spcats">${["Civil Unrest", "Severe Weather", "Earthquake", "Security Threat", "Industrial Action", "Transport Disruption", "Health"].map(c => `<option>${c}</option>`).join("")}</datalist>
+      <select data-spf="stage">${["Developing", "Update", "Final"].map(s => `<option${s === S.stage ? " selected" : ""}>${s}</option>`).join("")}</select>${inp(`data-spf="loc"`, S.loc, "City, Country")}</div>
+    <label class="fld">BLUF <span class="s">(written from the Protest tracker — check names, times and distances)</span><textarea data-spf="bluf" rows="9">${esc(S.bluf)}</textarea></label>
+    <label class="fld">Impact<textarea data-spf="impact" rows="2">${esc(S.impact)}</textarea></label><label class="fld">Monitoring<textarea data-spf="monitor" rows="2">${esc(S.monitor)}</textarea></label>
+    <div class="rpline"><label class="fld" style="flex:2">Source${inp(`data-spf="source"`, S.source, "e.g. organiser's social media, police advisory")}</label><label class="fld" style="flex:1">Confidence<select data-spf="conf">${["Low", "Medium", "High"].map(c => `<option${c === S.conf ? " selected" : ""}>${c}</option>`).join("")}</select></label><label class="fld" style="flex:1">First figure number${inp(`data-spf="figStart" type="number" min="1"`, S.figStart || 1, "1")}</label></div>
+    <div class="rpsec"><div class="rpsech"><b>Figures</b><span class="sp"></span><label class="tab-mini rpup">+ Add picture<input type="file" accept="image/*" data-spimg hidden></label>${S.pr ? `<button class="tab-mini" data-spmap>↻ Route map from the tracker</button>` : ""}</div>
+      ${(S.figs || []).map((f, i) => `<div class="rpfig" data-spfig="${i}"><img src="${f.src}" alt=""><div style="flex:1"><input data-spcap value="${esc(f.cap || "")}" placeholder="Caption" class="rpwide"><div class="acts"><button class="tab-mini" data-spfup>↑</button><button class="tab-mini" data-spfdel>Remove</button></div></div></div>`).join("") || `<div class="s rpnil">No figures yet — the route map comes from the Protest tracker; add the organiser's poster or other pictures.</div>`}</div>
+    <div class="acts"><button class="act" data-spai>✦ Improve wording with AI</button></div></div></div>
+    <div class="rpprev"><div class="rpprevh"><b>Preview</b></div><div class="rpdoc">${bodyOf(spotHtml(S))}</div></div></div>`; }
+function reportsPanel(){ const tab = UI.repTab || "dsr";
+  const bar = `<div class="ptools"><span class="label">Reports</span><span class="innav0">${[["dsr", "Daily Shift Report"], ["spot", `Spot reports${SPOTS.length ? " (" + SPOTS.length + ")" : ""}`]].map(([k, l]) => `<button class="tab-mini" data-reptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span><span class="sp"></span>`;
+  if (tab === "spot"){ const S = SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0];
+    return bar + `<button class="tab-mini" data-spnew>+ From the Protest tracker</button><button class="tab-mini" data-spblank>+ Blank</button>${S ? `<button class="tab-mini" data-spdl>⬇ HTML file</button><button class="tab-mini" data-spcopy>Copy for email</button><button class="tab-mini" data-sprepo>File in repository</button><button class="tab-mini" data-spdel>Delete</button>` : ""}<button class="tab-mini" data-repset>⚙</button></div>
+      <div class="pbody"><div class="rpspots">${SPOTS.slice(0, 30).map(x => `<button class="tab-mini" data-spsel="${x.id}" aria-pressed="${S && x.id === S.id}">${esc(x.cat)} (${esc(x.stage)}) · ${esc(x.loc || "")} · ${esc(sgt(x.createdAt).slice(0, 13))}</button>`).join("")}</div>
+      ${S ? spotEditor(S) : `<div class="empty">No spot reports yet. Open the Protest tracker, select a protest and press "Spot report" — or start a blank one.</div>`}</div>`; }
+  const R = dsrCur();
+  return bar + `<button class="tab-mini primary" data-dsrfill>↻ Fill from the console</button><button class="tab-mini" data-dsrdl>⬇ HTML file</button><button class="tab-mini" data-dsrcopy>Copy for email</button><button class="tab-mini" data-dsrrepo>File in repository</button><button class="tab-mini" data-repset>⚙</button></div>
+    <div class="pbody">${dsrEditor(R)}</div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "reports") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+    const a = document.activeElement, keep = a && p.contains(a) && a.matches("input,textarea,select") ? { sel: rpSel(a), s: a.selectionStart, e: a.selectionEnd } : null, sc = (p.querySelector(".rpedit") || {}).scrollTop;
+    p.innerHTML = reportsPanel(); const ed = p.querySelector(".rpedit"); if (ed && sc) ed.scrollTop = sc;
+    if (keep && keep.sel){ const el = p.querySelector(keep.sel); if (el){ el.focus(); try{ el.setSelectionRange(keep.s, keep.e); }catch(e){} } } }; }
+function rpSel(a){ const it = a.closest("[data-rpi]"), at = [...a.attributes].find(x => /^data-(rpf|spf|rpsf|rprf|rpstf|rpsgf|rptop|spcap)$/.test(x.name)); if (!at) return null;
+  const host = a.closest("[data-rpi],[data-rps],[data-rpr],[data-rpst],[data-rpsg],[data-spfig]"); const hs = host ? [...host.attributes].filter(x => /^data-rp|^data-sp/.test(x.name)).map(x => `[${x.name}="${x.value}"]`).join("") : "";
+  return (hs ? hs + " " : "") + `[${at.name}${at.value ? `="${at.value}"` : ""}]`; }
+// live preview: update the preview only (keeps typing smooth)
+function rpPreview(){ const d = $("#panel .rpdoc"); if (!d) return; d.innerHTML = UI.repTab === "spot" ? bodyOf(spotHtml(SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0])) : bodyOf(dsrHtml(dsrCur())); }
+document.getElementById("panel").addEventListener("input", e => { if (UI.mode !== "reports") return; const t = e.target, R = UI.repTab === "spot" ? null : dsrCur(), S = UI.repTab === "spot" ? (SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0]) : null, d = t.dataset;
+  if (R){ const it = t.closest("[data-rpi]"); if (it && d.rpf){ const x = R.sec[it.dataset.rpsec].find(y => y.id === it.dataset.rpi); if (x) x[d.rpf] = t.value; }
+    const sr = t.closest("[data-rps]"); if (sr && d.rpsf) R[sr.dataset.rps][+sr.dataset.rpsi][d.rpsf] = t.value;
+    const rr = t.closest("[data-rpr]"); if (rr && d.rprf) R.roles[+rr.dataset.rpr][d.rprf] = t.value;
+    const st = t.closest("[data-rpst]"); if (st && d.rpstf) R.staff[+st.dataset.rpst][d.rpstf] = t.value;
+    const sg = t.closest("[data-rpsg]"); if (sg && d.rpsgf) R.sign[+sg.dataset.rpsg][d.rpsgf] = t.value;
+    if (d.rptop === "statustext") R.status.text = t.value; R.updatedAt = Date.now(); dsrSave(); }
+  if (S){ if (d.spf) S[d.spf] = t.value; const f = t.closest("[data-spfig]"); if (f && d.spcap !== undefined) S.figs[+f.dataset.spfig].cap = t.value; spotSave(); }
+  clearTimeout(rpPreview.t); rpPreview.t = setTimeout(rpPreview, 250); });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "reports") return; const t = e.target, d = t.dataset;
+  if (d.rpdate !== undefined){ UI.dsrDate = t.value || sgDate(); saveUI(); renderPanel(); return; }
+  if (t.matches("textarea,input:not([type=checkbox]):not([type=date]):not([type=file]):not([type=number])")) return;
+  if (UI.repTab !== "spot"){ const R = dsrCur(); if (d.rptop === "shift") R.shift = t.value; if (d.rptop === "level") R.status.level = t.value; if (d.rpsgok !== undefined) R.sign[+t.closest("[data-rpsg]").dataset.rpsg].ok = t.checked;
+    if (d.rpf === "status"){ const it = t.closest("[data-rpi]"), x = R.sec[it.dataset.rpsec].find(y => y.id === it.dataset.rpi); if (x) x.status = t.value; } dsrSave(); renderPanel(); return; }
+  const S = SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0]; if (!S) return;
+  if (d.spf){ S[d.spf] = t.value; spotSave(); rpPreview(); }
+  if (d.spimg !== undefined && t.files[0]){ const f = t.files[0]; if (f.size > 6 * 1048576){ toast("Picture too large", "Use a picture under 6 MB.", "var(--amber)"); return; }
+    const rd = new FileReader(); rd.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, 1400 / im.width), c = document.createElement("canvas"); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+        S.figs.push({ src: c.toDataURL("image/jpeg", .85), cap: f.name.replace(/\.[a-z]+$/i, "") }); spotSave(); renderPanel(); }; im.src = rd.result; }; rd.readAsDataURL(f); } });
+document.getElementById("panel").addEventListener("click", async e => { if (UI.mode !== "reports") return; const t = e.target.closest("button,[data-reptab]"); if (!t) return; const d = t.dataset;
+  if (d.reptab){ UI.repTab = d.reptab; saveUI(); renderPanel(); return; }
+  if (d.repset !== undefined){ openModal(head("Report settings") + `<div class="bd"><div class="fgrid3"><label class="fld">Team name (report header)<input id="rsT" value="${esc(CFG.reports.team)}"></label><label class="fld">Organisation (in impact lines)<input id="rsO" value="${esc(CFG.reports.org)}"></label><label class="fld">Footer marking<input id="rsF" value="${esc(CFG.reports.footer)}"></label></div></div><div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="rsGo">Save</button></div>`);
+    $("#rsGo").onclick = () => { Object.assign(CFG.reports, { team: $("#rsT").value.trim() || "THE APAC PSOC", org: $("#rsO").value.trim() || "the company", footer: $("#rsF").value.trim() || "INTERNAL" }); saveCfg(); $("#ov").classList.remove("show"); renderPanel(); }; return; }
+  if (UI.repTab !== "spot"){ const R = dsrCur(), it = t.closest("[data-rpi]"), arr = it && R.sec[it.dataset.rpsec], i = it ? arr.findIndex(y => y.id === it.dataset.rpi) : -1;
+    if (d.dsrfill !== undefined){ dsrFill(); renderPanel(); return; }
+    if (d.rpadd){ R.sec[d.rpadd].push({ id: nid("i"), loc: "", cat: (DSR_CATS[d.rpadd] || [""])[0], status: d.rpadd === "pending" ? "Pending" : "Monitoring", title: "", text: "" }); dsrSave(); renderPanel(); return; }
+    if (d.rpup !== undefined && i > 0){ [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; dsrSave(); renderPanel(); return; }
+    if (d.rpdown !== undefined && i >= 0 && i < arr.length - 1){ [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]]; dsrSave(); renderPanel(); return; }
+    if (d.rpdel !== undefined && i >= 0){ arr.splice(i, 1); dsrSave(); renderPanel(); return; }
+    if (d.rpai !== undefined && i >= 0){ const x = arr[i]; if (!(await llmReady())){ toast("No language model connected", "Connect one in Incidents › Incident report › ⚙ Writing setup.", "var(--amber)"); return; }
+      t.disabled = true; try{ const out = (await llm(llmwSystem("daily shift report entries") + "\nReturn only the rewritten paragraph.", `Entry title: ${x.title}\nLocation: ${x.loc}\nText:\n${x.text}`)).trim(); const bad = llmwFactGuard(out, [x.text, x.title, x.loc]);
+        if (bad.length) toast("Not applied", "The model added details that aren't in the entry: " + bad.slice(0, 4).join(", "), "var(--amber)"); else { x.text = out; dsrSave(); renderPanel(); } }catch(err){ toast("The model could not rewrite it", err.message, "var(--red)"); } t.disabled = false; return; }
+    if (d.rpsadd){ R[d.rpsadd].push({ country: "", site: "", remark: "Site has not contacted PSOC to test on Duress", date: "" }); dsrSave(); renderPanel(); return; }
+    if (d.rpsdel !== undefined){ const r = t.closest("[data-rps]"); R[r.dataset.rps].splice(+r.dataset.rpsi, 1); dsrSave(); renderPanel(); return; }
+    if (d.rpstadd !== undefined){ R.staff.push({ name: "", role: "" }); dsrSave(); renderPanel(); return; }
+    if (d.rpstdel !== undefined){ R.staff.splice(+t.closest("[data-rpst]").dataset.rpst, 1); dsrSave(); renderPanel(); return; }
+    if (d.dsrdl !== undefined){ downloadHtml(`PSOC_Daily_Shift_Report_${R.date}.html`, dsrHtml(R)); audit("Daily shift report exported", R.date, "HTML"); return; }
+    if (d.dsrcopy !== undefined){ copyRich(bodyOf(dsrHtml(R)), dsrText(R)); toast("Report copied", "Paste it into the email — it keeps its layout", "var(--green)"); return; }
+    if (d.dsrrepo !== undefined){ putShared("repo", { id: "dsr-" + R.date, createdAt: Date.now(), author: ME ? ME.name : "", type: "Daily shift report", repo: "ops", title: `Daily Shift Report — ${longDate(R.date)}`, content: dsrText(R), summary: `${(DSR_LEVELS[R.status.level] || DSR_LEVELS.green)[0]} · ${R.sec.obs.length} observations, ${R.sec.intel.length} intelligence, ${R.sec.pending.length} pending` }); audit("Daily shift report filed", R.date, ""); toast("Filed", "Operations repository", "var(--green)"); return; }
+    return; }
+  const S = SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0];
+  if (d.spnew !== undefined){ UI.prReturn = true; setMode("protests"); toast("Select the protest", "Then press \"Spot report\" above its map.", "var(--teal)"); return; }
+  if (d.spblank !== undefined){ const x = { id: nid("sr"), createdAt: Date.now(), by: ME ? ME.name : "", cat: "Civil Unrest", stage: "Developing", loc: "", bluf: "", impact: `No impact to ${CFG.reports.org} personnel, assets or operations has been identified at this time.`, monitor: "Monitoring is ongoing for any escalation in protest activity, associated disruptions, and government or security advisories.", source: "", conf: "Medium", figs: [] }; SPOTS.unshift(x); spotSave(); UI.spotSel = x.id; saveUI(); renderPanel(); return; }
+  if (d.spsel){ UI.spotSel = d.spsel; saveUI(); renderPanel(); return; }
+  if (!S) return; const fi = t.closest("[data-spfig]");
+  if (d.spfdel !== undefined && fi){ S.figs.splice(+fi.dataset.spfig, 1); spotSave(); renderPanel(); return; }
+  if (d.spfup !== undefined && fi){ const i = +fi.dataset.spfig; if (i > 0){ [S.figs[i - 1], S.figs[i]] = [S.figs[i], S.figs[i - 1]]; spotSave(); renderPanel(); } return; }
+  if (d.spmap !== undefined){ const p = SHARED.protests.find(x => x.id === S.pr); if (!p) return; UI.prSel = p.id; UI.spotMapFor = S.id; saveUI(); setMode("protests"); toast("Route map", "Frame the map, then press \"Spot report\" again to refresh the route map.", "var(--teal)"); return; }
+  if (d.spdl !== undefined){ downloadHtml(`PSOC_${S.cat.replace(/\W+/g, "_")}_${(S.loc || "report").replace(/\W+/g, "_")}_${sgDate(S.createdAt)}.html`, spotHtml(S)); audit("Spot report exported", S.cat + " — " + S.loc, "HTML"); return; }
+  if (d.spcopy !== undefined){ copyRich(bodyOf(spotHtml(S)), spotText(S)); toast("Spot report copied", "Paste it into the email — pictures included", "var(--green)"); return; }
+  if (d.sprepo !== undefined){ putShared("repo", { id: "spot-" + S.id, createdAt: Date.now(), author: ME ? ME.name : "", type: "Spot report", repo: "intel", title: `${S.cat} (${S.stage}) — ${S.loc}`, content: spotText(S), summary: trunc(S.bluf, 220) }); audit("Spot report filed", S.cat + " — " + S.loc, ""); toast("Filed", "Intelligence repository", "var(--green)"); return; }
+  if (d.spdel !== undefined && await confirmBox("Delete this spot report?", "")){ SPOTS = SPOTS.filter(x => x !== S); spotSave(); UI.spotSel = null; saveUI(); renderPanel(); return; }
+  if (d.spai !== undefined){ if (!(await llmReady())){ toast("No language model connected", "Connect one in Incidents › Incident report › ⚙ Writing setup.", "var(--amber)"); return; }
+    t.disabled = true; try{ const src = `${S.bluf}\n\n${S.impact} ${S.monitor}`, out = (await llm(llmwSystem("security spot reports (BLUF style)") + "\nKeep the first paragraph as the bottom line up front: what, where, when (local and UTC), who; then proximity to the nearest site and likely effects. Return only the rewritten BLUF paragraphs, separated by a blank line.", src)).trim(), bad = llmwFactGuard(out, [src]);
+      if (bad.length) toast("Not applied", "The model added details that aren't in the report: " + bad.slice(0, 4).join(", "), "var(--amber)"); else { S.bluf = out; spotSave(); renderPanel(); } }catch(err){ toast("The model could not rewrite it", err.message, "var(--red)"); } t.disabled = false; } });
+// "Spot report" on the Protest tracker
+{ const _pp = protestPanel; protestPanel = function(){ const h = _pp(); return h.replace('<button class="pill primary" data-prnew>', '<button class="pill" data-prspot title="Write a spot report about the selected protest, with its route map">📝 Spot report</button><button class="pill primary" data-prnew>'); }; }
+document.getElementById("panel").addEventListener("click", async e => { if (!e.target.closest("[data-prspot]")) return;
+  if (UI.spotMapFor){ const S = SPOTS.find(x => x.id === UI.spotMapFor), p = S && SHARED.protests.find(x => x.id === S.pr); UI.spotMapFor = null; saveUI();
+    if (S && p){ let img = null; try{ img = await protestImage(p); }catch(err){} if (img){ const i = S.figs.findIndex(f => /Route|Location/.test(f.cap)); const f = { src: img, cap: (S.figs[i] || {}).cap || `Announced March Route From ${S.start} to ${S.end} and Proximity to ${S.site} (${S.siteCls}).` }; if (i >= 0) S.figs[i] = f; else S.figs.unshift(f); spotSave(); }
+      UI.repTab = "spot"; UI.spotSel = S.id; saveUI(); setMode("reports"); return; } }
+  spotNewFromSelected(); });
+// the shift handover button also offers the Daily Shift Report
+{ const _oh = openHandover; openHandover = function(){ const r = _oh.apply(this, arguments); const ft = $("#box .ft"); if (ft && !ft.querySelector("[data-gorep]")) ft.insertAdjacentHTML("afterbegin", `<button class="pill" data-gorep>Daily Shift Report…</button>`); return r; }; }
+document.addEventListener("click", e => { if (e.target.closest("[data-gorep]")){ $("#ov").classList.remove("show"); UI.repTab = "dsr"; saveUI(); setMode("reports"); } });
+{ const st = document.createElement("style"); st.textContent = `
+.rpgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}.rpedit{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 230px);overflow:auto;padding-right:4px}
+.rpsec{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}.rpsech{display:flex;align-items:center;gap:8px}.rpsech b{font-size:13.5px}.rpnil{padding:2px 0}
+.rpsec input,.rpsec select,.rpsec textarea,.rpline input,.rpline select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:13px var(--font);min-width:0}
+.rpsec textarea{width:100%;box-sizing:border-box;line-height:1.5;resize:vertical}.rpwide{width:100%;box-sizing:border-box}.rpline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.rpitem{border:1px solid var(--line);border-radius:7px;padding:8px;display:flex;flex-direction:column;gap:6px}.rpih{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rpih input{flex:1 1 120px}.rpn{font-weight:800;color:var(--muted);font-size:12px}
+.rptitle{font-weight:700;text-transform:uppercase}.rpsite,.rprole,.rpsign,.rpst{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rpsite input{flex:1 1 110px}.rprole input:first-child{flex:0 0 200px}.rprole input:last-child{flex:1}
+.rpsign b{min-width:150px;font-size:12.5px}.rpstaff{display:flex;flex-wrap:wrap;gap:6px}.rpst input{width:140px}
+.rpprev{position:sticky;top:0}.rpprevh{display:flex;gap:8px;align-items:baseline;margin:0 0 6px}.rpdoc{max-height:calc(100vh - 250px);overflow:auto;border-radius:8px;border:1px solid var(--line);background:#EEF1F4;color:#1A1A1A;color-scheme:light}
+.rpspots{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 10px}.rpfig{display:flex;gap:10px;align-items:flex-start}.rpfig img{width:120px;max-height:90px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}.rpup{cursor:pointer}
+.innav0{display:inline-flex;gap:4px;margin-left:6px}
+@media (max-width:1100px){.rpgrid{grid-template-columns:1fr}.rpedit,.rpdoc{max-height:none}.rpprev{position:static}}
+.rpgrid>*,.rpsec,.rpitem{min-width:0}.rpsec input,.rpsec select{max-width:100%}
+@media (max-width:760px){.rpsite,.rpsign,.rprole{display:grid;grid-template-columns:1fr 1fr;gap:6px}.rpsign b{grid-column:1/-1}.rprole input:first-child,.rprole input:last-child{flex:none}
+  .rpst input{width:auto;flex:1 1 120px}.rpst{width:100%}.rpih input{flex:1 1 100%}.rpdoc{overflow-x:auto}.rpline>*{flex:1 1 100%}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   LIVE SATELLITE (16 Oct) — the "traffic camera" of satellites
+   Geostationary weather satellites photograph the whole region every
+   10 minutes (Himawari-9 over Asia-Pacific, GOES-West / GOES-East over
+   the Americas); NASA GIBS republishes each frame free, about 30–60 min
+   after it is taken. A Camera wall tile plays the last two hours over a
+   site as a loop and adds each new frame as it arrives.
+   Infrared works day and night; visible is sharper (1 km) by day only.
+   ===================================================================== */
+CFG.satlive = Object.assign({ frames: 12, lagMin: 40, halfKm: 300 }, CFG.satlive || {});
+SF_KINDS.live = ["Live satellite loop", "Himawari / GOES · new frame every 10 min"];
+SF_KINDS.livevis = ["Live satellite — visible", "1 km · daytime · every 10 min"];
+delete SF_KINDS.weather;   // the single weather picture becomes the live loop
+{ let ch = false; CFG.camwall.tiles.forEach(t => { if (t.src === "sat" && t.kind === "weather"){ t.kind = "live"; t.id = "sat:live:" + t.site; t.name = t.site + " " + SF_KINDS.live[0]; ch = true; } }); if (ch) saveCfg(); }
+const slSat = lon => lon > 60 || lon < -170 ? ["Himawari", "Himawari-9 (JMA)"] : lon < -105 ? ["GOES-West", "GOES-West (NOAA)"] : ["GOES-East", "GOES-East (NOAA)"];
+const slLayer = (s, vis) => { const [k] = slSat(s.lon); return k === "Himawari" ? (vis ? "Himawari_AHI_Band3_Red_Visible_1km" : "Himawari_AHI_Band13_Clean_Infrared") : `${k}_ABI_${vis ? "Band2_Red_Visible_1km" : "Band13_Clean_Infrared"}`; };
+function slTimes(){ const step = 600e3, end = Math.floor((Date.now() - CFG.satlive.lagMin * 60e3) / step) * step; return Array.from({ length: CFG.satlive.frames }, (_, i) => end - (CFG.satlive.frames - 1 - i) * step); }
+const slIso = t => new Date(t).toISOString().slice(0, 17) + "00Z";
+const slUrl = (s, t, vis, w, h) => `${GIBS_WMS}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${slLayer(s, vis)}&STYLES=&CRS=EPSG:3857&BBOX=${sfBox(s, (vis ? .5 : 1) * CFG.satlive.halfKm * 1000, w / h)}&WIDTH=${w}&HEIGHT=${h}&FORMAT=image/jpeg&TIME=${slIso(t)}`;
+const slClock = t => { const d = new Date(t); return `${d.toISOString().slice(11, 16)} UTC · ${new Date(t + 8 * 3600e3).toISOString().slice(11, 16)} SGT`; };
+function slBody(code, vis, big){ const s = sfSite(code); if (!s || !isFinite(s.lat)) return `<div class="ltvmsg">Site ${esc(code)} not found.</div>`; const W = big ? 640 : 480, H = big ? 400 : 300, ts = slTimes(), sat = slSat(s.lon);
+  return `<div class="sfpic slloop" data-slcode="${esc(code)}">${ts.map((t, i) => `<img class="sffull slf" data-slt="${t}" src="${esc(slUrl(s, t, vis, W, H))}" alt="" loading="${i < ts.length - 3 ? "lazy" : "eager"}">`).join("")}
+    <span class="sfring" aria-hidden="true"></span><span class="slclock">${esc(slClock(ts[ts.length - 1]))}</span><span class="slbar"><i style="width:100%"></i></span>
+    <span class="sfattr">NASA GIBS / ${esc(sat[1])} · ${vis ? "visible, daytime" : "infrared — brighter = colder, higher cloud"}</span></div>`; }
+// play every loop on screen: frames that loaded, one after another, holding the newest a little longer
+setInterval(() => { document.querySelectorAll(".slloop").forEach(box => { const fr = [...box.querySelectorAll(".slf")].filter(i => i.complete && i.naturalWidth && !i.dataset.bad); if (!fr.length){ box.classList.add("slwait"); return; } box.classList.remove("slwait");
+    let k = +(box.dataset.k || 0), hold = +(box.dataset.hold || 0); if (k === fr.length - 1 && hold < 3){ box.dataset.hold = hold + 1; } else { box.dataset.hold = 0; k = (k + 1) % fr.length; box.dataset.k = k; }
+    k = Math.min(k, fr.length - 1); box.querySelectorAll(".slf").forEach(i => i.classList.toggle("on", i === fr[k])); const c = box.querySelector(".slclock"), b = box.querySelector(".slbar i");
+    if (c) c.textContent = slClock(+fr[k].dataset.slt) + (k === fr.length - 1 ? " · latest" : ""); if (b) b.style.width = Math.round((k + 1) / fr.length * 100) + "%"; }); }, 450);
+// a new frame every 10 minutes: redraw the tiles that show a loop
+setInterval(() => { if (!ME || !document.querySelector(".slloop")) return; sfRefresh(); }, 10 * 60e3);
+{ const _sb = sfBody; sfBody = function(kind, code, big){ return kind === "live" || kind === "livevis" ? slBody(code, kind === "livevis", big) : _sb(kind, code, big); }; }
+{ const _sm = sfMeta; sfMeta = function(kind, code){ if (kind !== "live" && kind !== "livevis") return _sm(kind, code); const s = sfSite(code), sat = s ? slSat(s.lon)[0] : "";
+    return { age: "LIVE · 10 min", line: `${sat} · last ${Math.round(CFG.satlive.frames * 10 / 60 * 10) / 10} h as a loop · each frame arrives ~${CFG.satlive.lagMin} min after it is taken` }; }; }
+// the Site plan shows the loop in place of the single weather picture
+{ const _rp3 = renderPanelInner; renderPanelInner = function(p){ const r = _rp3(p); if (UI.mode === "siteplan" && UI.spSite){ const figs = p.querySelectorAll(".sfgrid figure"); const f = figs[2];
+      if (f && !f.querySelector(".slloop")){ f.querySelector(".sfbox").innerHTML = slBody(UI.spSite, false, true); f.querySelector("figcaption").textContent = "Live satellite over the site — last 2 hours, new frame every 10 min"; } } return r; }; }
+{ const st = document.createElement("style"); st.textContent = `
+.slloop .slf{position:absolute;inset:0;opacity:0;transition:opacity .25s}.slloop .slf.on{opacity:1}
+.slclock{position:absolute;left:6px;top:6px;font:700 11px var(--font);color:#fff;background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px;letter-spacing:.2px}
+.slbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.15)}.slbar i{display:block;height:100%;background:#4FC4BE;transition:width .3s}
+.slloop.slwait::after{content:"Waiting for the latest satellite frames…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cfd8dc;font-size:12.5px}`; document.head.appendChild(st); }
 
 boot();
 
