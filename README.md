@@ -23,6 +23,14 @@ described in the hosting guide that ships with the full package.
   every site, loitering alerts, tracks and pilot positions, alerts into the Action queue, and a training scenario.
   Detection only — stopping a drone is for authorised agencies.
 
+## Satellite feeds for buildings (Camera wall, Camera sources, Site plan)
+
+A satellite "camera" per site: **Sentinel-2** (10 m, a pass every few days — every pass with its cloud cover from the
+public Copernicus catalogue, the latest clear picture once a free Copernicus account is linked, the next pass
+estimated, and a change check between the two latest clear pictures that can raise an action), a **high-resolution
+reference** of the building, **weather over the site** every 10 minutes, and **your own provider** for fresh sharp
+pictures. Add them from Camera wall › 🛰 + Satellite feed, Camera sources, or a site's Site plan.
+
 ## Security gateways
 
 Administrator › **Security** shows and controls them:

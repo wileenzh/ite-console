@@ -15497,6 +15497,144 @@ setInterval(() => { if (UI.mode === "drones" && !$("#ov.show")){ const a = docum
 { const _ss = sgSecrets; sgSecrets = function(){ const r = _ss(); if (CFG.sat && CFG.sat.custom) r.push({ l: "Imagery provider address" + (CFG.sat.customName ? " (" + CFG.sat.customName + ")" : ""), p: "sat.custom", mask: CFG.sat.custom.replace(/(key|token|api_key)=([^&]{3})[^&]*/gi, "$1=$2•••") }); return r; }; }
 
 
+
+/* =====================================================================
+   SATELLITE FEEDS FOR BUILDINGS (16 Oct)
+   A satellite "camera" per site, in Vision Command Centre › Camera wall,
+   Camera sources and Security Operations › Site plan:
+   - Sentinel-2 (ESA Copernicus, 10 m, a pass every few days): every pass
+     over the site with its cloud cover from the public Copernicus catalogue;
+     the latest clear picture once a free Copernicus account is linked;
+     the next pass estimated from past ones; a change check between the two
+     latest clear pictures that can raise an action.
+   - High-resolution reference (Esri, ~30–60 cm): what the building looks
+     like (archive imagery, not live).
+   - Weather over the site (Himawari, every 10 minutes).
+   - Your provider (Planet, Maxar/Vantor, Airbus…) by tile address.
+   ===================================================================== */
+CFG.satfeed = Object.assign({ cdse: "", layer: "TRUE_COLOR", maxcc: 30, changePct: 15, alerts: true }, CFG.satfeed || {});
+["*.dataspace.copernicus.eu"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+const SF_KEY = "psoc.uni.satfeed.v1";
+const SF = Object.assign({ passes: {}, change: {} }, lsGet(SF_KEY, {})); SF.busy = {};
+const sfSave = () => { clearTimeout(sfSave.t); sfSave.t = setTimeout(() => lsSet(SF_KEY, { passes: SF.passes, change: SF.change }), 500); };
+const SF_KINDS = { s2: ["Sentinel-2", "10 m · a pass every few days"], hires: ["High-resolution reference", "~30–60 cm · archive, not live"], weather: ["Weather over the site", "Himawari · every 10 min"], custom: ["Your provider", "your imagery subscription"] };
+const sfSite = code => SITES.find(s => s.code === code);
+const sfDay = t => new Date(t).toISOString().slice(0, 10), sfShort = t => new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+// web-mercator helpers for picture boxes and tile mosaics
+const sfMerc = (lat, lon) => [lon * 20037508.34 / 180, Math.log(Math.tan((90 + lat) * Math.PI / 360)) * 20037508.34 / Math.PI];
+function sfBox(s, halfM, aspect){ const [x, y] = sfMerc(s.lat, s.lon), k = 1 / Math.cos(s.lat * Math.PI / 180), hw = halfM * k, hh = hw / (aspect || 1.6); return [x - hw, y - hh, x + hw, y + hh].map(v => v.toFixed(1)).join(","); }
+function sfMosaic(s, tmpl, z, attr){ const n = 2 ** z, X = (s.lon + 180) / 360 * n, lr = s.lat * Math.PI / 180, Y = (1 - Math.log(Math.tan(lr) + 1 / Math.cos(lr)) / Math.PI) / 2 * n, x0 = Math.floor(X) - 2, y0 = Math.floor(Y) - 2;
+  let h = ""; for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++){ const tx = ((x0 + i) % n + n) % n, ty = y0 + j; if (ty < 0 || ty >= n) continue;
+    h += `<img src="${esc(tmpl.replace("{z}", z).replace("{x}", tx).replace("{y}", ty).replace("{s}", "a"))}" style="left:${i * 256}px;top:${j * 256}px" alt="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin">`; }
+  return `<div class="sfmos" style="left:calc(50% - ${((X - x0) * 256).toFixed(1)}px);top:calc(50% - ${((Y - y0) * 256).toFixed(1)}px)">${h}</div>${attr ? `<span class="sfattr">${esc(attr)}</span>` : ""}`; }
+function sfS2Url(s, day, w, h){ if (!CFG.satfeed.cdse) return ""; return `https://sh.dataspace.copernicus.eu/ogc/wms/${encodeURIComponent(CFG.satfeed.cdse)}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${encodeURIComponent(CFG.satfeed.layer || "TRUE_COLOR")}&STYLES=&CRS=EPSG:3857&BBOX=${sfBox(s, 1200, w / h)}&WIDTH=${w}&HEIGHT=${h}&FORMAT=image/jpeg&TIME=${day}/${day}`; }
+const sfWeatherUrl = (s, w, h) => `${GIBS_WMS}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=Himawari_AHI_Band13_Clean_Infrared&STYLES=&CRS=EPSG:3857&BBOX=${sfBox(s, 300000, w / h)}&WIDTH=${w}&HEIGHT=${h}&FORMAT=image/jpeg`;
+// every Sentinel-2 pass over the site (public catalogue, no account needed)
+async function sfPasses(code, force){ const s = sfSite(code); if (!s || !isFinite(s.lat)) return null; const c = SF.passes[code];
+  if (!force && c && Date.now() - c.at < 3 * 3600e3) return c; if (SF.busy[code]) return c; SF.busy[code] = true;
+  try{ const d = .004, to = new Date().toISOString().slice(0, 19) + "Z", from = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 19) + "Z";
+    const j = JSON.parse(await fetchVia(`https://stac.dataspace.copernicus.eu/v1/search?collections=sentinel-2-l2a&bbox=${(s.lon - d).toFixed(4)},${(s.lat - d).toFixed(4)},${(s.lon + d).toFixed(4)},${(s.lat + d).toFixed(4)}&datetime=${from}/${to}&limit=200`, undefined, 25000));
+    const byDay = {}; (j.features || []).forEach(f => { const p = f.properties || {}, t = Date.parse(p.datetime), cc = +p["eo:cloud_cover"]; if (!isFinite(t)) return; const k = sfDay(t); if (!byDay[k] || cc < byDay[k].cc) byDay[k] = { t, cc: isFinite(cc) ? Math.round(cc) : null, sat: p.platform || p.constellation || "" }; });
+    const list = Object.values(byDay).sort((a, b) => b.t - a.t);
+    const gaps = list.slice(0, 12).map((p, i, a) => i ? a[i - 1].t - p.t : null).filter(Boolean).sort((a, b) => a - b), gap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 5 * 864e5;
+    SF.passes[code] = { at: Date.now(), list: list.slice(0, 40), next: list.length ? list[0].t + gap : null, gap, err: "" }; }
+  catch(e){ SF.passes[code] = Object.assign({}, c || { list: [] }, { at: Date.now(), err: e.message }); }
+  SF.busy[code] = false; sfSave(); sfCheckChange(code); return SF.passes[code]; }
+const sfClear = code => ((SF.passes[code] || {}).list || []).filter(p => p.cc != null && p.cc <= CFG.satfeed.maxcc);
+// change check between the two latest clear pictures (centre of the picture, around the building)
+async function sfCheckChange(code){ const s = sfSite(code), cl = sfClear(code); if (!s || cl.length < 2 || !CFG.satfeed.cdse) return; const key = sfDay(cl[0].t) + "|" + sfDay(cl[1].t);
+  if (SF.change[code] && SF.change[code].key === key) return;
+  const load = u => new Promise((ok, bad) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = () => bad(new Error("picture not available")); i.src = u; });
+  try{ const [a, b] = await Promise.all([load(sfS2Url(s, sfDay(cl[0].t), 160, 100)), load(sfS2Url(s, sfDay(cl[1].t), 160, 100))]); const cv = document.createElement("canvas"); cv.width = 160; cv.height = 100; const g = cv.getContext("2d", { willReadFrequently: true });
+    const px = img => { g.drawImage(img, 0, 0, 160, 100); return g.getImageData(48, 30, 64, 40).data; }, A = px(a), B = px(b); let diff = 0, n = 0, la = 0, lb = 0;
+    for (let i = 0; i < A.length; i += 4){ la += A[i] + A[i + 1] + A[i + 2]; lb += B[i] + B[i + 1] + B[i + 2]; } const k = la && lb ? la / lb : 1;   // even out overall brightness first
+    for (let i = 0; i < A.length; i += 4){ diff += Math.abs(A[i] - B[i] * k) + Math.abs(A[i + 1] - B[i + 1] * k) + Math.abs(A[i + 2] - B[i + 2] * k); n += 3; }
+    const pct = Math.round(diff / n / 255 * 100); SF.change[code] = { key, pct, a: cl[0].t, b: cl[1].t, at: Date.now() }; sfSave();
+    if (CFG.satfeed.alerts && pct >= CFG.satfeed.changePct) enqueueAction({ srcKey: "satchg:" + code + ":" + key, source: "Satellite feed", pri: "P3", title: `Visible change at ${code} in satellite pictures`, detail: `Sentinel-2 ${sfShort(cl[0].t)} vs ${sfShort(cl[1].t)}: ${pct}% change around the site (threshold ${CFG.satfeed.changePct}%). Check the pictures — construction, flooding, fire or smoke, or a cloud the cloud mask missed.`, site: code, city: metroOf(s), suggested: ["check", "monitor"] });
+    sfRefresh(); }
+  catch(e){ SF.change[code] = { key, err: e.message === "picture not available" ? e.message : "the picture service doesn't allow comparing here", at: Date.now() }; sfSave(); } }
+setInterval(() => { if (!ME || isLimited()) return; const codes = new Set(CFG.camwall.tiles.filter(t => t.src === "sat" && t.kind === "s2").map(t => t.site)); if (UI.mode === "siteplan" && UI.spSite) codes.add(UI.spSite); codes.forEach(c => sfPasses(c)); }, 10 * 60e3);
+// one picture box, for the camera wall and the site plan
+function sfBody(kind, code, big){ const s = sfSite(code); if (!s) return `<div class="ltvmsg">Site ${esc(code)} not found.</div>`; const ring = `<span class="sfring" aria-hidden="true"></span>`, W = big ? 640 : 480, H = big ? 400 : 300;
+  if (kind === "hires") return `<div class="sfpic">${sfMosaic(s, ESRI2 + "World_Imagery/MapServer/tile/{z}/{y}/{x}", 18, "Esri, Maxar, Earthstar Geographics")}${ring}</div>`;
+  if (kind === "custom") return CFG.sat.custom ? `<div class="sfpic">${sfMosaic(s, CFG.sat.custom, 17, CFG.sat.customAttr || CFG.sat.customName)}${ring}</div>` : `<div class="ltvmsg">Set your provider's tile address in Security Operations › Satellite view › ⚙ Imagery source.</div>`;
+  if (kind === "weather") return `<div class="sfpic"><img class="sffull" src="${esc(sfWeatherUrl(s, W, H))}&_=${Math.floor(Date.now() / 600e3)}" alt="Infrared clouds over ${esc(code)}">${ring}<span class="sfattr">NASA GIBS / JMA Himawari · brighter = colder, higher cloud</span></div>`;
+  const P = SF.passes[code], cl = sfClear(code);
+  if (!CFG.satfeed.cdse) return `<div class="sfpic">${sfMosaic(s, ESRI2 + "World_Imagery/MapServer/tile/{z}/{y}/{x}", 16, "")}<div class="sfveil"><b>Sentinel-2 passes are live${P && P.list && P.list.length ? ` — last ${sfShort(P.list[0].t)}` : ""}.</b> Link a free Copernicus account to see each new picture.<button class="act on" data-sfset>Link Copernicus…</button></div></div>`;
+  if (!cl.length) return `<div class="ltvmsg">${P ? P.err ? "Couldn't read the pass list: " + esc(P.err) : `No clear pass (≤ ${CFG.satfeed.maxcc}% cloud) in the last 120 days.` : "Reading the passes…"}</div>`;
+  return `<div class="sfpic"><img class="sffull" src="${esc(sfS2Url(s, sfDay(cl[0].t), W, H))}" alt="Sentinel-2 ${esc(sfShort(cl[0].t))} over ${esc(code)}">${ring}<span class="sfattr">Copernicus Sentinel-2 · ${esc(sfShort(cl[0].t))}</span></div>`; }
+function sfMeta(kind, code){ if (kind !== "s2") return { line: SF_KINDS[kind][1], age: kind === "weather" ? "live" : "" }; const P = SF.passes[code], cl = sfClear(code), ch = SF.change[code];
+  if (!P) return { line: "Reading the passes…", age: "" };
+  const last = (P.list || [])[0], days = t => Math.max(0, Math.round((Date.now() - t) / 864e5));
+  return { age: cl[0] ? `clear ${sfShort(cl[0].t)} · ${days(cl[0].t)} d ago` : last ? `last pass ${sfShort(last.t)}` : "",
+    line: [last ? `last pass ${sfShort(last.t)}${last.cc != null ? " (" + last.cc + "% cloud)" : ""}` : "", P.next ? `next ~${sfShort(P.next)}` : "", ch && ch.pct != null ? `change ${ch.pct}% vs ${sfShort(ch.b)}` : ""].filter(Boolean).join(" · "), hot: ch && ch.pct != null && ch.pct >= CFG.satfeed.changePct }; }
+
+/* ---------- Vision Command Centre › Camera wall ---------- */
+{ const _tb = cwTileBody; cwTileBody = function(t){ return t.src === "sat" ? sfBody(t.kind, t.site) : _tb(t); }; }
+{ const _ct = cwTile; cwTile = function(t){ if (t.src !== "sat") return _ct(t); const m = sfMeta(t.kind, t.site);
+    return `<div class="cwtile sftile" data-cwt="${esc(t.id)}"><div class="vwh"><i class="ltvdot" style="background:${m.hot ? "#E8873A" : "#13A10E"}"></i><b>🛰 ${esc(t.site)} · ${esc(SF_KINDS[t.kind][0])}</b><span class="cwage">${esc(m.age || "")}</span>
+      <button class="ltvb" data-satsite="${esc(t.site)}" title="Open in Satellite view" aria-label="Open ${esc(t.site)} in Satellite view">↗</button><button class="ltvb" data-cwrm="${esc(t.id)}" aria-label="Remove">×</button></div>
+      <div class="vwb cwb">${cwTileBody(t)}</div><div class="cwsite${m.hot ? " sfhot" : ""}">${esc(m.line)}</div></div>`; }; }
+{ const _cp = camWallPanel; camWallPanel = function(){ const h = _cp(); CFG.camwall.tiles.filter(t => t.src === "sat" && t.kind === "s2").forEach(t => { if (!SF.passes[t.site] && !SF.busy[t.site]) sfPasses(t.site).then(sfRefresh); });
+    return h.replace('<button class="tab-mini" data-cwcustom>', '<button class="tab-mini" data-sfadd>🛰 + Satellite feed</button><button class="tab-mini" data-cwcustom>').replace('<div class="empty" style="flex:1">No cameras yet', '<div class="empty" style="flex:1">No cameras yet — <button class="linkbtn" data-sfadd>add satellite feeds of your sites</button>, or'); }; }
+CW.cams.sat = [];                                   // satellite tiles have no camera list to load
+function sfRefresh(){ if (UI.mode === "camwall"){ const c = $("#panel .cw"); if (c) c.dataset.sig = "stale"; } if (["camwall", "siteplan", "camsit"].includes(UI.mode)) renderPanel(); }
+function sfAdd(pre){ const kinds = Object.keys(SF_KINDS); let kind = "s2";
+  openModal(head("Add satellite feeds") + `<div class="bd"><p class="help" style="margin-top:0">A satellite feed shows a site from above on the Camera wall, next to its cameras. Choose what to watch, then the sites.</p>
+    <div class="sfkinds">${kinds.map(k => `<label class="sfk"><input type="radio" name="sfk" value="${k}"${k === kind ? " checked" : ""}><b>${esc(SF_KINDS[k][0])}</b><span class="s">${esc(SF_KINDS[k][1])}</span></label>`).join("")}</div>
+    ${!CFG.satfeed.cdse ? `<div class="banner warn" style="margin:8px 0">Sentinel-2 pictures need a free Copernicus account (the pass list works without it). <button class="linkbtn" data-sfset>Link it now</button></div>` : ""}
+    <label class="fld">Find sites<input id="sfQ" placeholder="site code, city or country"></label><div id="sfL" class="ltvlist"></div></div>
+    <div class="ft"><span class="s" id="sfN"></span><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="sfGo">Add to the Camera wall</button></div>`, true);
+  const sel = new Set(pre ? [pre] : []), draw = () => { const q = $("#sfQ").value.trim().toLowerCase(), list = SITES.filter(s => isFinite(s.lat) && (!q || [s.code, s.name, metroOf(s), s.country].some(v => String(v || "").toLowerCase().includes(q)))).sort((a, b) => (isOffice(a) - isOffice(b)) || (isLive(b) - isLive(a)) || a.code.localeCompare(b.code)).slice(0, 120);
+    $("#sfL").innerHTML = list.map(s => `<label class="ltvrow"><input type="checkbox" data-sfpick="${esc(s.code)}"${sel.has(s.code) ? " checked" : ""}> <b>${esc(s.code)}</b> <span class="s">${esc([isOffice(s) ? "Office" : s.cls, metroOf(s) || s.city, s.country].filter(Boolean).join(" · "))}</span></label>`).join(""); $("#sfN").textContent = sel.size + " selected"; };
+  $("#sfQ").oninput = draw; $("#sfL").addEventListener("change", e => { const c = e.target.dataset.sfpick; if (!c) return; if (e.target.checked) sel.add(c); else sel.delete(c); $("#sfN").textContent = sel.size + " selected"; }); draw();
+  $("#sfGo").onclick = () => { kind = ($$("[name=sfk]").find(i => i.checked) || {}).value || "s2"; if (!sel.size){ toast("Choose at least one site", "", "var(--amber)"); return; }
+    const on = new Set(CFG.camwall.tiles.map(t => t.id)); [...sel].forEach(code => { const id = "sat:" + kind + ":" + code; if (!on.has(id)) CFG.camwall.tiles.push({ id, src: "sat", kind, site: code, name: code + " " + SF_KINDS[kind][0] }); });
+    saveCfg(); audit("Satellite feeds added to the Camera wall", SF_KINDS[kind][0], [...sel].join(", ")); $("#ov").classList.remove("show"); if (UI.mode !== "camwall") setMode("camwall"); else sfRefresh(); }; }
+function sfSettings(){ const c = CFG.satfeed;
+  openModal(head("Satellite feed settings") + `<div class="bd">
+    <div class="sec" style="margin-top:0">Sentinel-2 pictures (free)</div>
+    <ol class="help"><li>Create a free account at <b>dataspace.copernicus.eu</b>.</li><li>Open the <b>Sentinel Hub dashboard</b> › <b>Configuration utility</b> › <b>Add new configuration</b>, using the Sentinel-2 L2A template.</li><li>Copy its <b>instance ID</b> here, and the name of its true-colour layer (often TRUE_COLOR).</li></ol>
+    <div class="fgrid"><label class="fld">Copernicus instance ID<input id="sfI" value="${esc(c.cdse)}" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label><label class="fld">True-colour layer name<input id="sfLy" value="${esc(c.layer)}"></label></div>
+    <div class="sec">Clear passes and change alerts</div>
+    <div class="fgrid3"><label class="fld">A pass counts as clear up to (% cloud)<input id="sfC" type="number" min="0" max="100" value="${c.maxcc}"></label><label class="fld">Alert when the picture changes by (%)<input id="sfP" type="number" min="3" max="80" value="${c.changePct}"></label><label class="fld">Change alerts<select id="sfA"><option value="1"${c.alerts ? " selected" : ""}>On — to the Action queue (P3)</option><option value="0"${!c.alerts ? " selected" : ""}>Off — show on the tile only</option></select></label></div>
+    <p class="help">The change check compares the two latest clear pictures around the building, after evening out their brightness. Seasonal colour, shadows and clouds the cloud mask missed can also show as change, so treat it as "take a look", not proof.</p>
+    <div class="sec">Fresh high-resolution pictures</div><p class="help">For pictures of a building sharp enough to see vehicles, roofs and plant, refreshed as often as daily, use a commercial provider (for example Planet, Maxar/Vantor or Airbus) and enter its tile address in Satellite view › ⚙ Imagery source; then add "Your provider" feeds.</p></div>
+    <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="sfOk">Save</button></div>`, true);
+  $("#sfOk").onclick = () => { const id = $("#sfI").value.trim(); if (id && !/^[A-Za-z0-9-]{8,64}$/.test(id)){ toast("That doesn't look like an instance ID", "Copy it from the Configuration utility.", "var(--amber)"); return; }
+    Object.assign(CFG.satfeed, { cdse: id, layer: $("#sfLy").value.trim() || "TRUE_COLOR", maxcc: Math.max(0, Math.min(100, +$("#sfC").value || 30)), changePct: Math.max(3, Math.min(80, +$("#sfP").value || 15)), alerts: $("#sfA").value === "1" });
+    SF.change = {}; saveCfg(); sfSave(); audit("Satellite feed settings changed", id ? "Copernicus linked" : "no Copernicus account", ""); $("#ov").classList.remove("show"); Object.keys(SF.passes).forEach(k => sfCheckChange(k)); sfRefresh(); }; }
+document.addEventListener("click", e => { if (e.target.closest("[data-sfadd]")){ sfAdd(e.target.closest("[data-sfadd]").dataset.sfadd || ""); return; } if (e.target.closest("[data-sfset]")){ sfSettings(); return; } });
+
+/* ---------- Vision Command Centre › Camera sources ---------- */
+{ const _rp = renderPanelInner; renderPanelInner = function(p){ const r = _rp(p); if (UI.mode !== "camsit") return r; const b = p.querySelector(".pbody") || p, feeds = CFG.camwall.tiles.filter(t => t.src === "sat");
+    b.insertAdjacentHTML("afterbegin", `<div class="sfsrc"><div><b>🛰 Satellite feeds</b><div class="s">${feeds.length ? `${feeds.length} on the Camera wall (${[...new Set(feeds.map(t => t.site))].join(", ")})` : "None yet — a satellite view of each building next to its cameras."} · Sentinel-2 pictures: ${CFG.satfeed.cdse ? "Copernicus linked" : "Copernicus not linked (passes only)"} · change alerts ${CFG.satfeed.alerts ? "at " + CFG.satfeed.changePct + "%" : "off"}</div></div><span class="sp"></span><button class="act on" data-sfadd>+ Satellite feed</button><button class="act" data-sfset>Settings</button></div>`); return r; }; }
+
+/* ---------- Security Operations › Site plan ---------- */
+{ const _rp2 = renderPanelInner; renderPanelInner = function(p){ const r = _rp2(p); if (UI.mode !== "siteplan" || !UI.spSite) return r; const code = UI.spSite, s = sfSite(code); if (!s || !isFinite(s.lat)) return r;
+    const w = p.querySelector(".spwrap") || p.querySelector(".pbody"); if (!w) return r; const P = SF.passes[code], m = sfMeta("s2", code), ch = SF.change[code];
+    if (!P && !SF.busy[code]) sfPasses(code).then(() => { if (UI.mode === "siteplan" && UI.spSite === code) renderPanel(); });
+    const passes = ((P || {}).list || []).slice(0, 8);
+    w.insertAdjacentHTML("beforeend", `<div class="sfcard"><div class="sfch"><b>🛰 Satellite feed — ${esc(code)}</b><span class="s">${esc(m.line || "")}</span><span class="sp"></span><button class="act" data-sfadd="${esc(code)}">Add to Camera wall</button><button class="act" data-satsite="${esc(code)}">Open Satellite view</button><button class="act" data-sfset>Settings</button></div>
+      <div class="sfgrid"><figure><div class="sfbox">${sfBody("hires", code, true)}</div><figcaption>The building (high-resolution archive)</figcaption></figure>
+        <figure><div class="sfbox">${sfBody("s2", code, true)}</div><figcaption>Latest clear Sentinel-2 pass${sfClear(code)[0] ? " · " + esc(sfShort(sfClear(code)[0].t)) : ""}</figcaption></figure>
+        <figure><div class="sfbox">${sfBody("weather", code, true)}</div><figcaption>Weather over the site now (infrared)</figcaption></figure></div>
+      <div class="sfpasses"><span class="s">Passes over ${esc(code)}:</span> ${passes.map(x => `<span class="sfp${x.cc != null && x.cc <= CFG.satfeed.maxcc ? " clear" : ""}" title="${x.cc != null ? x.cc + "% cloud" : ""}">${esc(sfShort(x.t))}${x.cc != null ? ` <small>${x.cc}%</small>` : ""}</span>`).join("") || `<span class="s">${P && P.err ? "couldn't read: " + esc(P.err) : "reading…"}</span>`}${P && P.next ? ` <span class="s">· next expected around ${esc(sfShort(P.next))}</span>` : ""}${ch && ch.err ? ` <span class="s">· change check: ${esc(ch.err)}</span>` : ""}</div></div>`); return r; }; }
+// the Security page lists the Copernicus instance ID with the other keys
+{ const _ss2 = sgSecrets; sgSecrets = function(){ const r = _ss2(); if (CFG.satfeed && CFG.satfeed.cdse) r.push({ l: "Copernicus instance ID (satellite feeds)", p: "satfeed.cdse", mask: CFG.satfeed.cdse.slice(0, 4) + "•••" + CFG.satfeed.cdse.slice(-3) }); return r; }; }
+{ const st = document.createElement("style"); st.textContent = `
+.sfpic{position:relative;width:100%;height:100%;overflow:hidden;background:#0b1114}.sfmos{position:absolute;width:1280px;height:1280px}.sfmos img{position:absolute;width:256px;height:256px;max-width:none}
+.sffull{width:100%;height:100%;object-fit:cover;display:block}.sfring{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px dashed #4FC4BE;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35);pointer-events:none}
+.sfattr{position:absolute;right:4px;bottom:3px;font-size:10px;color:#fff;background:rgba(0,0,0,.45);padding:1px 5px;border-radius:3px}
+.sfveil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:12px;background:rgba(10,16,20,.72);color:#eef2f4;font-size:12.5px;line-height:1.45}
+.sftile .cwsite.sfhot{color:#E8873A;font-weight:700}
+.sfkinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px}.sfk{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.sfk input{align-self:flex-start}
+.sfsrc,.sfch{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sfsrc{background:var(--panel);border:1px solid var(--line);border-left:4px solid #4FC4BE;border-radius:8px;padding:10px 12px;margin:0 0 12px}
+.sfcard{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.sfgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:10px 0 8px}
+.sfgrid figure{margin:0}.sfbox{position:relative;aspect-ratio:16/10;border-radius:6px;overflow:hidden;border:1px solid var(--line)}.sfgrid figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.sfpasses{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px}.sfp{border:1px solid var(--line);border-radius:10px;padding:1px 7px;color:var(--muted)}.sfp.clear{border-color:#2FB170;color:var(--text)}.sfp small{opacity:.75}`; document.head.appendChild(st); }
+
+
 boot();
 
 </script>
