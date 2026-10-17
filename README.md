@@ -45,6 +45,16 @@ probabilities can be read from the PSOC server or an imported JSON file and repl
 exist. Weeks with high odds of an extreme week are listed under "Weeks to watch" and can be added to the Daily Shift
 Report.
 
+## Camera analytics: the vision pipeline (BAU Operations › Camera analytics)
+
+Every frame goes through five stages, shown live per camera: **image acquisition** (source, resolution, frame rate,
+gaps), **image processing** (brightness, contrast, noise and sharpness; dim, flat or noisy pictures are brightened,
+contrast-stretched and smoothed before analysis — switchable per camera in its rules), **feature extraction** (motion,
+edges, colour; a sharpness baseline per camera raises a tamper alarm when the lens is smeared or out of focus),
+**model analysis** (COCO-SSD people, vehicle and bag detection with its speed and confidence) and **decision** (every
+rule with its current value against its threshold, and the alarms raised into triage). Behaviour only: faces are not
+identified or matched.
+
 ## Reports (Response › Reports)
 
 - **Daily Shift Report** in the PSOC's format: staff on duty, overall status and counts, Observations, Information,

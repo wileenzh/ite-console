@@ -16093,6 +16093,118 @@ document.getElementById("panel").addEventListener("change", e => { const t = e.t
 @media (max-width:1100px){.olgrid{grid-template-columns:1fr}}.olgrid>*{min-width:0}.olscroll{overflow-x:auto}
 @media (max-width:760px){.olnum{display:none}.olwk{width:92px}.oltab th .s{display:none}.olw{flex-wrap:wrap}.olw>div{flex:1 1 calc(100% - 60px)!important}.olw .tab-mini{margin-left:56px}.oltab{min-width:560px}}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   CAMERA ANALYTICS — THE VISION PIPELINE (17 Oct)
+   Every frame goes through five stages, now shown live per camera in
+   BAU Operations › Camera analytics › Vision pipeline:
+   1 Image acquisition — source, resolution, measured frame rate, gaps.
+   2 Image processing — brightness, contrast, noise and sharpness of each
+     frame; dim or flat pictures are brightened and contrast-stretched and
+     noisy ones lightly smoothed before analysis (fewer missed people at
+     night, fewer false motion alarms from sensor noise).
+   3 Feature extraction — motion (frame difference), edges (Sobel) and
+     colour; a sharpness baseline per camera catches a lens that is
+     smeared, sprayed or out of focus.
+   4 Model analysis — COCO-SSD object detection (people, vehicles, bags)
+     on the processed frame, with its speed and confidence. Behaviour only:
+     faces are not identified.
+   5 Decision — every rule with its current value against its threshold,
+     what fired, and the alarm it raised into triage.
+   ===================================================================== */
+const CVP = { sample: document.createElement("canvas"), proc: {}, lat: new WeakMap(), canFilter: (() => { try{ const c = document.createElement("canvas").getContext("2d"); return "filter" in c; }catch(e){ return false; } })() };
+CVP.sample.width = 128; CVP.sample.height = 72; CVP.sctx = CVP.sample.getContext("2d", { willReadFrequently: true });
+const CVP_W = 128, CVP_H = 72, S_LEARNED = S => (S.sharpN || 0) > 30;
+function cvpMeasure(S, src){ const g = CVP.sctx; g.drawImage(src, 0, 0, CVP_W, CVP_H); const px = g.getImageData(0, 0, CVP_W, CVP_H).data, n = CVP_W * CVP_H, y = new Float32Array(n);
+  let s = 0, r = 0, gg = 0, b = 0; for (let i = 0; i < n; i++){ y[i] = .299 * px[i * 4] + .587 * px[i * 4 + 1] + .114 * px[i * 4 + 2]; s += y[i]; r += px[i * 4]; gg += px[i * 4 + 1]; b += px[i * 4 + 2]; }
+  const mean = s / n; let v = 0; for (let i = 0; i < n; i++) v += (y[i] - mean) ** 2; const std = Math.sqrt(v / n);
+  let noise = 0, lap = 0, lapS = 0, edges = 0, cnt = 0; const E = new Uint8ClampedArray(n);
+  for (let yy = 1; yy < CVP_H - 1; yy++) for (let x = 1; x < CVP_W - 1; x++){ const i = yy * CVP_W + x, a = y[i - CVP_W - 1], bb = y[i - CVP_W], c = y[i - CVP_W + 1], d = y[i - 1], f = y[i + 1], h = y[i + CVP_W - 1], k = y[i + CVP_W], l = y[i + CVP_W + 1];
+    const box = (a + bb + c + d + y[i] + f + h + k + l) / 9; noise += Math.abs(y[i] - box); const L = 4 * y[i] - bb - d - f - k; lap += L; lapS += L * L;
+    const gx = (c + 2 * f + l) - (a + 2 * d + h), gy = (h + 2 * k + l) - (a + 2 * bb + c), m = Math.sqrt(gx * gx + gy * gy); E[i] = Math.min(255, m); if (m > 60) edges++; cnt++; }
+  const sharp = (lapS / cnt - (lap / cnt) ** 2) / (std * std + 1);   // edge crispness relative to contrast, so lighting changes don't look like blur
+  const nz = noise / cnt, thr = Math.max(18, nz * 4), M = new Uint8ClampedArray(n); let moved = 0; if (S.cvpPrev) for (let i = 0; i < n; i++){ if (Math.abs(y[i] - S.cvpPrev[i]) > thr){ M[i] = 255; moved++; } }
+  S.cvpPrev = y; return { mean, std, noise: noise / cnt, sharp, edges: edges / cnt * 100, rgb: [r / n, gg / n, b / n], E, M, moved: moved / n * 100 }; }
+// stage 2: a processed copy of the frame for the detectors
+function cvpProcess(S, src, m){ const R = Object.assign({}, CV_DEF_RULES, S.cam.rules || {}), W = (src.videoWidth || src.naturalWidth || src.width || 640), H = (src.videoHeight || src.naturalHeight || src.height || 360);
+  const steps = []; let br = 1, ct = 1, bl = 0;
+  if (R.enhance !== false && CVP.canFilter && m.mean >= 12 && m.std >= 8){
+    if (m.mean < 70){ br = Math.min(2.2, 95 / Math.max(m.mean, 20)); steps.push(`brightened ×${br.toFixed(1)}`); }
+    if (m.std < 38){ ct = Math.min(1.8, 45 / Math.max(m.std, 12)); steps.push(`contrast ×${ct.toFixed(1)}`); }
+    if (m.noise > 5){ bl = Math.min(1.2, (m.noise - 4) / 6 + .4); steps.push(`noise smoothed (${bl.toFixed(1)} px)`); } }
+  if (!steps.length) return { out: src, steps: [R.enhance === false ? "off for this camera" : !CVP.canFilter ? "not supported in this browser" : "none needed"], W, H };
+  const c = CVP.proc[S.cam.id] = CVP.proc[S.cam.id] || document.createElement("canvas"); const w = Math.min(W, 960), h = Math.round(H * w / W); if (c.width !== w){ c.width = w; c.height = h; }
+  const g = c.getContext("2d"); g.filter = `brightness(${br}) contrast(${ct})${bl ? ` blur(${bl}px)` : ""}`; g.drawImage(src, 0, 0, w, h); g.filter = "none"; return { out: c, steps, W, H }; }
+{ const _ca = cvAnalyse; cvAnalyse = function(S, src, snapshot){ const t0 = performance.now(); let m = null, P = null;
+    try{ m = cvpMeasure(S, src); }catch(e){ return _ca(S, src, snapshot); }   // unreadable frame: the inner stage reports it
+    const now = Date.now(), A = S.acq = S.acq || { n: 0, fps: 0, gap: 0, startedAt: now };
+    if (A.lastAt){ const dt = (now - A.lastAt) / 1000; A.fps = A.fps ? A.fps * .8 + (1 / Math.max(dt, .001)) * .2 : 1 / dt; A.gap = Math.max(A.gap * .98, dt); } A.lastAt = now; A.n++;
+    A.w = src.videoWidth || src.naturalWidth || src.width; A.h = src.videoHeight || src.naturalHeight || src.height;
+    P = cvpProcess(S, src, m); S.cvp = { m, steps: P.steps, enhanced: P.out !== src };
+    if (CV.model && !CV.model.__cvp){ const d0 = CV.model.detect.bind(CV.model); CV.model.detect = async function(cv){ const a = performance.now(), r = await d0.apply(null, arguments); CVP.lat.set(cv, { ms: performance.now() - a, n: r.length, at: Date.now() }); return r; }; CV.model.__cvp = true; }
+    _ca(S, P.out, snapshot);
+    // stage 3: a lens that loses its sharpness (smeared, sprayed, defocused) against this camera's own normal
+    const R = Object.assign({}, CV_DEF_RULES, S.cam.rules || {});
+    if (R.tamper && m.mean >= 12 && m.std >= 4){ S.sharpN = (S.sharpN || 0) + 1; if (S.sharpN <= 30){ S.sharpBase = S.sharpBase == null ? m.sharp : S.sharpBase + (m.sharp - S.sharpBase) / S.sharpN; } const ratio = m.sharp / Math.max(S.sharpBase, 1);
+      if (S.sharpN > 30 && ratio < .25){ S.blurN = (S.blurN || 0) + 1; if (S.blurN === 5) cvRaise(S, "tamper", `Picture out of focus or smeared — sharpness at ${Math.round(ratio * 100)}% of this camera's normal`); }
+      else { S.blurN = 0; if (S.sharpN > 30 && ratio > .5) S.sharpBase = S.sharpBase * .99 + m.sharp * .01; } S.cvp.sharpPct = Math.round(ratio * 100); }
+    S.cvp.ms = performance.now() - t0; }; }
+// the rules as the decision stage sees them right now
+function cvpDecisions(S){ const R = Object.assign({}, CV_DEF_RULES, S.cam.rules || {}), m = (S.cvp || {}).m || {}, people = (S.boxes || []).filter(d => d.class === "person").length, veh = (S.boxes || []).filter(d => /car|truck|bus|motorcycle/.test(d.class)).length;
+  const fired = t => S.last && S.last[t] && Date.now() - S.last[t] < 90e3, row = (on, name, val, thr, t) => ({ on, name, val, thr, hit: fired(t), t });
+  return [row(R.motion, "Motion in zone", S.motion != null ? S.motion.toFixed(1) + "%" : "—", "≥ " + R.minMotion + "%", "motion"),
+    row(R.tamper, "Tamper — blackout / covered", `brightness ${Math.round(m.mean || 0)}, contrast ${Math.round(m.std || 0)}`, "brightness < 12 or flat", "tamper"),
+    row(R.tamper, "Tamper — out of focus / smeared", S.cvp && S.cvp.sharpPct != null && S_LEARNED(S) ? S.cvp.sharpPct + "% of normal" : "learning", "< 25% for 5 frames", "tamper"),
+    row(R.person, "Person in zone", CV.model ? people + " seen" : "AI off", R.hours ? "any, " + R.hours : "any", "person"),
+    row(R.loiterSec > 0, "Loitering", S.personSince ? Math.round((Date.now() - S.personSince) / 1000) + " s" : "0 s", "> " + R.loiterSec + " s", "loiter"),
+    row(R.crowd > 0, "Crowd", CV.model ? people + " people" : "AI off", "≥ " + R.crowd, "crowd"),
+    row(R.vehicle, "Vehicle in zone", CV.model ? veh + " seen" : "AI off", "any", "vehicle"),
+    row(R.object, "Unattended bag", S.objSince ? Math.round((Date.now() - S.objSince) / 1000) + " s alone" : "none", "> 60 s, no one near", "object"),
+    row(S.cam.anomaly !== false, "Unusual for this hour", (() => { const b = (typeof CVB !== "undefined" && CVB[S.cam.id]) || {}, d = new Date(), s = b[d.getDay() * 24 + d.getHours()]; return s && s.n >= 60 ? "baseline ready" : `learning ${s ? s.n : 0}/60 min`; })(), "3σ above normal", "anomaly")]; }
+const cvpCol = rgb => { const [r, g, b] = rgb.map(x => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx < .18) return "very dark"; if (mx - mn < .08) return mx > .7 ? "bright grey / white" : "grey"; const h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; return ["red / orange", "yellow", "green", "cyan / teal", "blue", "magenta"][Math.floor(h)]; };
+function cvpPaint(cv, data, tint){ if (!cv || !data) return; const g = cv.getContext("2d"), im = g.createImageData(CVP_W, CVP_H); for (let i = 0; i < data.length; i++){ const v = data[i]; im.data[i * 4] = tint ? v : v; im.data[i * 4 + 1] = tint ? v * .35 : v; im.data[i * 4 + 2] = tint ? v * .2 : v; im.data[i * 4 + 3] = 255; } g.putImageData(im, 0, 0); }
+function cvpRender(){ const box = CV.root && CV.root.querySelector(".cvpipe"); if (!box || UI.mode !== "cv") return; const live = Object.values(CV.streams).filter(S => S.state !== "error" || S.acq);
+  const sel = CV.streams[UI.cvPipe] || live[0]; const opts = Object.values(CV.streams).map(S => `<option value="${esc(S.cam.id)}"${sel && S === sel ? " selected" : ""}>${esc(S.cam.name)}${S.cam.site ? " · " + esc(S.cam.site) : ""}</option>`).join("");
+  if (!sel){ box.innerHTML = `<div class="sec">Vision pipeline</div><div class="s">Start a camera (for example the simulated camera) to see each stage of the analysis live.</div>`; return; }
+  const A = sel.acq || {}, C = sel.cvp || {}, m = C.m || {}, L = CVP.lat.get(sel.view), dec = cvpDecisions(sel), al = SHARED.cvalerts.filter(a => a.cam === sel.cam.id && !a.deleted).sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  const q = (v, lo, hi) => v == null ? "" : v < lo ? "low" : v > hi ? "high" : "ok";
+  if (!box.querySelector(".cvpg") || box.dataset.cam !== sel.cam.id){ box.dataset.cam = sel.cam.id;
+    box.innerHTML = `<div class="cvph"><span class="sec" style="margin:0">Vision pipeline</span><select data-cvpsel aria-label="Camera">${opts}</select><span class="s">what happens to every frame, live</span></div>
+    <div class="cvpg">${[["1", "Image acquisition", "acq"], ["2", "Image processing", "proc"], ["3", "Feature extraction", "feat"], ["4", "Model analysis", "model"], ["5", "Decision", "dec"]].map(([n, t, k]) => `<div class="cvps" data-cvps="${k}"><div class="cvpn"><b>${n}</b>${t}</div><div class="cvpb"></div></div>`).join("")}</div>`; }
+  const set = (k, h) => { const el = box.querySelector(`[data-cvps="${k}"] .cvpb`); if (el) el.innerHTML = h; };
+  const kv = rows => `<dl class="cvpkv">${rows.map(([a, b, c]) => `<dt>${a}</dt><dd${c ? ` class="${c}"` : ""}>${b}</dd>`).join("")}</dl>`;
+  set("acq", kv([["Source", esc({ webcam: "webcam", file: "video file", url: "video stream", lta: "SG traffic camera (still every 60 s)", sim: "simulated camera", hls: "live stream" }[sel.cam.kind] || sel.cam.kind)], ["Resolution", A.w ? `${A.w} × ${A.h}` : "—"],
+    ["Frames analysed", (A.n || 0).toLocaleString()], ["Rate", A.fps ? (A.fps >= 1 ? A.fps.toFixed(1) + " per s" : "1 per " + Math.round(1 / A.fps) + " s") : "—"], ["Last frame", A.lastAt ? Math.round((Date.now() - A.lastAt) / 1000) + " s ago" : "—", A.lastAt && Date.now() - A.lastAt > 15e3 ? "bad" : ""], ["State", esc(sel.state + (sel.err ? " — " + sel.err : "")), sel.state === "error" ? "bad" : ""]]));
+  set("proc", kv([["Brightness", m.mean != null ? Math.round(m.mean) + " / 255" : "—", { low: "warn" }[q(m.mean, 55, 999)]], ["Contrast", m.std != null ? Math.round(m.std) : "—", { low: "warn" }[q(m.std, 30, 999)]], ["Noise", m.noise != null ? m.noise.toFixed(1) : "—", { high: "warn" }[q(m.noise, 0, 5)]], ["Sharpness", m.sharp != null ? (C.sharpPct != null && S_LEARNED(sel) ? `${C.sharpPct}% of normal` : `${m.sharp.toFixed(2)} (learning normal)`) : "—", C.sharpPct != null && C.sharpPct < 25 ? "bad" : ""]])
+    + `<div class="cvpstep">${C.enhanced ? "Applied: " : ""}${esc((C.steps || ["—"]).join(", "))}</div><canvas class="cvpc" data-cvpimg width="160" height="90" title="The frame the detectors see"></canvas>`);
+  set("feat", `<div class="cvpfeat"><figure><canvas class="cvpc" data-cvpmot width="${CVP_W}" height="${CVP_H}"></canvas><figcaption>Motion ${m.moved != null ? m.moved.toFixed(1) + "%" : ""}</figcaption></figure><figure><canvas class="cvpc" data-cvpedge width="${CVP_W}" height="${CVP_H}"></canvas><figcaption>Edges ${m.edges != null ? m.edges.toFixed(0) + "%" : ""}</figcaption></figure></div>`
+    + kv([["Zone motion", sel.motion != null ? sel.motion.toFixed(1) + "%" : "—"], ["Colour", m.rgb ? `<i class="cvpsw" style="background:rgb(${m.rgb.map(Math.round).join(",")})"></i> ${esc(cvpCol(m.rgb))}` : "—"]]));
+  set("model", CV.model ? kv([["Model", "COCO-SSD (TensorFlow.js), in this browser"], ["Speed", L ? Math.round(L.ms) + " ms per frame" : "—"], ["Found", (sel.boxes || []).length ? (sel.boxes || []).map(d => `${esc(d.class)} ${Math.round(d.score * 100)}%`).join(", ") : "nothing above 50%"]])
+      : `<div class="s">Object detection is off — motion, tamper and focus checks still run.</div><button class="act" data-cvai>Turn on AI detection</button>`) ;
+  { const el = box.querySelector(`[data-cvps="model"] .cvpb`); if (el && !el.querySelector(".cvppol")) el.insertAdjacentHTML("beforeend", `<div class="cvppol s">Behaviour only — faces are not identified or matched.</div>`); }
+  set("dec", `<table class="cvpdec">${dec.map(d => `<tr class="${!d.on ? "off" : d.hit ? "hit" : ""}"><td>${esc(d.name)}</td><td>${d.on ? esc(d.val) : "off"}</td><td class="s">${d.on ? esc(d.thr) : ""}</td></tr>`).join("")}</table>`
+    + (al.length ? `<div class="s" style="margin-top:6px">Latest alarms: ${al.map(a => `${esc(CV_TYPES[a.type] ? CV_TYPES[a.type][0] : a.type)} (${esc(ago(a.createdAt))}${a.status !== "new" ? ", " + esc(a.status) : ""})`).join(" · ")}</div>` : `<div class="s" style="margin-top:6px">No alarms from this camera yet.</div>`));
+  try{ const pc = box.querySelector("[data-cvpimg]"); if (pc){ const src = (C.enhanced && CVP.proc[sel.cam.id]) || sel.view; pc.getContext("2d").drawImage(src, 0, 0, 160, 90); } }catch(e){}
+  cvpPaint(box.querySelector("[data-cvpmot]"), m.M, true); cvpPaint(box.querySelector("[data-cvpedge]"), m.E, false); }
+setInterval(() => { try{ cvpRender(); }catch(e){} }, 1000);
+{ const _cm = cvMount; cvMount = function(p){ _cm(p); if (CV.root && !CV.root.querySelector(".cvpipe")){ const g = CV.root.querySelector(".cvgrid"); if (g) g.insertAdjacentHTML("afterend", `<div class="cvpipe"></div>`); } cvpRender(); }; }
+document.getElementById("panel").addEventListener("change", e => { if (e.target.matches("[data-cvpsel]")){ UI.cvPipe = e.target.value; saveUI(); const b = CV.root.querySelector(".cvpipe"); if (b) b.dataset.cam = ""; cvpRender(); } });
+// the rules dialog gains the processing switch
+{ const _cr = cvRules; cvRules = function(cam){ _cr(cam); const R = Object.assign({}, CV_DEF_RULES, cam.rules || {}), list = $("#box .chklist"); if (!list) return;
+    list.insertAdjacentHTML("beforeend", `<label class="chkline"><input type="checkbox" id="rE"${R.enhance !== false ? " checked" : ""}> Improve dim, flat or noisy pictures before analysis (brighten, stretch contrast, smooth noise)</label>`);
+    const go = $("#rGo"), orig = go.onclick; go.onclick = ev => { const en = $("#rE").checked; orig.call(go, ev); cam.rules = Object.assign({}, cam.rules || {}, { enhance: en }); saveCams(); }; }; }
+{ const st = document.createElement("style"); st.textContent = `
+.cvpipe{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.cvph{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.cvph select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:13px var(--font)}
+.cvpg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.cvps{border:1px solid var(--line);border-radius:8px;padding:8px 10px;position:relative;min-width:0}
+.cvps:not(:last-child)::after{content:"→";position:absolute;right:-10px;top:8px;color:var(--muted);font-weight:700}
+.cvpn{display:flex;gap:6px;align-items:center;font-weight:700;font-size:13px;margin-bottom:6px}.cvpn b{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--teal,#2F9E9A);color:#fff;align-items:center;justify-content:center;font-size:11.5px}
+.cvpkv{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0;font-size:12px}.cvpkv dt{color:var(--muted)}.cvpkv dd{margin:0;overflow-wrap:anywhere}.cvpkv dd.warn{color:#D69E2E;font-weight:700}.cvpkv dd.bad{color:var(--red);font-weight:700}
+.cvpstep{font-size:12px;margin:6px 0}.cvpc{width:100%;height:auto;border-radius:4px;border:1px solid var(--line);image-rendering:pixelated;background:#000;display:block}
+.cvpfeat{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}.cvpfeat figure{margin:0}.cvpfeat figcaption{font-size:11px;color:var(--muted)}.cvpsw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;border:1px solid var(--line)}
+.cvpdec{width:100%;border-collapse:collapse;font-size:11.5px}.cvpdec td{padding:2px 4px;border-bottom:1px solid var(--line)}.cvpdec tr.off{opacity:.45}.cvpdec tr.hit td{color:var(--red);font-weight:700}.cvppol{margin-top:6px}
+@media (max-width:1300px){.cvpg{grid-template-columns:repeat(2,minmax(0,1fr))}.cvps::after{display:none}}@media (max-width:760px){.cvpg{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
