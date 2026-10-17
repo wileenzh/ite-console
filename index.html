@@ -15919,6 +15919,180 @@ setInterval(() => { if (!ME || !document.querySelector(".slloop")) return; sfRef
 .slbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.15)}.slbar i{display:block;height:100%;background:#4FC4BE;transition:width .3s}
 .slloop.slwait::after{content:"Waiting for the latest satellite frames…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cfd8dc;font-size:12.5px}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   WEEKS 2–5 OUTLOOK (17 Oct) — Intelligence Monitoring
+   The odds that each week from day 8 to day 35 is unusually hot or cool,
+   wet or dry, or low or high pressure, for every city with sites —
+   as probabilities of each fifth (quintile) of the last 10 years for
+   the same dates, the way subseasonal outlooks are issued.
+   - Built in: the free GFS ensemble (31 forecasts, 35 days, Open-Meteo)
+     against ERA5 for the same dates in the last 10 years. The console keeps
+     its own forecasts, checks them against ERA5 once the week has passed,
+     learns each city's systematic error by lead week and removes it, and
+     blends toward climatology at longer leads where skill is low.
+     This follows the idea of Probabilistic Bias Correction (PBC,
+     Microsoft Research, Nature 2026: learn a forecast system's systematic
+     errors and correct its probabilities), in a lightweight form.
+   - PBC proper (github.com/mouatadid/pbc, MIT) runs on a server with
+     ECMWF S2S forecasts and ERA5; its quintile probabilities can be read
+     from the PSOC server or an imported file, and replace the built-in
+     estimate wherever they exist.
+   ===================================================================== */
+CFG.outlook = Object.assign({ flag: 0.45, pbcUrl: "", years: 10 }, CFG.outlook || {});
+["ensemble-api.open-meteo.com", "archive-api.open-meteo.com"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+const OL_VARS = { t: ["temperature_2m_mean", "Temperature", "°C", "mean"], p: ["precipitation_sum", "Rainfall", "mm", "sum"], m: ["pressure_msl_mean", "Pressure", "hPa", "mean"] };
+const OL_WEEKS = [2, 3, 4, 5], OL_W = { 2: .85, 3: .7, 4: .6, 5: .5 };   // weight on the (corrected) ensemble; the rest is climatology
+const OL_Q = { t: ["Much cooler", "Cooler", "Near normal", "Warmer", "Much warmer"], p: ["Much drier", "Drier", "Near normal", "Wetter", "Much wetter"], m: ["Much lower", "Lower", "Near normal", "Higher", "Much higher"] };
+const OL_COL = { t: ["#2B6CB0", "#7FB2E5", "#C9CED3", "#F0A07A", "#C8432B"], p: ["#9C6B30", "#D8B27A", "#C9CED3", "#7CC4A0", "#1E8A5A"], m: ["#6B3FA0", "#B39BD6", "#C9CED3", "#9FC3D8", "#3B7EA1"] };
+const OL_HIST_KEY = "psoc.uni.olhist.v1", OL_CLIM_KEY = "psoc.uni.olclim.v1", OL_PBC_KEY = "psoc.uni.olpbc.v1";
+const OL = { ens: {}, clim: lsGet(OL_CLIM_KEY, {}), hist: lsGet(OL_HIST_KEY, {}), obs: {}, pbc: lsGet(OL_PBC_KEY, null), busy: false, at: 0, err: "", prog: "" };
+FEEDS.outlook = { name: "Weeks 2–5 outlook (GFS ensemble + ERA5)", ok: null, err: null, at: 0, busy: false };
+SOURCE_CATALOG.push(["outlook", "Weeks 2–5 outlook", "Open-Meteo: GFS ensemble 0.5° (NOAA) and ERA5 (ECMWF Copernicus); PBC output from the PSOC server", "Odds of an unusually hot, wet or low-pressure week, weeks 2–5, for each city with sites", "weather", "No", "6 h"]);
+const olDay = (t) => new Date(t).toISOString().slice(0, 10), olAdd = (d, n) => olDay(Date.parse(d + "T00:00:00Z") + n * 864e5);
+const olCities = () => CITIES.filter(c => (METRO_SITES[c.name] || { all: [] }).all.some(s => isLive(s))).map(c => c.name);
+const olFmt = d => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const olWeekRange = (iss, k) => [olAdd(iss, (k - 1) * 7), olAdd(iss, (k - 1) * 7 + 6)];
+const olStat = (v, arr) => { const x = arr.filter(n => n != null && isFinite(n)); if (x.length < arr.length - 1 || !x.length) return null; const s = x.reduce((a, b) => a + b, 0); return v === "p" ? s * arr.length / x.length : s / x.length; };
+async function olPool(items, n, fn){ let i = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length){ const it = items[i++]; try{ await fn(it); }catch(e){ OL.err = e.message; } } })); }
+// the 31-member ensemble for one city: weekly values per member, weeks 2–5
+async function olEnsemble(city){ const c = CITIES.find(x => x.name === city);
+  const j = JSON.parse(await fetchVia(`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&daily=${Object.values(OL_VARS).map(v => v[0]).join(",")}&models=gfs05&forecast_days=35&timezone=GMT`, null, 30000));
+  const d = j.daily || {}, iss = (d.time || [])[0]; if (!iss) throw new Error("no ensemble data");
+  const out = { at: Date.now(), iss, w: {} };
+  OL_WEEKS.forEach(k => { out.w[k] = {}; Object.entries(OL_VARS).forEach(([v, [name]]) => { const keys = Object.keys(d).filter(x => x === name || x.startsWith(name + "_member") || x.startsWith(name + "_gfs05"));
+      out.w[k][v] = keys.map(x => olStat(v, (d[x] || []).slice((k - 1) * 7, (k - 1) * 7 + 7))).filter(x => x != null); }); });
+  OL.ens[city] = out; return out; }
+// ERA5 for the same dates in each of the last 10 years (a 50-day window per year, kept for a week)
+async function olClimate(city, iss){ const c = CITIES.find(x => x.name === city), have = OL.clim[city];
+  if (have && Date.now() - have.at < 7 * 864e5 && Math.abs(Date.parse(have.iss) - Date.parse(iss)) < 4 * 864e5) return have;
+  const yrs = Array.from({ length: CFG.outlook.years }, (_, i) => i + 1), Y = {};
+  await olPool(yrs, 3, async y => { const s = new Date(Date.parse(iss + "T00:00:00Z")); s.setUTCFullYear(s.getUTCFullYear() - y); const a = olAdd(olDay(s), -7), b = olAdd(a, 49);
+    const j = JSON.parse(await fetchVia(`https://archive-api.open-meteo.com/v1/archive?latitude=${c.lat}&longitude=${c.lon}&start_date=${a}&end_date=${b}&daily=${Object.values(OL_VARS).map(v => v[0]).join(",")}&timezone=GMT`, null, 30000));
+    const d = j.daily || {}; Y[y] = Object.fromEntries(Object.entries(OL_VARS).map(([v, [n]]) => [v, (d[n] || []).map(x => x == null ? null : Math.round(x * 10) / 10)])); });
+  if (Object.keys(Y).length < Math.ceil(CFG.outlook.years / 2)) throw new Error("ERA5 history not available");
+  OL.clim[city] = { at: Date.now(), iss, y: Y }; try{ lsSet(OL_CLIM_KEY, OL.clim); }catch(e){} return OL.clim[city]; }
+// past 7 weeks of ERA5 for checking the console's own earlier forecasts
+async function olObserved(city){ const o = OL.obs[city]; if (o && Date.now() - o.at < 12 * 3600e3) return o; const c = CITIES.find(x => x.name === city), b = olAdd(olDay(Date.now()), -6), a = olAdd(b, -48);
+  const j = JSON.parse(await fetchVia(`https://archive-api.open-meteo.com/v1/archive?latitude=${c.lat}&longitude=${c.lon}&start_date=${a}&end_date=${b}&daily=${Object.values(OL_VARS).map(v => v[0]).join(",")}&timezone=GMT`, null, 30000));
+  const d = j.daily || {}, by = {}; (d.time || []).forEach((t, i) => { by[t] = Object.fromEntries(Object.entries(OL_VARS).map(([v, [n]]) => [v, (d[n] || [])[i]])); }); return (OL.obs[city] = { at: Date.now(), by }); }
+// quintile edges from the 10-year sample (each year at the same dates and a week either side)
+function olEdges(city, k, v){ const C = OL.clim[city]; if (!C) return null; const xs = [];
+  Object.values(C.y).forEach(Y => [-7, 0, 7].forEach(sh => { const i0 = 7 + (k - 1) * 7 + sh, s = olStat(v, (Y[v] || []).slice(i0, i0 + 7)); if (s != null && (Y[v] || []).length >= i0 + 7) xs.push(s); }));
+  if (xs.length < 10) return null; xs.sort((a, b) => a - b); const q = f => { const i = (xs.length - 1) * f, lo = Math.floor(i); return xs[lo] + (xs[Math.ceil(i)] - xs[lo]) * (i - lo); };
+  return { e: [q(.2), q(.4), q(.6), q(.8)], med: q(.5), n: xs.length }; }
+// what the console learned about its own errors: mean (forecast − ERA5) by city, variable and lead week
+function olBias(city, k, v){ const H = OL.hist[city] || [], diffs = H.map(h => h.err && h.err[k] && h.err[k][v]).filter(x => x != null && isFinite(x)); if (!diffs.length) return { b: v === "p" ? 1 : 0, n: 0 };
+  const shrink = diffs.length / (diffs.length + 8), mean = diffs.reduce((a, b) => a + b, 0) / diffs.length; return { b: v === "p" ? 1 + (Math.max(.4, Math.min(2.5, mean)) - 1) * shrink : mean * shrink, n: diffs.length }; }
+function olRemember(city){ const E = OL.ens[city]; if (!E) return; const H = OL.hist[city] = OL.hist[city] || []; if (H.some(h => h.iss === E.iss)) return;
+  const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  H.push({ iss: E.iss, f: Object.fromEntries(OL_WEEKS.map(k => [k, Object.fromEntries(Object.keys(OL_VARS).map(v => [v, mean(E.w[k][v]) != null ? Math.round(mean(E.w[k][v]) * 100) / 100 : null]))])) });
+  OL.hist[city] = H.slice(-80); lsSet(OL_HIST_KEY, OL.hist); }
+function olVerify(city){ const H = OL.hist[city] || [], O = (OL.obs[city] || {}).by; if (!O) return 0; let n = 0;
+  H.forEach(h => OL_WEEKS.forEach(k => { const [a] = olWeekRange(h.iss, k), days = Array.from({ length: 7 }, (_, i) => olAdd(a, i)); if (!days.every(d => O[d])) return; h.err = h.err || {}; h.err[k] = h.err[k] || {};
+    Object.keys(OL_VARS).forEach(v => { if (h.err[k][v] != null || h.f[k][v] == null) return; const ob = olStat(v, days.map(d => O[d][v])); if (ob == null) return;
+      h.err[k][v] = v === "p" ? (ob > 1 ? Math.round(h.f[k][v] / ob * 100) / 100 : null) : Math.round((h.f[k][v] - ob) * 100) / 100; n++; }); }));
+  if (n) lsSet(OL_HIST_KEY, OL.hist); return n; }
+// probabilities of each fifth: PBC when the server or a file has them, otherwise the corrected ensemble
+function olProbs(city, k, v){ const P = olPbcFor(city, k, v); if (P) return { p: P, src: "PBC", note: OL.pbc.model || "PBC" };
+  const E = OL.ens[city], ed = olEdges(city, k, v); if (!E || !ed) return null; const B = olBias(city, k, v), mem = (E.w[k] || {})[v] || []; if (mem.length < 5) return null;
+  const adj = mem.map(x => v === "p" ? x / B.b : x - B.b), cnt = [0, 0, 0, 0, 0]; adj.forEach(x => { let i = 0; while (i < 4 && x > ed.e[i]) i++; cnt[i]++; });
+  const w = OL_W[k], p = cnt.map(c => w * (c + .2) / (adj.length + 1) + (1 - w) * .2), s = p.reduce((a, b) => a + b, 0);
+  const sorted = adj.slice().sort((a, b) => a - b); return { p: p.map(x => x / s), src: "GFS", n: adj.length, bias: B, med: sorted[Math.floor(sorted.length / 2)], clim: ed.med }; }
+// PBC output: {model, issued, forecasts:[{city | lat+lon, var: t2m|tp|mslp, week | lead_days, probs:[5]}]}
+function olPbcFor(city, k, v){ const P = OL.pbc; if (!P || !P.items) return null; const iss = (OL.ens[city] || {}).iss || olDay(Date.now());
+  if (Date.parse(iss) - Date.parse(P.issued || 0) > 8 * 864e5) return null;   // only a recent issue
+  const shift = Math.round((Date.parse(iss) - Date.parse(P.issued)) / (7 * 864e5)), it = P.items.find(x => x.city === city && x.v === v && x.week - shift === k); return it ? it.probs : null; }
+function olPbcLoad(j, from){ const VM = { t2m: "t", tas: "t", tmp2m: "t", temperature: "t", tp: "p", precip: "p", pr: "p", precipitation: "p", mslp: "m", msl: "m", psl: "m", pressure: "m" }, items = [];
+  const list = Array.isArray(j) ? j : j.forecasts || j.items || []; if (!list.length) throw new Error("no forecasts in the file");
+  list.slice(0, 5000).forEach(f => { const v = VM[String(f.var || f.variable || "").toLowerCase().replace(/^era5-f\d+_/, "")], probs = (f.probs || f.probabilities || []).map(Number); if (!v || probs.length !== 5 || probs.some(x => !isFinite(x) || x < 0)) return;
+    let city = CITIES.find(c => c.name === f.city) ? f.city : null; if (!city && isFinite(+f.lat) && isFinite(+f.lon)){ let best = null; CITIES.forEach(c => { const d = km(+f.lat, +f.lon, c.lat, c.lon); if (d < 150 && (!best || d < best.d)) best = { c, d }; }); city = best && best.c.name; }
+    const week = f.week ? +f.week : f.lead_days ? Math.floor(+f.lead_days / 7) + 1 : null; if (!city || !(week >= 2 && week <= 6)) return; const s = probs.reduce((a, b) => a + b, 0) || 1;
+    items.push({ city, v, week, probs: probs.map(x => x / s) }); });
+  if (!items.length) throw new Error("none of the forecasts matched a city, variable and week");
+  OL.pbc = { model: String(j.model || "PBC").slice(0, 60), issued: /^\d{4}-\d\d-\d\d/.test(j.issued || "") ? j.issued.slice(0, 10) : olDay(Date.now()), items, from, at: Date.now() }; lsSet(OL_PBC_KEY, OL.pbc); return items.length; }
+async function olLoad(force){ if (OL.busy || (!force && Date.now() - OL.at < 6 * 3600e3)) return; if (!force && Date.now() - (OL.failAt || 0) < 2 * 60e3) return; OL.busy = true; OL.err = ""; FEEDS.outlook.busy = true;
+  const cities = olCities(); let done = 0; const tick = () => { OL.prog = `${done} of ${cities.length} cities`; if (UI.mode === "outlook") olRedraw(); };
+  if (CFG.outlook.pbcUrl){ try{ olPbcLoad(JSON.parse(await fetchVia(CFG.outlook.pbcUrl, null, 30000)), "PSOC server"); }catch(e){ OL.pbcErr = e.message; } }
+  await olPool(cities, 3, async city => { const E = await olEnsemble(city); await olClimate(city, E.iss); olRemember(city); try{ await olObserved(city); olVerify(city); }catch(e){} done++; tick(); });
+  OL.busy = false; FEEDS.outlook.busy = false; const ok = Object.keys(OL.ens).length; if (ok) OL.at = Date.now(); else OL.failAt = Date.now();
+  FEEDS.outlook.ok = !!ok; FEEDS.outlook.err = ok ? null : OL.err || "no data"; FEEDS.outlook.at = Date.now(); OL.prog = ""; if (UI.mode === "outlook") renderPanel(); }
+setInterval(() => { if (ME && UI.mode === "outlook") olLoad(); }, 30 * 60e3);
+function olRedraw(){ const s = $("#panel .olprog"); if (s) s.textContent = OL.prog; }
+// weeks to watch: high odds of the top (or, for pressure, bottom) fifth
+function olWatch(){ const out = [], f = CFG.outlook.flag;
+  Object.keys(OL.ens).forEach(city => OL_WEEKS.forEach(k => { const t = olProbs(city, k, "t"), p = olProbs(city, k, "p"), m = olProbs(city, k, "m");
+    if (t && t.p[4] >= f) out.push({ city, k, v: "t", pr: t.p[4], what: "much warmer than usual", src: t.src });
+    if (p && p.p[4] >= f) out.push({ city, k, v: "p", pr: p.p[4], what: "much wetter than usual", src: p.src });
+    if (m && m.p[0] >= f) out.push({ city, k, v: "m", pr: m.p[0], what: "much lower pressure than usual (unsettled, stormier)", src: m.src }); }));
+  return out.sort((a, b) => b.pr - a.pr); }
+function olWatchText(x){ const iss = (OL.ens[x.city] || {}).iss || olDay(Date.now()), [a, b] = olWeekRange(iss, x.k), n = (METRO_SITES[x.city] || { all: [] }).all.filter(isLive).length;
+  return `${Math.round(x.pr * 100)}% chance that week ${x.k} (${olFmt(a)}–${olFmt(b)}) is ${x.what} in ${x.city} — in the top fifth of the last ${CFG.outlook.years} years for these dates (a normal chance is 20%). ${n} site${n === 1 ? "" : "s"} in the area. Source: ${x.src === "PBC" ? (OL.pbc.model || "PBC") : "GFS ensemble, bias-corrected against ERA5"}. Planning note — skill at this range is modest.`; }
+
+/* ---------- Intelligence Monitoring › Weeks 2–5 ---------- */
+{ const t = G("intel").tabs; if (!t.some(x => x[0] === "outlook")) t.splice(t.findIndex(x => x[0] === "forecast") + 1, 0, ["outlook", "Weeks 2–5"]); }
+NON_CITY_MODES.push("outlook"); if (!FULLW.includes("outlook")) FULLW.push("outlook");
+KEYS.outlook = ["WEEKS 2–5 OUTLOOK", [], "Odds that each week from day 8 to day 35 is unusually hot, wet or stormy, for every city with sites — bias-corrected ensemble, or PBC from the PSOC server"];
+function olBar(P, v){ return `<span class="olbar" title="${OL_Q[v].map((q, i) => `${q}: ${Math.round(P.p[i] * 100)}%`).join(" · ")}">${P.p.map((x, i) => `<i style="width:${(x * 100).toFixed(1)}%;background:${OL_COL[v][i]}"></i>`).join("")}</span>`; }
+function olCell(P, v){ if (!P) return `<td class="s">—</td>`; const lo = P.p[0] + P.p[1], hi = P.p[3] + P.p[4], tilt = hi - lo, big = Math.max(P.p[0], P.p[4]);
+  const lab = Math.abs(tilt) < .12 ? "Near normal" : tilt > 0 ? (P.p[4] >= CFG.outlook.flag ? OL_Q[v][4] : OL_Q[v][3]) : (P.p[0] >= CFG.outlook.flag ? OL_Q[v][0] : OL_Q[v][1]);
+  const col = Math.abs(tilt) < .12 ? "" : OL_COL[v][tilt > 0 ? (P.p[4] >= CFG.outlook.flag ? 4 : 3) : (P.p[0] >= CFG.outlook.flag ? 0 : 1)];
+  return `<td><div class="olc${big >= CFG.outlook.flag ? " olhot" : ""}" style="${col ? `border-left-color:${col}` : ""}"><b>${esc(lab)}</b><span class="s">${Math.round((tilt > 0 ? hi : tilt < 0 ? lo : P.p[2]) * 100)}%${P.src === "PBC" ? " · PBC" : ""}</span></div>${olBar(P, v)}</td>`; }
+function outlookPanel(){ if (!OL.at && !OL.busy && Date.now() - (OL.failAt || 0) > 2 * 60e3) setTimeout(() => olLoad(true), 20);
+  const v = UI.olVar || "t", cities = olCities().filter(c => OL.ens[c]), sel = UI.olCity && OL.ens[UI.olCity] ? UI.olCity : null, iss = cities.length ? OL.ens[cities[0]].iss : olDay(Date.now()), watch = olWatch();
+  const learned = cities.reduce((a, c) => a + ((OL.hist[c] || []).filter(h => h.err).length ? 1 : 0), 0), nchk = cities.reduce((a, c) => a + (OL.hist[c] || []).filter(h => h.err).length, 0);
+  const head = `<div class="ptools"><span class="label">Weeks 2–5 outlook</span><span class="innav0">${Object.entries(OL_VARS).map(([k, x]) => `<button class="tab-mini" data-olvar="${k}" aria-pressed="${v === k}">${x[1]}</button>`).join("")}</span>
+    <span class="s olprog">${OL.busy ? esc(OL.prog || "loading…") : OL.at ? "updated " + esc(ago(OL.at)) : ""}</span><span class="sp"></span><button class="tab-mini" data-olref>↻ Refresh</button><label class="tab-mini rpup" title="Import probabilities produced by PBC (JSON)">Import PBC…<input type="file" accept=".json,application/json" data-olimp hidden></label><button class="tab-mini" data-olset>⚙</button></div>`;
+  if (!cities.length) return head + `<div class="pbody"><div class="empty">${OL.busy ? `Loading the GFS ensemble and 10 years of ERA5 for each city with sites… <span class="olprog">${esc(OL.prog)}</span>` : OL.err ? "Outlook unavailable: " + esc(OL.err) + " — it tries again in 2 minutes." : "Loading…"}</div></div>`;
+  const wk = OL_WEEKS.map(k => { const [a, b] = olWeekRange(iss, k); return `<th>Week ${k}<div class="s">${olFmt(a)} – ${olFmt(b)}</div></th>`; }).join("");
+  const rows = cities.map(c => { const n = (METRO_SITES[c] || { all: [] }).all.filter(isLive).length; return `<tr class="olrow${c === sel ? " on" : ""}" data-olcity="${esc(c)}"><td><b>${esc(c)}</b><div class="s">${n} site${n === 1 ? "" : "s"}${(OL.hist[c] || []).some(h => h.err) ? " · corrected" : ""}</div></td>${OL_WEEKS.map(k => olCell(olProbs(c, k, v), v)).join("")}</tr>`; }).join("");
+  const detail = sel ? `<div class="olsec"><div class="olh"><b>${esc(sel)}</b><span class="s">issued ${esc(olFmt(OL.ens[sel].iss))} · ${OL.ens[sel].w[2].t.length} ensemble members · ${(() => { const n = (OL.hist[sel] || []).filter(h => h.err).length; return n ? `${n} earlier forecast${n === 1 ? "" : "s"} checked against ERA5` : "no earlier forecasts checked yet"; })()}</span><span class="sp"></span><button class="tab-mini" data-olx>×</button></div>
+      ${Object.entries(OL_VARS).map(([vv, x]) => `<div class="oldv"><div class="s"><b>${x[1]}</b> — weekly ${x[3]}, ${x[2]}</div>${OL_WEEKS.map(k => { const P = olProbs(sel, k, vv), [a, b] = olWeekRange(OL.ens[sel].iss, k);
+        return `<div class="oldr"><span class="olwk">Week ${k} <small>${olFmt(a)}–${olFmt(b)}</small></span>${P ? olBar(P, vv) + `<span class="olnum">${P.src === "PBC" ? "PBC" : `forecast ${P.med.toFixed(vv === "p" ? 0 : 1)} · usual ${P.clim.toFixed(vv === "p" ? 0 : 1)}${P.bias && P.bias.n ? ` · corrected ${vv === "p" ? "×" + (1 / P.bias.b).toFixed(2) : (P.bias.b > 0 ? "−" : "+") + Math.abs(P.bias.b).toFixed(1)}` : ""}`}</span>` : `<span class="s">—</span>`}</div>`; }).join("")}</div>`).join("")}
+      <div class="olkey">${Object.keys(OL_VARS).map(vv => `<span>${OL_Q[vv].map((q, i) => `<i style="background:${OL_COL[vv][i]}"></i>${esc(q)}`).join(" ")}</span>`).join("")}</div></div>` : "";
+  const W = watch.slice(0, UI.olAll ? 40 : 6);
+  return head + `<div class="pbody"><div class="olgrid"><div>
+    <div class="olsec"><div class="olh"><b>Weeks to watch</b><span class="s">${Math.round(CFG.outlook.flag * 100)}% or more for the top fifth (normal 20%)</span></div>
+      ${W.map((x, i) => `<div class="olw"><span class="olpct" style="background:${OL_COL[x.v][x.v === "m" ? 0 : 4]}">${Math.round(x.pr * 100)}%</span><div style="flex:1"><b>${esc(x.city)}</b> · week ${x.k} · ${esc(x.what)}<div class="s">${(() => { const [a, b] = olWeekRange((OL.ens[x.city] || {}).iss || iss, x.k), n = (METRO_SITES[x.city] || { all: [] }).all.filter(isLive).length; return `${olFmt(a)}–${olFmt(b)} · ${n} site${n === 1 ? "" : "s"} · ${x.src === "PBC" ? "PBC" : "corrected ensemble"}`; })()}</div></div><button class="tab-mini" data-oldsr="${i}" title="Add to today's Daily Shift Report (Intelligence)">+ Shift report</button></div>`).join("") || `<div class="s">Nothing stands out — no city has high odds of an extreme week.</div>`}${watch.length > 6 ? `<button class="linkbtn" data-olall>${UI.olAll ? "Show fewer" : `Show all ${watch.length}`}</button>` : ""}</div>
+    <div class="olscroll"><table class="oltab"><thead><tr><th>City</th>${wk}</tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="help">Each bar splits the chances across the five fifths of the last ${CFG.outlook.years} years for the same dates (ERA5): ${OL_Q[v].join(" · ")}. With no information each is 20%. Built from the GFS ensemble (31 forecasts, Open-Meteo); the console checks its own past forecasts against ERA5, removes each city's systematic error by lead week (${learned ? `${nchk} checks so far across ${learned} cities` : "it starts learning once the first forecast weeks have passed"}), and leans toward climatology at longer leads where forecasts carry little skill. The idea follows Probabilistic Bias Correction (Microsoft Research, <i>Nature</i>, 2026). ${OL.pbc ? `<b>PBC probabilities loaded</b> (${esc(OL.pbc.model)}, issued ${esc(olFmt(OL.pbc.issued))}, ${OL.pbc.items.length} forecasts, from ${esc(OL.pbc.from || "file")}) are used where they exist.` : "Probabilities from PBC itself can be loaded from the PSOC server or a file (⚙)."}</p></div>
+    <div>${detail || `<div class="olsec s">Select a city for its temperature, rainfall and pressure odds week by week.</div>`}</div></div></div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "outlook") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = outlookPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "outlook") return; const t = e.target.closest("[data-olvar],[data-olref],[data-olcity],[data-olx],[data-oldsr],[data-olset],[data-olall]"); if (!t) return; const d = t.dataset;
+  if (d.olall !== undefined){ UI.olAll = !UI.olAll; saveUI(); renderPanel(); return; }
+  if (d.olvar){ UI.olVar = d.olvar; saveUI(); renderPanel(); return; }
+  if (d.olref !== undefined){ OL.at = 0; OL.failAt = 0; olLoad(true); renderPanel(); return; }
+  if (d.olx !== undefined){ UI.olCity = null; saveUI(); renderPanel(); return; }
+  if (d.olcity){ UI.olCity = d.olcity; saveUI(); renderPanel(); return; }
+  if (d.oldsr){ const x = olWatch()[+d.oldsr]; if (!x) return; const R = dsrCur(), key = `ol:${x.city}:${x.k}:${x.v}:${(OL.ens[x.city] || {}).iss}`; if (R.sec.intel.some(i => i.src === key)){ toast("Already in today's report", "", "var(--amber)"); return; }
+    R.sec.intel.push({ id: nid("i"), src: key, loc: x.city, cat: "Weather outlook", status: "Monitoring", title: x.v === "t" ? "HEAT OUTLOOK" : x.v === "p" ? "HEAVY RAIN OUTLOOK" : "UNSETTLED WEATHER OUTLOOK", text: olWatchText(x) }); dsrSave();
+    toast("Added to the Daily Shift Report", "Response › Reports, under Intelligence", "var(--green)"); return; }
+  if (d.olset !== undefined){ openModal(head("Weeks 2–5 outlook settings") + `<div class="bd">
+      <div class="fgrid"><label class="fld">Flag a week when the chance of an extreme fifth reaches (%)<input id="olF" type="number" min="25" max="90" value="${Math.round(CFG.outlook.flag * 100)}"></label><label class="fld">Years of ERA5 for "usual"<input id="olY" type="number" min="5" max="20" value="${CFG.outlook.years}"></label></div>
+      <div class="sec">PBC from the PSOC server</div><p class="help">PBC (github.com/mouatadid/pbc, MIT licence) runs on a server with ECMWF S2S forecasts (IRI Data Library account) and ERA5 (Copernicus account). Have it publish its quintile probabilities as JSON — <code>{"model":"PBC-ECMWF","issued":"YYYY-MM-DD","forecasts":[{"city":"Singapore","var":"t2m","week":3,"probs":[p1,p2,p3,p4,p5]}]}</code> (or <code>lat</code>/<code>lon</code> in place of <code>city</code>, <code>lead_days</code> in place of <code>week</code>; <code>var</code> t2m, tp or mslp) — and enter its address here. Imported probabilities are checked and only numbers are kept.</p>
+      <label class="fld">PBC address (https)<input id="olU" value="${esc(CFG.outlook.pbcUrl)}" placeholder="https://psoc-server.example/pbc/latest.json"></label>${OL.pbc ? `<p class="help">Loaded: ${esc(OL.pbc.model)}, issued ${esc(OL.pbc.issued)}, ${OL.pbc.items.length} forecasts from ${esc(OL.pbc.from || "file")}. <button class="linkbtn" id="olClr">Remove</button></p>` : ""}${OL.pbcErr ? `<p class="help" style="color:var(--red)">Last PBC read failed: ${esc(OL.pbcErr)}</p>` : ""}</div>
+      <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="olOk">Save</button></div>`, true);
+    if ($("#olClr")) $("#olClr").onclick = () => { OL.pbc = null; lsSet(OL_PBC_KEY, null); $("#ov").classList.remove("show"); renderPanel(); };
+    $("#olOk").onclick = () => { const u = $("#olU").value.trim(); if (u && !/^https:\/\//i.test(u)){ toast("Use an https address", "", "var(--amber)"); return; }
+      const yrsChanged = +$("#olY").value !== CFG.outlook.years; Object.assign(CFG.outlook, { flag: Math.max(.25, Math.min(.9, (+$("#olF").value || 45) / 100)), years: Math.max(5, Math.min(20, +$("#olY").value || 10)), pbcUrl: u });
+      if (yrsChanged){ OL.clim = {}; lsSet(OL_CLIM_KEY, {}); } if (u){ try{ const h = new URL(u).hostname; if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); }catch(e){} }
+      saveCfg(); audit("Outlook settings changed", u ? "PBC address set" : "", ""); $("#ov").classList.remove("show"); if (u || yrsChanged){ OL.at = 0; olLoad(true); } renderPanel(); }; } });
+document.getElementById("panel").addEventListener("change", e => { const t = e.target; if (UI.mode !== "outlook" || t.dataset.olimp === undefined || !t.files[0]) return; const f = t.files[0];
+  if (f.size > 5 * 1048576){ toast("File too large", "PBC files over 5 MB are not read.", "var(--amber)"); return; }
+  f.text().then(txt => { const n = olPbcLoad(JSON.parse(txt), f.name.slice(0, 60)); audit("PBC outlook imported", f.name, n + " forecasts"); toast("PBC probabilities loaded", `${n} forecasts are used where they exist`, "var(--green)"); renderPanel(); })
+    .catch(err => toast("Couldn't read that file", err.message, "var(--red)")); });
+{ const st = document.createElement("style"); st.textContent = `
+.olgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:start}.olsec{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+.olh{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}.olw{display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}.olw:first-of-type{border-top:0}
+.olpct{min-width:46px;text-align:center;color:#fff;font-weight:800;border-radius:6px;padding:4px 0;font-size:13px}
+.oltab{width:100%;border-collapse:collapse}.oltab th{text-align:left;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}.oltab td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.olrow{cursor:pointer}.olrow:hover,.olrow.on{background:var(--hover,rgba(127,127,127,.08))}.olc{border-left:4px solid var(--line);padding-left:6px;display:flex;flex-direction:column;font-size:12.5px;margin-bottom:4px}.olc.olhot b{text-decoration:underline}
+.olbar{display:flex;height:9px;border-radius:5px;overflow:hidden;min-width:90px;flex:1}.olbar i{display:block;height:100%}
+.oldv{margin:8px 0 12px}.oldr{display:flex;align-items:center;gap:10px;margin:5px 0}.olwk{width:118px;font-size:12.5px;flex:none}.olwk small{color:var(--muted)}.olnum{font-size:11.5px;color:var(--muted);width:210px;flex:none}
+.olkey{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}.olkey i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 3px 0 8px;vertical-align:-1px}
+@media (max-width:1100px){.olgrid{grid-template-columns:1fr}}.olgrid>*{min-width:0}.olscroll{overflow-x:auto}
+@media (max-width:760px){.olnum{display:none}.olwk{width:92px}.oltab th .s{display:none}.olw{flex-wrap:wrap}.olw>div{flex:1 1 calc(100% - 60px)!important}.olw .tab-mini{margin-left:56px}.oltab{min-width:560px}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>

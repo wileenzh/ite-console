@@ -33,6 +33,18 @@ the Americas, a new frame every 10 minutes, infrared day and night or 1 km visib
 for fresh sharp pictures. Add them from Camera wall › 🛰 + Satellite feed, Camera sources, or a site's Site plan.
 No public satellite streams live video of a building; the live loop is the closest to a traffic camera.
 
+## Weeks 2–5 outlook (Intelligence Monitoring)
+
+The odds that each week from day 8 to day 35 is unusually hot or cool, wet or dry, or low or high pressure, for every
+city with sites, as chances of each fifth of the last 10 years for the same dates (ERA5). Built from the free GFS
+ensemble (31 forecasts, 35 days, via Open-Meteo). The console keeps its own forecasts, checks them against ERA5 once
+the week has passed, learns each city's systematic error by lead week and removes it, and leans toward climatology at
+longer leads. This follows the idea of Probabilistic Bias Correction (PBC; Microsoft Research, *Nature*, 2026).
+PBC itself (github.com/mouatadid/pbc, MIT) runs on a server with ECMWF S2S forecasts and ERA5; its quintile
+probabilities can be read from the PSOC server or an imported JSON file and replace the built-in estimate where they
+exist. Weeks with high odds of an extreme week are listed under "Weeks to watch" and can be added to the Daily Shift
+Report.
+
 ## Reports (Response › Reports)
 
 - **Daily Shift Report** in the PSOC's format: staff on duty, overall status and counts, Observations, Information,
