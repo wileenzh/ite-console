@@ -16239,6 +16239,241 @@ function cvAddTestVideos(files){ let n = 0; [...files].slice(0, 12).forEach(f =>
 { const _at = attention; attention = function(){ if (CVP.testing) return; return _at.apply(this, arguments); }; }
 document.getElementById("panel").addEventListener("change", e => { if (e.target.matches("[data-cvtestin]") && e.target.files.length){ cvAddTestVideos(e.target.files); e.target.value = ""; } });
 
+
+/* =====================================================================
+   PERIMETER (17 Oct) — Security Operations › Perimeter
+   A site's fence as zones, the sensors that watch each zone, and the PSOC's
+   view of them:
+   - Live: every zone's state on the satellite map; alarms from fence
+     vibration / fibre, microwave beams, ground radar, gates and thermal
+     camera analytics are correlated per zone. Two independent sensor types
+     within 60 s = VERIFIED intrusion (P1). One type alone = UNVERIFIED (P3),
+     with the likely cause (wind gusts or heavy rain at the site right now,
+     or a zone that keeps raising nuisance alarms). Tamper and cut = P2.
+   - Checks: automatic health checks (sensor offline, walk test due,
+     zones with a single layer or no camera, nuisance-prone zones) and the
+     guard's perimeter patrol check, zone by zone.
+   - Design: which layer covers which zone (detect, assess, access).
+   - Connect: the event format the PSOC server forwards from the perimeter
+     system; device list import.
+   An example perimeter can be generated for any site, with training
+   scenarios to see each case end to end. Example devices are simulated.
+   ===================================================================== */
+const PM_KEY = "psoc.uni.perim.v1";
+const PM = Object.assign({ sites: {}, inc: [], ev: [], checks: [] }, lsGet(PM_KEY, {})); PM.timers = []; PM.simWind = null;
+const pmSave = () => { clearTimeout(pmSave.t); pmSave.t = setTimeout(() => lsSet(PM_KEY, { sites: PM.sites, inc: PM.inc.slice(0, 300), ev: PM.ev.slice(0, 600), checks: PM.checks.slice(0, 200) }), 300); };
+CFG.perim = Object.assign({ confirmSec: 60, offlineMin: 5, walkDays: 30, patrolHours: 12, windKmh: 40, rainMm: 10, nuisance24: 5 }, CFG.perim || {});
+const PM_T = { fence: ["Fence vibration", "#E8B04A", "detect"], fibre: ["Fence / buried fibre", "#E8B04A", "detect"], beam: ["Microwave beam", "#C77DDB", "detect"], radar: ["Ground radar", "#4FC4BE", "detect"],
+  thermal: ["Thermal camera + analytics", "#5B9BD5", "assess"], gate: ["Gate (access control)", "#9AA5AE", "access"], light: ["Perimeter lighting", "#F2E394", "support"] };
+const pmM = (s, dx, dy) => [s.lat + dy / 111320, s.lon + dx / (111320 * Math.cos(s.lat * Math.PI / 180))];
+const pmLerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+const pmBear = (a, b) => { const y = (b[1] - a[1]) * Math.cos(a[0] * Math.PI / 180), x = b[0] - a[0]; return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; };
+const pmDist = (a, b) => km(a[0], a[1], b[0], b[1]) * 1000;
+function pmWedge(c, bear, half, r){ const pts = [c]; for (let a = -half; a <= half; a += half / 6){ const t = (bear + a) * Math.PI / 180; pts.push([c[0] + Math.cos(t) * r / 111320, c[1] + Math.sin(t) * r / (111320 * Math.cos(c[0] * Math.PI / 180))]); } return pts; }
+// zones: each fence side split into pieces of at most maxM metres
+function pmZones(fence, maxM){ const names = ["N", "E", "S", "W"], out = []; for (let i = 0; i < fence.length; i++){ const a = fence[i], b = fence[(i + 1) % fence.length], n = Math.max(1, Math.ceil(pmDist(a, b) / (maxM || 120)));
+    const side = fence.length === 4 ? names[i] : "Z" + (i + 1); for (let k = 0; k < n; k++) out.push({ id: side + (k + 1), a: pmLerp(a, b, k / n), b: pmLerp(a, b, (k + 1) / n) }); } return out; }
+const pmMid = z => pmLerp(z.a, z.b, .5);
+// the example: a 220 m × 150 m compound, eight zones, two detection layers on the north side, radar on the open south approach
+function pmExample(code){ const s = SITES.find(x => x.code === code); if (!s) return null; const c = [pmM(s, -110, 75), pmM(s, 110, 75), pmM(s, 110, -75), pmM(s, -110, -75)], zones = pmZones(c, 120), Z = id => zones.find(z => z.id === id), now = Date.now();
+  const dev = [], add = (o) => dev.push(Object.assign({ sim: true, lastSeen: now, lastTest: now - Math.round(Math.random() * 25) * 864e5, state: "ok" }, o));
+  zones.forEach(z => add({ id: "FV-" + z.id, type: "fence", name: "Fence sensor " + z.id, zones: [z.id], ll: pmMid(z) }));
+  add({ id: "MW-N", type: "beam", name: "Microwave beam, north (inner layer)", zones: ["N1", "N2"], ll: pmM(s, 0, 62) });
+  add({ id: "RD-S", type: "radar", name: "Ground radar, south approach", zones: ["S1", "S2"], ll: pmM(s, 0, -80), dir: 180, range: 220 });
+  // thermal cameras look along each fence line from a corner, the way perimeter cameras are mounted
+  [["TC-N", ["N1", "N2"], [-104, 69]], ["TC-E", ["E1", "E2"], [104, 69]], ["TC-S", ["S1", "S2"], [104, -69]], ["TC-W", ["W1", "W2"], [-104, -69]]].forEach(([id, zs, off]) => {
+    const ll = pmM(s, off[0], off[1]), far = Z(zs[1]).b; add({ id, type: "thermal", name: "Thermal camera " + id.slice(3), zones: zs, ll, dir: pmBear(ll, far), range: Math.round(pmDist(ll, far) + 15), half: 9 }); });
+  add({ id: "GT-V", type: "gate", name: "Vehicle gate (OnGuard)", zones: ["S1"], ll: pmMid(Z("S1")) }); add({ id: "GT-P", type: "gate", name: "Pedestrian turnstile (OnGuard)", zones: ["E1"], ll: pmMid(Z("E1")) });
+  ["N", "E", "S", "W"].forEach(k => add({ id: "LT-" + k, type: "light", name: "Lighting circuit " + k, zones: zones.filter(z => z.id[0] === k).map(z => z.id), ll: pmMid(Z(k + "1")) }));
+  // the example leaves one deliberate design gap so the checks have something to find: W1 relies on its fence sensor and one camera; the west lighting circuit is due for a walk test
+  dev.find(d => d.id === "LT-W").lastTest = now - 41 * 864e5; dev.find(d => d.id === "FV-E2").lastTest = now - 36 * 864e5;
+  return { code, example: true, fence: c, zones, devices: dev, bypass: {}, createdAt: now }; }
+const pmSite = code => PM.sites[code || UI.pmSite];
+const pmDevZone = (P, zid, type) => P.devices.filter(d => d.zones.includes(zid) && (!type || d.type === type));
+function pmZoneState(P, zid){ if ((P.bypass || {})[zid] > Date.now()) return ["bypassed", "#8A94A0", "Bypassed for maintenance"];
+  const open = PM.inc.filter(i => i.site === P.code && i.zone === zid && !i.closed); if (open.some(i => i.level === "verified")) return ["verified", "#E5484D", "Verified intrusion"];
+  if (open.some(i => i.level === "tamper")) return ["tamper", "#E5484D", "Tamper / cut"]; if (open.some(i => i.level === "checking")) return ["checking", "#F08C3A", "Alarm — checking"];
+  if (open.some(i => i.level === "unverified")) return ["unverified", "#E8B04A", "Unverified alarm"];
+  if (pmDevZone(P, zid).some(d => ["fence", "fibre", "beam", "radar", "thermal"].includes(d.type) && pmOffline(d))) return ["fault", "#B08CE0", "Sensor offline — degraded"]; return ["secure", "#2FB170", "Secure"]; }
+const pmOffline = d => d.state === "fault" || Date.now() - (d.lastSeen || 0) > CFG.perim.offlineMin * 60e3;
+const pmTrain = () => !!PM.training;
+function pmWx(code){ const s = SITES.find(x => x.code === code), c = s && metroOf(s), w = c && typeof wxFor === "function" ? wxFor(c) : null, u = w && w.current;
+  if (PM.simWind && PM.simWind.site === code && Date.now() < PM.simWind.until) return { gust: PM.simWind.gust, rain: 0, sim: true };
+  return u ? { gust: u.wind_gusts_10m != null ? u.wind_gusts_10m : u.wind_speed_10m, rain: u.precipitation || 0 } : null; }
+/* ---------- events in: from the PSOC server (real) or the training scenarios ---------- */
+// {site, device, kind: alarm|detect|tamper|forced|held|fault|restore|heartbeat|track, zone?, object?, at?, detail?, training?}
+function pmIngest(e){ const P = pmSite(e.site); if (!P) return; const d = P.devices.find(x => x.id === e.device); if (!d) return; const at = e.at || Date.now(); d.lastSeen = at;
+  if (e.kind === "heartbeat"){ if (d.state === "fault"){ d.state = "ok"; pmLog(P, d, "restore", "Back online"); } pmSave(); return; }
+  if (e.kind === "fault"){ d.state = "fault"; pmLog(P, d, "fault", e.detail || "Device reports a fault"); pmAction(P, d.zones[0], "P3", `Perimeter sensor offline — ${d.name}`, `${P.code} zone ${d.zones.join(", ")} is degraded. Start a compensating guard patrol of the zone until it is repaired.`, "fault:" + d.id + ":" + Math.floor(at / 36e5), e.training); pmSave(); pmRedraw(); return; }
+  if (e.kind === "restore"){ d.state = "ok"; pmLog(P, d, "restore", "Restored"); pmSave(); pmRedraw(); return; }
+  const zone = e.zone || d.zones[0]; if ((P.bypass || {})[zone] > Date.now()){ pmLog(P, d, e.kind, `${e.detail || e.kind} — zone bypassed, ignored`); pmSave(); return; }
+  pmLog(P, d, e.kind, e.detail || ({ alarm: "Alarm", detect: `${e.object || "person"} detected`, tamper: "Tamper / cut", forced: "Gate forced open", held: "Gate held open", track: "Radar track" }[e.kind] || e.kind), zone);
+  let I = PM.inc.find(i => i.site === P.code && i.zone === zone && !i.closed && at - i.start < CFG.perim.confirmSec * 1000 * 3);
+  if (!I){ I = { id: nid("pi"), site: P.code, zone, start: at, level: "checking", hits: [], training: !!e.training, why: [] }; PM.inc.unshift(I); }
+  I.hits.push({ at, dev: d.id, type: d.type, kind: e.kind, object: e.object || "" });
+  if (e.kind === "tamper" && I.level !== "verified"){ I.level = "tamper"; I.why = [`${d.name} reports tamper — the fence or sensor may have been cut`]; pmAction(P, zone, "P2", `Perimeter tamper / cut — ${P.code} zone ${zone}`, `${d.name}: tamper. Dispatch a guard to the zone and check the nearest camera.`, "tamper:" + I.id, I.training); }
+  if (e.kind === "held" && I.level === "checking" && I.hits.length === 1){ I.level = "unverified"; I.why = ["Gate held open — usually a delivery or a propped door; check with the site"]; pmAction(P, zone, "P3", `Gate held open — ${P.code} ${d.name}`, "Ask the site to close the gate; check the camera.", "held:" + I.id, I.training); }
+  pmEvaluate(I); pmSave(); pmRedraw(); }
+function pmLog(P, d, kind, text, zone){ PM.ev.unshift({ at: Date.now(), site: P.code, dev: d.id, name: d.name, type: d.type, kind, text, zone: zone || d.zones[0], training: pmTrain() }); }
+// two independent kinds of sensor in the same zone within the confirmation window = verified
+function pmEvaluate(I){ if (I.closed || I.level === "verified") return; const P = pmSite(I.site); const kinds = new Set(I.hits.filter(h => h.kind !== "held").map(h => h.type === "fibre" ? "fence" : h.type)), latest = Math.max(...I.hits.map(h => h.at)), win = I.hits.filter(h => h.kind !== "held" && latest - h.at <= CFG.perim.confirmSec * 1000);   /* any two sensor types within the window, also an approach followed by a fence alarm */
+  const kindsWin = new Set(win.map(h => h.type === "fibre" ? "fence" : h.type));
+  if (kindsWin.size >= 2 || (I.hits.some(h => h.kind === "forced") && kinds.has("thermal"))){ const was = I.level; I.level = "verified"; I.verifiedAt = Date.now();
+    I.why = [`${[...kindsWin].map(k => PM_T[k][0].toLowerCase()).join(" + ")} in zone ${I.zone} within ${Math.max(1, Math.round((latest - Math.min(...win.map(h => h.at))) / 1000))} s`].concat(I.hits.filter(h => h.object).map(h => `${h.dev} saw a ${h.object}`).slice(0, 2));
+    const cam = pmDevZone(P, I.zone, "thermal")[0];
+    pmAction(P, I.zone, "P1", `VERIFIED perimeter intrusion — ${P.code} zone ${I.zone}`, `${I.why.join("; ")}. Dispatch guards to zone ${I.zone}${cam ? `, watch ${cam.name}` : ""}, notify the site security lead, consider lockdown of the nearest entrances.`, "ver:" + I.id, I.training, true);
+    if (was !== "verified") toast(`Verified intrusion — zone ${I.zone}`, `${P.code}: ${I.why[0]}`, "var(--red)"); } }
+setInterval(() => { const now = Date.now(); let ch = false; PM.inc.filter(i => !i.closed && i.level === "checking" && now - i.start > CFG.perim.confirmSec * 1000).forEach(I => { const P = pmSite(I.site); if (!P) return; ch = true;
+    const wx = pmWx(I.site), n24 = PM.inc.filter(i => i.site === I.site && i.zone === I.zone && i.level === "unverified" && now - i.start < 864e5).length, why = [], t0 = I.hits[0].type, forced = I.hits.some(h => h.kind === "forced"), track = I.hits.every(h => h.kind === "track");
+    if (forced) why.push("gate forced open but no one seen — possible lock or contact fault, or someone outside camera view; call the site");
+    else if (track) why.push("someone or something approached, but nothing reached the fence; keep the camera on the approach");
+    else if (wx && wx.gust >= CFG.perim.windKmh && ["fence", "fibre", "beam"].includes(t0)) why.push(`wind gusting ${Math.round(wx.gust)} km/h at the site${wx.sim ? " (training)" : ""} — fence sensors pick up wind`);
+    if (!forced && !track && wx && wx.rain >= CFG.perim.rainMm) why.push(`heavy rain ${wx.rain.toFixed(1)} mm/h at the site`);
+    if (n24 >= CFG.perim.nuisance24 - 1) why.push(`zone ${I.zone} has raised ${n24 + 1} unverified alarms in 24 h — likely nuisance; schedule a sensitivity check`);
+    if (!why.length && t0 === "thermal") why.push(`the camera saw a ${I.hits[0].object || "person"} near the fence but no fence sensor triggered — watch the camera; it may be someone passing outside`);
+    if (!why.length) why.push("only one sensor type responded and the camera saw nothing — possible animal, debris or a fault; check the camera recording");
+    I.level = "unverified"; I.why = [`${PM_T[I.hits[0].type][0]} alone, not confirmed within ${CFG.perim.confirmSec} s`].concat(why);
+    pmAction(P, I.zone, forced ? "P2" : "P3", forced ? `Gate forced, not confirmed — ${P.code} zone ${I.zone}` : track ? `Approach detected by radar — ${P.code} zone ${I.zone}` : `Unverified perimeter alarm — ${P.code} zone ${I.zone}`, I.why.join("; ") + ". Review the camera covering the zone; send a guard if in doubt.", "unv:" + I.id, I.training); });
+  // automatic heartbeats for simulated example devices
+  Object.values(PM.sites).forEach(P => P.devices.forEach(d => { if (d.sim && d.state !== "fault" && !d.simOff && now - d.lastSeen > 50e3) d.lastSeen = now; }));
+  if (ch){ pmSave(); pmRedraw(); } }, 2000);
+function pmAction(P, zone, pri, title, detail, key, training, loud){ const T = training ? " (TRAINING)" : "";
+  enqueueAction({ srcKey: "pm:" + P.code + ":" + key, source: "Perimeter", pri, title: title + T, detail, site: P.code, suggested: pri === "P1" ? ["escalate", "notify"] : ["monitor", "escalate"],
+    payload: { cat: "operational_security", sev: pri === "P1" ? "P1" : pri === "P2" ? "P2" : "P3", desc: `${P.code} | Perimeter | ${title}${T}`.slice(0, 200), sites: [P.code], src: "pm:" + key } });
+  if (loud && typeof attention === "function") attention(title + T, detail, () => setMode("perimeter")); audit("Perimeter alarm", title + T, detail.slice(0, 160)); }
+/* ---------- training scenarios ---------- */
+const PM_SCEN = {
+  climb: ["Fence climb (verified)", "N2", [[0, "FV-N2", "alarm"], [8, "TC-N", "detect", { object: "person", zone: "N2" }], [14, "MW-N", "alarm", { zone: "N2" }]]],
+  wind: ["Wind on the east fence (unverified)", "E1", [[0, "FV-E1", "alarm"], [0, "@wind"], [25, "FV-E2", "alarm"]]],
+  cut: ["Fence cut (tamper, then verified)", "W1", [[0, "FV-W1", "tamper"], [4, "FV-W1", "alarm"], [20, "TC-W", "detect", { object: "person", zone: "W1" }]]],
+  gate: ["Vehicle gate forced (verified)", "S1", [[0, "GT-V", "forced"], [6, "TC-S", "detect", { object: "car", zone: "S1" }]]],
+  approach: ["Radar track, then fence (verified)", "S2", [[0, "RD-S", "track", { zone: "S2", detail: "Person approaching from 180 m, walking" }], [22, "FV-S2", "alarm"]]],
+  offline: ["Sensor offline (degraded zone)", "S2", [[0, "FV-S2", "fault", { detail: "No heartbeat — power or network lost" }]]] };
+function pmRun(key){ const P = pmSite(); if (!P) return; const [name, , steps] = PM_SCEN[key]; PM.training = true; PM.simWind = null; PM.timers.forEach(clearTimeout); PM.timers = [];
+  toast("Training: " + name, `${P.code} — events arrive over the next ${Math.max(...steps.map(s => s[0])) + 5} s. Training alarms are marked TRAINING.`, "var(--teal)"); audit("Perimeter training scenario", name, P.code);
+  steps.forEach(([t, dev, kind, extra]) => PM.timers.push(setTimeout(() => { if (dev === "@wind"){ PM.simWind = { site: P.code, gust: 58, until: Date.now() + 15 * 60e3 }; return; }
+      pmIngest(Object.assign({ site: P.code, device: dev, kind, training: true }, extra || {})); }, t * 1000)));
+  PM.timers.push(setTimeout(() => { PM.training = false; }, (Math.max(...steps.map(s => s[0])) + CFG.perim.confirmSec + 5) * 1000)); }
+/* ---------- the panel ---------- */
+{ const g = G("secops"); if (g && !g.tabs.some(t => t[0] === "perimeter")){ const i = g.tabs.findIndex(t => t[0] === "drones"); g.tabs.splice(i >= 0 ? i + 1 : g.tabs.length, 0, ["perimeter", "Perimeter"]); } }
+KEYS.perimeter = ["PERIMETER", [[3, "verified intrusion / tamper"], [2, "alarm being checked / unverified"], [1, "sensor offline"]], "Fence zones, perimeter sensors and their alarms, correlated per zone; health checks and the guard's perimeter check"];
+NON_CITY_MODES.push("perimeter"); if (!FULLW.includes("perimeter")) FULLW.push("perimeter");
+const PMV = { map: { host: null, map: null, layers: null } };
+function pmChecks(P){ const now = Date.now(), out = [];
+  P.devices.filter(d => pmOffline(d) && d.type !== "light").forEach(d => out.push(["bad", `${d.name} is offline`, `Zone ${d.zones.join(", ")} has lost a layer — compensating patrol until repaired`]));
+  P.devices.filter(d => d.type === "light" && d.state === "fault").forEach(d => out.push(["warn", `${d.name} has failed`, "Cameras see less at night along these zones"]));
+  P.devices.filter(d => now - (d.lastTest || 0) > CFG.perim.walkDays * 864e5).forEach(d => out.push(["warn", `Walk test due: ${d.name}`, `Last tested ${Math.round((now - d.lastTest) / 864e5)} days ago (every ${CFG.perim.walkDays} days)`]));
+  P.zones.forEach(z => { const det = new Set(pmDevZone(P, z.id).filter(d => PM_T[d.type][2] === "detect").map(d => d.type)), cam = pmDevZone(P, z.id, "thermal").length;
+    if (!cam) out.push(["bad", `Zone ${z.id} has no camera`, "Alarms there can't be checked by the PSOC — they will stay unverified"]);
+    else if (det.size < 2) out.push(["info", `Zone ${z.id}: one detection layer (${[...det].map(t => PM_T[t][0].toLowerCase()).join("") || "none"}) + camera`, "Verification relies on the camera analytics"]);
+    const n = PM.inc.filter(i => i.site === P.code && i.zone === z.id && i.level === "unverified" && now - i.start < 7 * 864e5).length; if (n >= CFG.perim.nuisance24) out.push(["warn", `Zone ${z.id}: ${n} unverified alarms in 7 days`, "Nuisance-prone — check sensor sensitivity, vegetation and fence tension"]); });
+  const last = PM.checks.find(c => c.site === P.code); if (!last || now - last.at > CFG.perim.patrolHours * 36e5) out.push(["warn", "Guard perimeter check due", last ? `Last done ${ago(last.at)} by ${last.by}` : "Not done yet"]);
+  return out; }
+function perimeterPanel(){ const codes = Object.keys(PM.sites), code = UI.pmSite && SITES.find(s => s.code === UI.pmSite) ? UI.pmSite : codes[0] || (SITES.find(s => isLive(s) && !isOffice(s)) || {}).code; UI.pmSite = code; const P = pmSite(code), tab = UI.pmTab || "live";
+  const bar = `<div class="ptools"><span class="label">Perimeter</span><input class="pmsite" list="pmSites" data-pmsite value="${esc(code || "")}" placeholder="site code" aria-label="Site"><datalist id="pmSites">${SITES.filter(s => !isOffice(s)).map(s => `<option value="${esc(s.code)}">${esc(metroOf(s) || s.city || "")}${PM.sites[s.code] ? " · perimeter set up" : ""}</option>`).join("")}</datalist>
+    ${P ? `<span class="innav0">${[["live", "Live"], ["checks", "Checks"], ["design", "Design"], ["connect", "Connect"]].map(([k, l]) => `<button class="tab-mini" data-pmtab="${k}" aria-pressed="${tab === k}">${l}${k === "checks" ? ` (${pmChecks(P).filter(c => c[0] !== "info").length})` : ""}</button>`).join("")}</span>` : ""}<span class="sp"></span>
+    ${P ? `<select data-pmscen aria-label="Training scenario"><option value="">▶ Training scenario…</option>${Object.entries(PM_SCEN).map(([k, v]) => `<option value="${k}">${esc(v[0])}</option>`).join("")}</select>` : ""}</div>`;
+  if (!P) return bar + `<div class="pbody"><div class="empty">No perimeter set up for ${esc(code || "this site")} yet.<div class="acts" style="justify-content:center;margin-top:10px"><button class="act" data-pmex>Create an example perimeter</button></div><div class="s" style="margin-top:8px">The example is a 220 × 150 m compound with eight fence zones, fence sensors, a microwave beam, ground radar, four thermal cameras with analytics, two gates and lighting — all simulated, with training scenarios. Real sensors connect through the PSOC server (Connect tab).</div></div></div>`;
+  const zl = P.zones.map(z => { const [st, col, lab] = pmZoneState(P, z.id), det = pmDevZone(P, z.id).filter(d => d.type !== "light"); return `<div class="pmz" data-pmzone="${z.id}" style="--c:${col}"><b>${z.id}</b><span>${esc(lab)}</span><span class="s">${det.map(d => `<i class="pmdot${pmOffline(d) ? " off" : ""}" style="background:${PM_T[d.type][1]}" title="${esc(d.name)}${pmOffline(d) ? " — offline" : ""}"></i>`).join("")}</span></div>`; }).join("");
+  const incs = PM.inc.filter(i => i.site === code).slice(0, 12).map(i => { const col = { verified: "#E5484D", tamper: "#E5484D", checking: "#F08C3A", unverified: "#E8B04A" }[i.level] || "#8A94A0";
+    return `<div class="pmi${i.closed ? " closed" : ""}" style="--c:${col}"><div class="hd"><b>${esc({ verified: "VERIFIED intrusion", tamper: "Tamper / cut", checking: "Alarm — checking…", unverified: "Unverified alarm" }[i.level])}</b><span class="tag">zone ${esc(i.zone)}</span>${i.training ? `<span class="tag">TRAINING</span>` : ""}<span class="s" style="margin-left:auto">${esc(ago(i.start))}</span></div>
+      <div class="pmhits">${i.hits.map(h => `<span title="${esc(new Date(h.at).toLocaleTimeString())}"><i style="background:${PM_T[h.type][1]}"></i>${esc(h.dev)} ${esc(h.kind)}${h.object ? " (" + esc(h.object) + ")" : ""} +${Math.round((h.at - i.start) / 1000)}s</span>`).join("")}</div>
+      ${i.why && i.why.length ? `<div class="s">${i.why.map(esc).join(" · ")}</div>` : `<div class="s">Waiting up to ${CFG.perim.confirmSec} s for a second sensor or the camera to confirm…</div>`}
+      ${!i.closed ? `<div class="acts"><button class="act" data-pmclose="${i.id}" data-v="false">False alarm</button><button class="act" data-pmclose="${i.id}" data-v="checked">Checked — clear</button><button class="act warn" data-pmclose="${i.id}" data-v="dispatched">Guard dispatched</button></div>` : `<div class="s">Closed: ${esc(i.closed)} — ${esc(i.by || "")}, ${esc(ago(i.closedAt))}</div>`}</div>`; }).join("") || `<div class="s">No alarms. Try a training scenario (top right).</div>`;
+  let body = "";
+  if (tab === "live") body = `<div class="pmgrid"><div class="pmmapwrap"><div id="pmmap" class="pmmap"></div><div class="pmleg">${Object.entries(PM_T).map(([k, v]) => `<span><i style="background:${v[1]}"></i>${esc(v[0])}</span>`).join("")}</div></div>
+      <div class="pmside"><div class="sec" style="margin-top:0">Zones</div><div class="pmzl">${zl}</div><div class="sec">Alarms</div>${incs}</div></div>`;
+  if (tab === "checks"){ const ch = pmChecks(P), last = PM.checks.filter(c => c.site === code).slice(0, 5);
+    body = `<div class="pmcols"><div><div class="sec" style="margin-top:0">Automatic checks</div>${ch.map(([lv, t, s]) => `<div class="pmck ${lv}"><b>${esc(t)}</b><div class="s">${esc(s)}</div></div>`).join("") || `<div class="s">All clear.</div>`}
+      <div class="acts" style="margin-top:8px"><button class="act" data-pmwalk>Record walk tests done today…</button></div></div>
+      <div><div class="sec" style="margin-top:0">Guard perimeter check</div><p class="help">Every ${CFG.perim.patrolHours} h a guard walks the fence and records each zone. Problems become actions; the result can go into the Daily Shift Report.</p>
+      <button class="act" data-pmpatrol>Start perimeter check</button>${last.map(c => `<div class="pmck ${c.issues ? "warn" : "ok"}"><b>${esc(ago(c.at))} — ${esc(c.by)}</b><div class="s">${c.issues ? c.issues + " issue(s): " + Object.entries(c.res).filter(([, r]) => !r.ok).map(([z, r]) => `${z} ${r.issue}${r.note ? " (" + r.note + ")" : ""}`).map(esc).join("; ") : "All zones OK"}</div></div>`).join("")}</div></div>`; }
+  if (tab === "design"){ const layers = ["fence", "beam", "radar", "thermal", "gate", "light"];
+    body = `<p class="help">Which layer covers each zone. Good practice is two independent ways to detect and one way to see (assess) every zone, so an alarm can be verified from the PSOC.</p>
+      <div class="olscroll"><table class="pmtab"><thead><tr><th>Zone</th>${layers.map(l => `<th>${esc(PM_T[l][0])}</th>`).join("")}<th>Layers</th></tr></thead><tbody>${P.zones.map(z => { const ds = pmDevZone(P, z.id), det = new Set(ds.filter(d => PM_T[d.type][2] === "detect").map(d => d.type)).size, cam = ds.some(d => d.type === "thermal");
+        return `<tr><td><b>${z.id}</b> <span class="s">${Math.round(pmDist(z.a, z.b))} m</span></td>${layers.map(l => { const x = ds.filter(d => d.type === l || (l === "fence" && d.type === "fibre")); return `<td>${x.map(d => `<span class="pmchip${pmOffline(d) && d.type !== "light" ? " off" : ""}">${esc(d.id)}</span>`).join(" ") || `<span class="s">—</span>`}</td>`; }).join("")}<td class="${det >= 2 && cam ? "ok" : !cam ? "bad" : "warn"}">${det} detect · ${cam ? "camera" : "no camera"}</td></tr>`; }).join("")}</tbody></table></div>
+      <div class="sec">Devices (${P.devices.length})</div><div class="pmdevs">${P.devices.map(d => `<div class="pmdev"><i style="background:${PM_T[d.type][1]}"></i><b>${esc(d.id)}</b> ${esc(d.name)} <span class="s">zones ${esc(d.zones.join(", "))} · ${pmOffline(d) ? "offline" : "online"} · tested ${esc(ago(d.lastTest))}${d.sim ? " · simulated" : ""}</span>${d.sim ? `<button class="tab-mini" data-pmtoggle="${esc(d.id)}">${d.state === "fault" ? "Bring back" : "Fail"}</button>` : ""}</div>`).join("")}</div>
+      <div class="acts" style="margin-top:10px"><button class="act" data-pmbypass>Bypass a zone for maintenance…</button><button class="act" data-pmdel>Remove this perimeter</button></div>`; }
+  if (tab === "connect") body = `<div class="pmcols"><div><div class="sec" style="margin-top:0">Events from your perimeter system</div><p class="help">The perimeter system (fence and fibre controllers, radar, the VMS's camera analytics, OnGuard for gates) sends events to the PSOC server, which forwards them here. One JSON object per event:</p>
+      <pre class="pmpre">{ "site": "${esc(code)}", "device": "FV-N2", "kind": "alarm",
+  "zone": "N2", "at": "2026-10-17T14:02:11Z",
+  "object": "person", "detail": "free text" }</pre><p class="help"><b>kind</b>: alarm · detect (camera analytics; object = person / vehicle) · tamper · forced · held (gates) · track (radar) · fault · restore · heartbeat. Devices that send no heartbeat for ${CFG.perim.offlineMin} min are shown offline.</p>
+      <label class="fld">Test: paste events (one JSON object or a list)<textarea id="pmJ" rows="5" placeholder='[{"device":"FV-N1","kind":"alarm"},{"device":"TC-N","kind":"detect","object":"person","zone":"N1"}]'></textarea></label><button class="act" data-pmpaste>Send to this site</button></div>
+      <div><div class="sec" style="margin-top:0">Your devices</div><p class="help">Import the device list (CSV: id, type, name, zones separated by |, latitude, longitude). Types: ${Object.keys(PM_T).join(", ")}. Draw your real fence on the map first (Live tab, ✎ Draw fence) — zones are made every 120 m.</p>
+      <label class="tab-mini rpup">Import devices (CSV)<input type="file" accept=".csv,text/csv" data-pmcsv hidden></label>
+      <div class="sec">Settings</div><div class="fgrid3"><label class="fld">Confirm within (s)<input type="number" min="10" max="300" data-pmcfg="confirmSec" value="${CFG.perim.confirmSec}"></label><label class="fld">Offline after (min)<input type="number" min="1" max="60" data-pmcfg="offlineMin" value="${CFG.perim.offlineMin}"></label><label class="fld">Walk test every (days)<input type="number" min="7" max="365" data-pmcfg="walkDays" value="${CFG.perim.walkDays}"></label>
+      <label class="fld">Guard check every (h)<input type="number" min="1" max="48" data-pmcfg="patrolHours" value="${CFG.perim.patrolHours}"></label><label class="fld">Wind gusts that explain alarms (km/h)<input type="number" min="10" max="150" data-pmcfg="windKmh" value="${CFG.perim.windKmh}"></label><label class="fld">Nuisance: unverified alarms per zone<input type="number" min="2" max="50" data-pmcfg="nuisance24" value="${CFG.perim.nuisance24}"></label></div></div></div>`;
+  return bar + `<div class="pbody">${P.example ? `<div class="banner ok" style="margin:0 0 8px">Example perimeter — devices are simulated. Run a training scenario to see how alarms are verified.</div>` : ""}${body}</div>`; }
+function pmDraw(){ const slot = $("#pmmap"), P = pmSite(); if (!slot || !P) return; const st = PMV.map, b = L.latLngBounds(P.fence.concat(P.devices.map(d => d.ll)));
+  const m = keepMap(st, slot, b.getCenter(), 17); if (!m) return; if (st.code !== P.code){ st.code = P.code; m.fitBounds(b.pad(.35)); }
+  if (!st.base){ st.base = satLayer(SAT_SRC.hires.def).addTo(m); }
+  if (!st.drawBtn){ st.drawBtn = L.control({ position: "topright" }); st.drawBtn.onAdd = () => { const d = L.DomUtil.create("div", "pmctl"); d.innerHTML = `<button data-pmdraw>✎ Draw fence</button>`; L.DomEvent.disableClickPropagation(d); return d; }; st.drawBtn.addTo(m); }
+  st.layers.clearLayers();
+  P.devices.filter(d => d.type === "thermal").forEach(d => L.polygon(pmWedge(d.ll, d.dir || 0, d.half || 20, d.range || 140), { color: "#5B9BD5", weight: 1, fillOpacity: .1, interactive: false }).addTo(st.layers));
+  P.devices.filter(d => d.type === "radar").forEach(d => L.polygon(pmWedge(d.ll, d.dir || 180, 70, d.range || 220), { color: "#4FC4BE", weight: 1, dashArray: "4 4", fillOpacity: .06, interactive: false }).addTo(st.layers));
+  P.zones.forEach(z => { const [stt, col, lab] = pmZoneState(P, z.id), hot = ["verified", "tamper", "checking"].includes(stt);
+    L.polyline([z.a, z.b], { color: col, weight: hot ? 9 : 6, opacity: .95, className: hot ? "pmhot" : "" }).bindTooltip(`<b>Zone ${z.id}</b> — ${esc(lab)}<br>${pmDevZone(P, z.id).map(d => esc(d.id)).join(", ")}`, { sticky: true }).addTo(st.layers);
+    L.marker(pmMid(z), { icon: L.divIcon({ className: "pmlab", html: `<span style="border-color:${col}">${z.id}</span>`, iconSize: [30, 16], iconAnchor: [15, 8] }), interactive: false }).addTo(st.layers); });
+  P.devices.forEach(d => L.circleMarker(d.ll, { radius: d.type === "thermal" || d.type === "radar" ? 6 : 4, color: pmOffline(d) && d.type !== "light" ? "#B08CE0" : "#111", weight: pmOffline(d) ? 3 : 1, fillColor: PM_T[d.type][1], fillOpacity: 1 })
+    .bindTooltip(`<b>${esc(d.id)}</b> ${esc(d.name)}<br>${esc(PM_T[d.type][0])} · zones ${esc(d.zones.join(", "))}${pmOffline(d) ? "<br><b>offline</b>" : ""}`).addTo(st.layers));
+  const s = SITES.find(x => x.code === P.code); if (s) L.circleMarker([s.lat, s.lon], { radius: 7, color: "#fff", weight: 2, fillColor: "#2F7BD9", fillOpacity: 1 }).bindTooltip(`<b>${esc(s.code)}</b> building`).addTo(st.layers);
+  PM.inc.filter(i => i.site === P.code && !i.closed).forEach(i => i.hits.filter(h => h.kind === "track").forEach(h => { const r = P.devices.find(d => d.id === h.dev); if (!r) return; const z = P.zones.find(x => x.id === i.zone), tgt = z ? pmMid(z) : r.ll, far = pmLerp(r.ll, tgt, -1.6);
+    L.polyline([far, pmLerp(far, tgt, .7)], { color: "#4FC4BE", weight: 3, dashArray: "2 6" }).bindTooltip("Radar track").addTo(st.layers); })); }
+function pmRedraw(){ if (UI.mode !== "perimeter" || $("#ov.show")) return; const a = document.activeElement; if (a && a.closest && a.closest("#panel") && a.matches("input,textarea,select")) return; renderPanel(); }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "perimeter") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
+    p.innerHTML = perimeterPanel(); if ((UI.pmTab || "live") === "live") setTimeout(pmDraw, 20); }; }
+// drawing a real fence: click the corners, finish on the first point or with "Done"
+function pmStartDraw(){ const m = PMV.map.map; if (!m) return; const pts = [], ln = L.polyline([], { color: "#fff", dashArray: "6 6" }).addTo(m); toast("Draw the fence", "Click each corner in order; click the first corner again to finish (at least 3 corners).", "var(--teal)");
+  const fin = () => { m.off("click", on); ln.remove(); if (pts.length < 3) return; const code = UI.pmSite, old = PM.sites[code];
+    PM.sites[code] = { code, example: false, fence: pts, zones: pmZones(pts, 120), devices: old && !old.example ? old.devices : [], bypass: {}, createdAt: Date.now() }; pmSave(); audit("Perimeter fence drawn", code, pts.length + " corners"); renderPanel(); };
+  const on = e => { const p = [e.latlng.lat, e.latlng.lng]; if (pts.length >= 3 && pmDist(p, pts[0]) < 12){ fin(); return; } pts.push(p); ln.setLatLngs(pts); }; m.on("click", on); }
+document.getElementById("panel").addEventListener("click", async e => { if (UI.mode !== "perimeter") return; const t = e.target.closest("button,[data-pmzone]"); if (!t) return; const d = t.dataset, P = pmSite();
+  if (d.pmtab){ UI.pmTab = d.pmtab; saveUI(); renderPanel(); return; }
+  if (d.pmex !== undefined){ PM.sites[UI.pmSite] = pmExample(UI.pmSite); pmSave(); audit("Example perimeter created", UI.pmSite, ""); renderPanel(); return; }
+  if (d.pmdraw !== undefined){ pmStartDraw(); return; }
+  if (d.pmzone && PMV.map.map && P){ const z = P.zones.find(x => x.id === d.pmzone); if (z) PMV.map.map.fitBounds(L.latLngBounds([z.a, z.b]).pad(1.2)); return; }
+  if (d.pmclose){ const i = PM.inc.find(x => x.id === d.pmclose); if (i){ i.closed = { false: "False alarm", checked: "Checked — clear", dispatched: "Guard dispatched" }[d.v]; i.by = ME ? ME.name : ""; i.closedAt = Date.now(); audit("Perimeter alarm closed", `${i.site} zone ${i.zone}`, i.closed); pmSave(); renderPanel(); } return; }
+  if (d.pmtoggle && P){ const x = P.devices.find(y => y.id === d.pmtoggle); if (x){ if (x.state === "fault"){ x.state = "ok"; x.simOff = false; x.lastSeen = Date.now(); } else pmIngest({ site: P.code, device: x.id, kind: "fault", detail: "Failed by hand (test)" }); pmSave(); renderPanel(); } return; }
+  if (d.pmdel !== undefined && P && await confirmBox("Remove this perimeter?", P.code)){ delete PM.sites[P.code]; PM.inc = PM.inc.filter(i => i.site !== P.code); pmSave(); renderPanel(); return; }
+  if (d.pmpaste !== undefined && P){ let n = 0; try{ const j = JSON.parse($("#pmJ").value); (Array.isArray(j) ? j : [j]).slice(0, 100).forEach(x => { if (x && typeof x === "object" && typeof x.device === "string"){ pmIngest({ site: P.code, device: x.device, kind: String(x.kind || "alarm"), zone: typeof x.zone === "string" ? x.zone : undefined, object: typeof x.object === "string" ? x.object.slice(0, 30) : undefined, detail: typeof x.detail === "string" ? x.detail.slice(0, 200) : undefined }); n++; } }); toast(n + " event(s) sent", "See the Live tab", "var(--green)"); }catch(err){ toast("Not valid JSON", err.message, "var(--red)"); } return; }
+  if (d.pmwalk !== undefined && P){ openModal(head("Walk tests done today") + `<div class="bd"><p class="help">Tick the devices that were tested and alarmed correctly.</p><div class="chklist">${P.devices.map(x => `<label class="chkline"><input type="checkbox" value="${esc(x.id)}"> ${esc(x.id)} — ${esc(x.name)} <span class="s">(last ${esc(ago(x.lastTest))})</span></label>`).join("")}</div></div><div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="pmWg">Save</button></div>`, true);
+    $("#pmWg").onclick = () => { const ids = $$("#box .chklist input:checked").map(i => i.value); P.devices.forEach(x => { if (ids.includes(x.id)) x.lastTest = Date.now(); }); pmSave(); audit("Perimeter walk tests recorded", P.code, ids.join(", ")); $("#ov").classList.remove("show"); renderPanel(); }; return; }
+  if (d.pmbypass !== undefined && P){ openModal(head("Bypass a zone") + `<div class="bd"><div class="fgrid"><label class="fld">Zone<select id="pmBz">${P.zones.map(z => `<option>${z.id}</option>`).join("")}</select></label><label class="fld">For (hours)<input id="pmBh" type="number" min="0" max="72" value="4"></label></div><p class="help">Alarms from a bypassed zone are logged but ignored. Use 0 to end a bypass. A compensating patrol is expected while bypassed.</p></div><div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="pmBg">Save</button></div>`);
+    $("#pmBg").onclick = () => { const z = $("#pmBz").value, h = +$("#pmBh").value || 0; P.bypass = P.bypass || {}; if (h) P.bypass[z] = Date.now() + h * 36e5; else delete P.bypass[z]; pmSave(); audit("Perimeter zone bypass", `${P.code} ${z}`, h ? h + " h" : "ended"); $("#ov").classList.remove("show"); renderPanel(); }; return; }
+  if (d.pmpatrol !== undefined && P){ const iss = ["OK", "Fence damaged", "Gap / hole / dig-under", "Vegetation touching fence", "Lighting out", "Object near fence", "Gate not secure"];
+    openModal(head(`Perimeter check — ${P.code}`) + `<div class="bd"><div class="pmpat">${P.zones.map(z => `<div class="pmprow" data-pz="${z.id}"><b>${z.id}</b><select>${iss.map(x => `<option>${x}</option>`).join("")}</select><input placeholder="note (optional)"></div>`).join("")}</div></div><div class="ft"><label class="ctl" style="margin-right:auto"><input type="checkbox" id="pmPd" checked> Add to today's Daily Shift Report</label><button class="pill" data-x>Cancel</button><button class="pill primary" id="pmPg">Save check</button></div>`, true);
+    $("#pmPg").onclick = () => { const res = {}; $$("#box .pmprow").forEach(r => { const v = r.querySelector("select").value; res[r.dataset.pz] = { ok: v === "OK", issue: v === "OK" ? "" : v, note: r.querySelector("input").value.trim().slice(0, 200) }; });
+      const bad = Object.entries(res).filter(([, r]) => !r.ok), c = { at: Date.now(), site: P.code, by: ME ? ME.name : "", res, issues: bad.length }; PM.checks.unshift(c); pmSave();
+      bad.forEach(([z, r]) => pmAction(P, z, "P3", `Perimeter check: ${r.issue} — ${P.code} zone ${z}`, `Found on the guard's perimeter check${r.note ? ": " + r.note : ""}. Arrange repair; patrol the zone until fixed.`, "chk:" + c.at + ":" + z, false));
+      if ($("#pmPd").checked && typeof dsrCur === "function"){ const R = dsrCur(); R.sec.obs.push({ id: nid("i"), src: "pmchk:" + c.at, loc: P.code, cat: "Security Posture", status: bad.length ? "Monitoring" : "Closed", title: "PERIMETER CHECK", text: bad.length ? `Perimeter check of ${P.zones.length} zones completed by ${c.by}; ${bad.length} issue(s): ${bad.map(([z, r]) => `${z} ${r.issue.toLowerCase()}${r.note ? " (" + r.note + ")" : ""}`).join("; ")}. Repairs requested.` : `Perimeter check of ${P.zones.length} zones completed by ${c.by}; no issues.` }); dsrSave(); }
+      audit("Perimeter check recorded", P.code, bad.length + " issue(s)"); $("#ov").classList.remove("show"); toast("Perimeter check saved", bad.length ? bad.length + " issue(s) sent to the Action queue" : "All zones OK", bad.length ? "var(--amber)" : "var(--green)"); renderPanel(); }; return; } });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "perimeter") return; const t = e.target, d = t.dataset;
+  if (d.pmsite !== undefined){ const v = t.value.trim().toUpperCase(); if (SITES.find(s => s.code === v)){ UI.pmSite = v; saveUI(); renderPanel(); } return; }
+  if (d.pmscen !== undefined && t.value){ pmRun(t.value); UI.pmTab = "live"; saveUI(); renderPanel(); return; }
+  if (d.pmcfg){ CFG.perim[d.pmcfg] = Math.max(+t.min || 0, Math.min(+t.max || 1e9, +t.value || CFG.perim[d.pmcfg])); saveCfg(); return; }
+  if (d.pmcsv !== undefined && t.files[0]){ const P = pmSite(); if (!P) return; t.files[0].text().then(txt => { let n = 0; txt.split(/\r?\n/).slice(1).forEach(line => { const c = line.split(",").map(x => x.trim().replace(/^"|"$/g, "")); if (c.length < 4 || !PM_T[c[1]]) return;
+        const zs = c[3].split("|").map(x => x.trim()).filter(z => P.zones.some(q => q.id === z)); if (!zs.length) return; const lat = +c[4], lon = +c[5], ll = isFinite(lat) && isFinite(lon) && lat && lon ? [lat, lon] : pmMid(P.zones.find(q => q.id === zs[0]));
+        const dv = { id: c[0].slice(0, 30), type: c[1], name: (c[2] || c[0]).slice(0, 80), zones: zs, ll, lastSeen: 0, lastTest: 0, state: "ok" }; if (dv.type === "thermal"){ const z = P.zones.find(q => q.id === zs[0]); dv.dir = pmBear(ll, pmMid(z)); dv.range = 140; }
+        P.devices = P.devices.filter(x => x.id !== dv.id).concat(dv); n++; }); pmSave(); toast(n + " device(s) imported", "They show offline until their first heartbeat arrives", "var(--teal)"); renderPanel(); }); } });
+document.addEventListener("click", e => { if (e.target.closest("[data-pmdraw]")) pmStartDraw(); });
+{ const st = document.createElement("style"); st.textContent = `
+.pmsite{width:120px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:13px var(--font);text-transform:uppercase}
+.ptools select[data-pmscen]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:13px var(--font)}
+.pmgrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px;align-items:start}.pmmapwrap{position:relative}.pmmap{position:relative;height:calc(100vh - 290px);min-height:420px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.pmleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted);margin-top:6px}.pmleg i,.pmhits i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.pmside{max-height:calc(100vh - 260px);overflow:auto}.pmzl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.pmz{border:1px solid var(--line);border-left:5px solid var(--c);border-radius:6px;padding:5px 8px;display:flex;flex-direction:column;cursor:pointer;font-size:12.5px}
+.pmdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}.pmdot.off{outline:2px solid #B08CE0;opacity:.5}
+.pmi{border:1px solid var(--line);border-left:5px solid var(--c);border-radius:8px;padding:8px 10px;margin:6px 0;display:flex;flex-direction:column;gap:4px}.pmi.closed{opacity:.6}.pmi .hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pmhits{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px}.pmcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.pmck{border-left:4px solid var(--line);padding:5px 9px;margin:5px 0;background:var(--panel);border-radius:4px}
+.pmck.bad{border-left-color:var(--red)}.pmck.warn{border-left-color:#E8B04A}.pmck.ok{border-left-color:var(--green)}.pmck.info{border-left-color:#5B9BD5}
+.pmtab{width:100%;border-collapse:collapse;font-size:12.5px}.pmtab th,.pmtab td{text-align:left;padding:5px 7px;border-bottom:1px solid var(--line)}.pmtab td.ok{color:var(--green)}.pmtab td.warn{color:#D69E2E}.pmtab td.bad{color:var(--red);font-weight:700}
+.pmchip{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:0 6px;font-size:11.5px}.pmchip.off{border-color:#B08CE0;color:#B08CE0}
+.pmdevs{display:flex;flex-direction:column;gap:4px}.pmdev{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px}.pmdev i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.pmpre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;overflow:auto}.pmpat{display:flex;flex-direction:column;gap:6px}.pmprow{display:grid;grid-template-columns:40px 220px 1fr;gap:8px;align-items:center}
+.pmlab span{display:inline-block;background:rgba(10,15,18,.8);color:#fff;border:2px solid;border-radius:4px;font:700 10.5px var(--font);padding:0 3px}.pmhot{animation:pmblink 1s infinite}@keyframes pmblink{50%{opacity:.35}}
+.pmctl button{background:#16242B;color:#EEF3F5;border:1px solid #2C3D45;border-radius:6px;padding:5px 9px;font:600 12.5px var(--font);cursor:pointer}
+@media (max-width:1100px){.pmgrid,.pmcols{grid-template-columns:1fr}.pmmap{height:55vh}.pmside{max-height:none}}@media (max-width:760px){.pmprow{grid-template-columns:34px 1fr}.pmprow input{grid-column:1/-1}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>

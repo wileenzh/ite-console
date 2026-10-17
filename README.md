@@ -45,6 +45,18 @@ probabilities can be read from the PSOC server or an imported JSON file and repl
 exist. Weeks with high odds of an extreme week are listed under "Weeks to watch" and can be added to the Daily Shift
 Report.
 
+## Perimeter (Security Operations › Perimeter)
+
+A site's fence as zones (drawn on the satellite map, a zone every 120 m) and the sensors that watch each zone: fence
+vibration or fibre, microwave beams, ground radar, thermal cameras with analytics, gates (OnGuard) and lighting.
+Alarms are correlated per zone: two independent sensor types within 60 s is a **verified intrusion** (P1); one type
+alone is **unverified** (P3) with the likely cause — wind gusts or heavy rain at the site right now, a nuisance-prone
+zone, a camera seeing someone outside — and tamper/cut is P2. **Checks**: sensors offline, walk tests due, zones with a
+single layer or no camera, nuisance-prone zones, and the guard's zone-by-zone perimeter check (issues become actions;
+the result can go into the Daily Shift Report). **Design** shows which layer covers each zone. **Connect** gives the
+JSON event format the PSOC server forwards from the perimeter system, and a device-list import. An example perimeter
+with simulated devices and six training scenarios can be created for any site.
+
 ## Camera analytics: the vision pipeline (BAU Operations › Camera analytics)
 
 Every frame goes through five stages, shown live per camera: **image acquisition** (source, resolution, frame rate,
