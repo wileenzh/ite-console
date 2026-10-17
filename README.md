@@ -48,12 +48,14 @@ Report.
 ## Camera analytics: the vision pipeline (BAU Operations › Camera analytics)
 
 Every frame goes through five stages, shown live per camera: **image acquisition** (source, resolution, frame rate,
-gaps), **image processing** (brightness, contrast, noise and sharpness; dim, flat or noisy pictures are brightened,
-contrast-stretched and smoothed before analysis — switchable per camera in its rules), **feature extraction** (motion,
-edges, colour; a sharpness baseline per camera raises a tamper alarm when the lens is smeared or out of focus),
+gaps), **image processing** (brightness, contrast, noise and sharpness; dim or flat pictures are level-stretched on screen,
+while the analysis keeps the original frame), **feature extraction** (motion, edges, colour; checks against each
+camera's own normal raise tamper alarms for a smeared or out-of-focus lens, a moved camera and a frozen picture),
 **model analysis** (COCO-SSD people, vehicle and bag detection with its speed and confidence) and **decision** (every
 rule with its current value against its threshold, and the alarms raised into triage). Behaviour only: faces are not
 identified or matched.
+
+"▶ Test videos" runs one or more video clips as test cameras for the session (they are not kept).
 
 ## Reports (Response › Reports)
 
