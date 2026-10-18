@@ -59,6 +59,29 @@ Threat Brief, Daily Shift Report, spot reports, the shift handover, anything sen
 products, incident reports, briefings), incident summaries, volcano briefs, the weekly alarm categories table and the
 executive weekly snapshot. Event notices keep their prescribed notice format.
 
+## Threat reports, dashboards and sending (Threat Intelligence › Briefs & templates)
+
+Fourteen reports are written from the console's data: Threat Intelligence Summary, Weekly Threat Roll-up, Site
+Threat Assessment (any site), Ops Intelligence Brief, Cyber Threat Brief, Ransomware & Supplier Risk, Exploited
+Vulnerabilities (with EPSS), Microsoft Defender Incidents, Internet & Power, Civil Unrest Outlook, Natural Hazards,
+Travel Risk, Physical Security (perimeter and camera analytics) and Indicators of Compromise. Each has a report
+number, period, distribution and next issue; the level; KPI tiles showing the change since the report was last sent;
+key judgements; "what changed"; a dashboard (threat matrix, weekly columns, bars, shares, heat maps — drawn with
+tables so they keep their look in Outlook, Gmail, Teams and print); detail tables; recommended actions with owner and
+deadline; sources and confidence; and method.
+
+**Distribution** is set per report (or one default list): email To / Cc, a Teams channel (its "Get link to channel"
+address), Teams chat people, and a Teams Workflows webhook. One click:
+- **✉ Email** sends straight away from your Microsoft 365 mailbox when you are signed in with Microsoft (Entra app:
+  delegated Mail.Send; through the PSOC server, a sending mailbox). Otherwise Outlook on the web, your mail app or an
+  .eml draft opens with the recipients, and the formatted report is on the clipboard (the .eml already contains it).
+- **💬 Teams** posts an Adaptive Card through the workflow webhook, or a message to the channel (Graph, delegated
+  ChannelMessage.Send), or through the PSOC server. Otherwise Teams opens the channel (summary on the clipboard) or a chat
+  with the people and the summary filled in — Teams links cannot send by themselves, so you press Send.
+
+The Daily Shift Report, spot reports, the Threat overview and anything sent from the console have the same buttons.
+Every send is logged and listed under "Recently sent".
+
 ## Microsoft security (Threat Intelligence)
 
 Microsoft Defender XDR incidents and alerts (and Microsoft Sentinel's, once Sentinel is onboarded to the Defender
