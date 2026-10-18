@@ -13,6 +13,18 @@ This hosted copy runs entirely in your browser:
 Features that need a server (shared data, background monitoring, relaying news sources that browsers block) are
 described in the hosting guide that ships with the full package.
 
+## Channels (Vision Command Centre › Channels)
+
+Monitor-ready views for the PSOC video wall, one facet each, in large type, refreshing by themselves: **Aerial Map**
+(satellite imagery with sites and alerts, touring each alert's impact zone), **Alerts — Summary** and **Alerts — Detail**
+(one alert at a time with sites and people in the zone, rotating), **Assets** (sites at risk now and why, by country),
+**Grid Map** (one map per region side by side), **Incident Communications** (incidents, mass notifications with
+replies, escalation updates due, reports sent), **Montage** (several channels on one screen), **Perimeter & optics**
+(perimeter zones per site and the latest camera pictures) and **Status Board** (threat level by domain, operations,
+systems and feeds, clocks). Show a channel in the tab, full screen, or on another monitor (its own window,
+`#channel=<name>`); set up monitors with one channel or a rotation (`#monitor=<id>`), drag each window onto its screen
+and press F11. The same browser must be signed in. Channels only display; nothing is sent or decided from them.
+
 ## Satellite view and Drone watch (Security Operations)
 
 - **Satellite view**: high-resolution imagery with labels; past imagery (Esri Wayback) with a fade to compare dates;
