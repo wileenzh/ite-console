@@ -40,7 +40,7 @@ from the news (GDELT), matched to site countries and cities, and a register for 
 report. Per country the signals are read together (an internet outage with power-cut news is most likely a power
 problem). Ongoing disruptions and major power cuts near sites go to the Action queue.
 
-## Cyber threats (Intelligence Monitoring)
+## Cyber threats (Threat Intelligence)
 
 Ransomware victims named on leak sites and cyber attacks reported in the press (ransomware.live), for site countries and
 key sectors (technology, telecoms, data and cloud, energy, logistics, facilities); a watchlist of suppliers and
@@ -49,7 +49,17 @@ and matched to the vendors of the sites' security, building and network systems 
 per country from the Internet & power tab. Leak-site pages and screenshots are never opened or shown. ransomware.live's
 free API is for personal use — for company use, request its PRO key under its terms.
 
-## Microsoft security (Intelligence Monitoring)
+## Threat Intelligence (its own tab) and one report template
+
+Threat Intelligence has its own top-level tab: **Threat overview** (operating-environment and cyber levels, key
+judgements, trends), **Cyber threats**, **Microsoft security**, **IOC workbench** and **Briefs & templates**.
+Every PSOC report and brief uses one house template (team line, title and date on a navy band, overall level, key
+judgements, tables, sources and confidence, marking footer): Threat Intelligence Summary, Ops Intelligence Brief, Cyber
+Threat Brief, Daily Shift Report, spot reports, the shift handover, anything sent from the console (repository
+products, incident reports, briefings), incident summaries, volcano briefs, the weekly alarm categories table and the
+executive weekly snapshot. Event notices keep their prescribed notice format.
+
+## Microsoft security (Threat Intelligence)
 
 Microsoft Defender XDR incidents and alerts (and Microsoft Sentinel's, once Sentinel is onboarded to the Defender
 portal) through the Microsoft Graph security API, read-only. Devices, IP addresses and accounts are matched to sites
