@@ -18042,6 +18042,225 @@ document.getElementById("panel").addEventListener("click", e => { if (!["tihome"
 .rptsend{display:flex;flex-direction:column;gap:8px}.rptsend .ctl{font-size:13px}.rpprevh select{margin-left:auto}
 @media (max-width:1100px){.rptgrid{grid-template-columns:1fr}.rptgrid .tilist{max-height:none}}`; document.head.appendChild(st); }
 
+/* =====================================================================
+   ORCHESTRATED PLAYBOOKS (18 Oct) — Response › AI agents › Playbooks
+   Following Microsoft's "orchestrated intelligence" idea: agent-led
+   workflows that connect people, trusted data and the console's systems
+   so each stage feeds the next — signal → context → decision → hunt →
+   report → email / Teams → follow-up → outcome → learning.
+   - Six playbooks: supplier named by ransomware, exploited flaw in our
+     vendor, verified perimeter intrusion, internet / power outage,
+     Defender incident at a site, protest within 1 km of a site.
+   - Agents do the legwork (gather context, prepare the hunt, draft the
+     report with the case in it); people decide, send and close. Autonomy
+     per playbook: Off / Suggest (agent waits for a click) / Prepare
+     (agent steps run themselves). Nothing is sent or decided by an agent.
+   - Every case is timed (detection → decision → report sent → closed);
+     per playbook the median times with and without the playbook, the
+     share of steps done by agents, outcomes, and what to change. Earlier
+     outcomes are shown to the triage agent for the next similar alert.
+   - "Start with one priority workflow": one playbook is the pilot.
+   - Practice runs with invented cases; excluded from the metrics.
+   ===================================================================== */
+const PB_KEY = "psoc.uni.pb.v1", PB = Object.assign({ runs: {} }, lsGet(PB_KEY, {}));
+const pbSave = () => { clearTimeout(pbSave.t); pbSave.t = setTimeout(() => { const keep = Object.values(PB.runs).sort((a, b) => b.t0 - a.t0).slice(0, 300); PB.runs = Object.fromEntries(keep.map(r => [r.id, r])); lsSet(PB_KEY, { runs: PB.runs }); }, 300); };
+CFG.pb = Object.assign({ mode: {}, pilot: "supplier" }, CFG.pb || {});
+const pbMode = k => CFG.pb.mode[k] || "prepare";
+const pbDef = k => PB_DEFS.find(d => d.key === k);
+const pbAct = R => R.aid ? SHARED.actions.find(a => a.id === R.aid) : null;
+const pbLog = (R, m, who) => { R.log.push({ t: Date.now(), m: String(m).slice(0, 300), who: who || (ME ? ME.name : "") }); };
+const pbPrac = t => /TRAINING|PRACTICE/.test(t || "");
+const pbMed = a => { a = a.filter(x => x != null && x >= 0).sort((x, y) => x - y); return a.length ? a[Math.floor((a.length - 1) / 2)] : null; };
+const pbDur = ms => ms == null ? "—" : ms < 60e3 ? Math.max(1, Math.round(ms / 1000)) + " s" : ms < 36e5 ? Math.round(ms / 60e3) + " min" : ms < 864e5 ? (ms / 36e5).toFixed(1) + " h" : (ms / 864e5).toFixed(1) + " d";
+const PB_OUT = ["Real — handled", "No impact", "False alarm", "Duplicate"];
+/* ---------- the steps ---------- */
+const PBS = {
+  ctx: { n: "Gather context", who: "agent", desc: "The agent pulls together what the console knows about this case.", run(R, D){ R.ctx = (D.ctx(R) || []).filter(Boolean).slice(0, 12); return `${R.ctx.length} fact(s) gathered`; } },
+  decide: { n: "Decide", who: "person", desc: "The triage agent proposes a decision; you record it in the Action queue.", done(R){ const a = pbAct(R); return a && a.status !== "pending" && a.decision ? `${DEC[a.decision.kind] ? DEC[a.decision.kind][1] : a.decision.kind} — ${a.decision.by || ""}` : null; } },
+  brief: { n: "Brief site security", who: "person", desc: "The message to the site is ready to copy into chat or email." },
+  hunt: { n: "Prepare the hunt", who: "agent", desc: "Indicators go into the IOC workbench; the Defender hunting query is ready.", run(R, D){ const v = D.ioc ? D.ioc(R) : ""; if (v && typeof ctiAdd === "function"){ ctiAdd(v, "playbook"); return "Into the IOC workbench: " + trunc(v, 120); } return "No indicators to hunt for in this case"; } },
+  draft: { n: "Draft the report", who: "agent", desc: "The report is prepared with this case, its context and the decision at the top.", run(R, D){
+    if (D.spot){ const p = SHARED.protests.find(x => x.id === R.pid); if (p && typeof spotFromProtest === "function" && typeof SPOTS !== "undefined"){ const S = spotFromProtest(p); SPOTS.unshift(S); spotSave(); R.spot = S.id; return "Spot report drafted (Response › Reports › Spot reports)"; } }
+    R.rep = { key: D.report, at: Date.now(), no: rptId(D.report, Date.now()) }; return `${(rptDef(D.report) || {}).title || "Report"} drafted with this case (${R.rep.no})`; } },
+  send: { n: "Send (email + Teams)", who: "person", desc: "One click: email and Teams to this playbook's distribution." },
+  follow: { n: "Follow up", who: "timer", desc: "A reminder comes back when it is due.", done(R, D){ return D.followCheck ? D.followCheck(R) : null; } },
+  close: { n: "Close with the outcome", who: "person", desc: "The outcome is logged, goes into the Daily Shift Report and teaches the next case." } };
+/* ---------- the playbooks ---------- */
+const pbSiteCtx = (code, hours) => { if (!code) return []; const now = Date.now(), h = (hours || 24) * 36e5, s = SITES.find(x => x.code === code), city = s && metroOf(s), out = [];
+  if (s) out.push(`${s.code} · ${s.cls || ""} · ${s.city}${s.country ? ", " + s.country : ""}`);
+  const ev = openEvents().filter(e => (e.sites || []).includes(code)); if (ev.length) out.push(`${ev.length} escalation(s) open at ${code}: ${ev.slice(0, 2).map(e => trunc(e.desc, 60)).join("; ")}`);
+  const cv = (SHARED.cvalerts || []).filter(a => a.site === code && !a.deleted && !a.test && now - a.createdAt < h); if (cv.length) out.push(`${cv.length} camera alarm(s) at ${code} in ${hours || 24} h (${rTop(cv, a => (CV_TYPES[a.type] || [a.type])[0], 2).map(x => x[0].toLowerCase()).join(", ")})`);
+  const pi = (PM.inc || []).filter(i => i.site === code && !i.training && now - i.start < h); if (pi.length) out.push(`${pi.length} perimeter alarm(s) at ${code} in ${hours || 24} h (${pi.filter(i => i.level === "verified").length} verified)`);
+  const pr = SHARED.protests.filter(p => !p.deleted && p.status !== "ended" && p.when && Math.abs(p.when - now) < 48 * 36e5).map(p => ({ p, x: protestSites(p).find(y => y.s.code === code) })).filter(z => z.x && z.x.d < 3000); if (pr.length) out.push(`Protest nearby: ${pr.map(z => `${z.p.title} ${kmTxt(z.x.d / 1000)} away, ${rT(z.p.when)}`).join("; ")}`);
+  if (city && SCORES[city] && SCORES[city].overview.tier) out.push(`${city}: hazard level ${TIER[SCORES[city].overview.tier].label.toLowerCase()}`);
+  const cc = CITY_CC[city || ""]; if (cc && typeof infCountry === "function"){ const c = infCountry(cc); if (c.level >= 2) out.push(`Internet / power in ${c.name}: ${INFL[c.level].toLowerCase()}${c.cause ? " (" + c.cause + ")" : ""}`); }
+  return out; };
+const pbDefCtx = () => { const o = []; if (typeof msConnected === "function" && msConnected()){ const op = (MS.inc || []).filter(i => i.status !== "resolved"); o.push(`Microsoft Defender: ${op.length} open incident(s), ${op.filter(i => (i._sites || []).length).length} touching sites`); } else o.push("Microsoft Defender not connected — no tenant check"); return o; };
+const PB_DEFS = [
+  { key: "supplier", name: "Supplier named by ransomware", pri: "P2", report: "ransomware", trig: "A watchlist supplier or partner is named on a leak site or in an attack report", trigger: a => /^rwa?:/.test(a.srcKey || ""),
+    steps: [["ctx"], ["decide"], ["hunt"], ["draft"], ["send", "Send to IT security and leadership"], ["follow", "Vendor owner confirms exposure", 24], ["close"]],
+    ctx(R){ const now = Date.now(), w = (/"([^"]+)"/.exec(R.title) || [])[1] || "", hits = cyAllVictims().filter(v => w && cyWatchHit(v) === w), v = hits[0], g = v ? v.group : (/group (\S+)/.exec(R.title) || [])[1], gl = g ? cyAllVictims().filter(x => x.group === g && SITE_CC.has(x.cc) && now - x.t < 60 * RD) : [];
+      return [v ? `“${w}” listed as “${v.name}” by ${v.group} ${ago(v.t)}${v.cc ? " (" + ccName(v.cc) + ")" : ""}${v.sector ? " · " + v.sector : ""}` : `Watchlist entry: ${w || "—"}`, g ? `${g}: ${gl.length} victim(s) in site countries in 60 days; sectors ${rTop(gl, x => (x.sector || "").toLowerCase(), 3).map(x => x[0]).join(", ") || "—"}` : null,
+        (() => { const k = (CY.kev.list || []).filter(k => k.rw && cyVendorHit(k) && now - Date.parse(k.added) < 30 * RD); return k.length ? `Ransomware-used flaws in our vendors (30 d): ${k.slice(0, 3).map(x => `${x.vendor} ${x.product} ${x.cve}`).join("; ")}` : "No ransomware-used flaws in our vendors in 30 days"; })(), ...pbDefCtx(),
+        "What they may hold: badges / visitor data, remote access to building or security systems, floor plans, service accounts — ask the vendor owner", "Leak-site pages are not opened; treat it as the group's claim until the supplier confirms"]; },
+    ioc(R){ const w = (/"([^"]+)"/.exec(R.title) || [])[1] || ""; return cyAllVictims().filter(v => w && cyWatchHit(v) === w).map(v => v.domain).filter(Boolean).slice(0, 3).join(" "); },
+    practice(){ const w = CFG.cyber.watch[0] || "Example Facilities Ltd"; return { srcKey: "rw:practice:" + Date.now(), source: "Cyber threats", pri: "P2", title: `(PRACTICE) Watchlist: "${w}" named by ransomware group Akira`, detail: "Practice case — invented. Tell the vendor owner and IT security; check what PSOC or site data and access they hold.", suggested: ["intel", "notify", "monitor"] }; } },
+  { key: "vuln", name: "Exploited flaw in our vendor", pri: "P2", report: "vuln", trig: "CISA adds an exploited flaw in a vendor of the sites' security, building or network systems", trigger: a => /^kev:/.test(a.srcKey || ""),
+    steps: [["ctx"], ["decide"], ["hunt", "Add the CVE to the IOC workbench"], ["draft"], ["send", "Send to the system owners"], ["follow", "Owner confirms patched or mitigated", 168], ["close"]],
+    ctx(R){ const cve = (/CVE-\d{4}-\d+/.exec((pbAct(R) || {}).srcKey || R.title) || [])[0] || "", k = (CY.kev.list || []).find(x => x.cve === cve), e = (typeof RPT_E !== "undefined" && RPT_E[cve]) || {};
+      return k ? [`${k.cve}: ${k.name}`, `${k.vendor} ${k.product} — in the watched vendors (${cyVendorHit(k)})`, `Added ${k.added}${k.due ? ", US federal fix deadline " + k.due : ""}${k.rw ? " · known ransomware use" : ""}`, e.e != null ? `EPSS: ${(e.e * 100).toFixed(1)}% chance of exploitation in 30 days` : "EPSS: not scored yet", `Required action: ${k.action}`, ...pbDefCtx(), "Defender hunting: “Devices exposed to ransomware-used flaws” query in Microsoft security › Hunting"] : [`${cve || "CVE"} — details not in the loaded catalog (practice or older entry)`, ...pbDefCtx()]; },
+    ioc(R){ return (/CVE-\d{4}-\d+/.exec((pbAct(R) || {}).srcKey || R.title) || [])[0] || ""; },
+    due(R){ const cve = (/CVE-\d{4}-\d+/.exec((pbAct(R) || {}).srcKey || "") || [])[0], k = (CY.kev.list || []).find(x => x.cve === cve); return k && k.due ? Date.parse(k.due) : 0; },
+    practice(){ return { srcKey: "kev:CVE-2026-0001:practice:" + Date.now(), source: "Cyber threats", pri: "P2", title: "(PRACTICE) Exploited flaw in Fortinet FortiOS — used by ransomware", detail: "Practice case — invented CVE-2026-0001. Ask the owner of any Fortinet system at the sites whether it is affected and patched.", suggested: ["intel", "notify", "monitor"] }; } },
+  { key: "perimeter", name: "Verified perimeter intrusion", pri: "P1", report: "site", trig: "Two sensor types confirm an intrusion, or a fence is cut / tampered", trigger: a => /^pm:[^:]+:(ver|tamper):/.test(a.srcKey || ""),
+    steps: [["ctx"], ["decide", "Decide — dispatch / escalate"], ["draft", "Draft the Site Threat Assessment"], ["send", "Send to the site security lead"], ["follow", "Guard report received", 2], ["close"]],
+    ctx(R){ const now = Date.now(), I = (PM.inc || []).filter(i => i.site === R.site).sort((a, b) => b.start - a.start)[0], w = typeof pmWx === "function" ? pmWx(R.site) : null;
+      return [I ? `Zone ${I.zone}: ${(I.why || []).join("; ")}` : null, I ? `Sensors: ${[...new Set(I.hits.map(h => (PM_T[h.type] || [h.type])[0]))].join(", ")}${I.hits.some(h => h.object) ? " · seen: " + I.hits.filter(h => h.object).map(h => h.object).join(", ") : ""}` : null, w ? `Weather at the site: gusts ${Math.round(w.gust || 0)} km/h, rain ${w.rain || 0} mm/h` : null, ...pbSiteCtx(R.site, 6)]; },
+    practice(){ const s = SITES.filter(isLive)[0]; return { srcKey: `pm:${s.code}:ver:practice${Date.now()}`, source: "Perimeter", pri: "P1", title: `VERIFIED perimeter intrusion — ${s.code} zone Z3 (TRAINING)`, detail: "Practice case — fence vibration + thermal camera in zone Z3 within 20 s.", site: s.code, suggested: ["escalate", "notify"] }; } },
+  { key: "infra", name: "Internet or power outage", pri: "P3", report: "infra", trig: "IODA sees an internet outage in a site country, or a major power cut is reported near sites", trigger: a => /^(ioda|pwr):/.test(a.srcKey || ""),
+    steps: [["ctx"], ["decide", "Decide — check with the NOC"], ["draft"], ["send", "Send to the NOC and facilities"], ["follow", "Service restored", 4], ["close"]],
+    cc(R){ const a = pbAct(R) || {}, m = /^ioda:([A-Z]{2}):/.exec(a.srcKey || ""); return m ? m[1] : (PROTEST_COUNTRIES.find(c => c[1] === (a.payload || {}).country) || [])[2] || CITY_CC[a.city] || ""; },
+    ctx(R){ const cc = this.cc(R); if (!cc) return ["Country not identified"]; const c = infCountry(cc), e = c.io && c.io.events && c.io.events[0];
+      return [`${c.name}: ${INFL[c.level]}${c.cause ? " — " + c.cause : ""}; ${c.sites.length} site(s) in the country`, e ? `IODA: outage since ${rT(e.start)} (score ${Math.round(e.score)}, ${e.src})` : "IODA: no outage event", c.pw.length ? `Power-cut news (48 h): ${c.pw.slice(0, 2).map(x => trunc(x.title, 80)).join("; ")}` : "No power-cut news in 48 h", c.cb.length ? `Cable reports: ${c.cb.slice(0, 1).map(x => trunc(x.title, 80)).join("")}` : null, c.rg.length ? `NOC / telco: ${c.rg.map(r => trunc(r.summary, 80)).join("; ")}` : "No NOC / telco report logged yet"]; },
+    followCheck(R){ const cc = this.cc(R); if (!cc || R.training) return null; const c = infCountry(cc); return c.level < 2 && Date.now() - R.t0 > 30 * 60e3 ? "Back to normal (IODA and news)" : null; },
+    practice(){ return { srcKey: "ioda:PH:practice" + Date.now(), source: "Internet & power", pri: "P3", title: "(PRACTICE) Internet disruption in Philippines — likely power-related", detail: "Practice case — invented.", suggested: ["intel", "monitor", "notify"], payload: { country: "Philippines" } }; } },
+  { key: "defender", name: "Defender incident at a site", pri: "P2", report: "defender", trig: "A Microsoft Defender incident touches a site's devices, IP ranges or accounts", trigger: a => /^msinc:/.test(a.srcKey || ""),
+    steps: [["ctx"], ["decide"], ["hunt", "Indicators into the IOC workbench"], ["draft"], ["send", "Send to the SOC and site security"], ["follow", "SOC confirms containment", 4], ["close"]],
+    inc(R){ const id = (/^msinc:([^:]+):/.exec((pbAct(R) || {}).srcKey || "") || [])[1]; return (MS.inc || []).find(i => String(i.id) === id); },
+    ctx(R){ const i = this.inc(R); return (i ? [`${i.severity} · ${i.status}${i.assignedTo ? " · with " + i.assignedTo : " · unassigned"}: ${i.displayName}`, `Assets: ${(i._ents || []).slice(0, 6).map(e => e.name).join(", ") || "—"}`, (i.alerts || []).length ? `Alerts: ${i.alerts.slice(0, 3).map(a => a.title).join("; ")}` : null, (i.alerts || []).some(a => (a.mitreTechniques || []).length) ? `Techniques: ${[...new Set(i.alerts.flatMap(a => a.mitreTechniques || []))].slice(0, 5).join(", ")}` : null] : ["Incident details not loaded (practice, or Defender not connected)"]).concat(pbSiteCtx(R.site, 24)); },
+    ioc(R){ const i = this.inc(R); return i ? (i._ents || []).filter(e => e.kind === "ip").map(e => e.name).slice(0, 5).join(" ") : ""; },
+    practice(){ const s = SITES.filter(isLive)[0]; return { srcKey: "msinc:practice" + Date.now() + ":high", source: "Microsoft security", pri: "P2", title: `(PRACTICE) Defender incident at ${s.code}: ransomware activity on a security server`, detail: "Practice case — invented.", site: s.code, suggested: ["intel", "notify", "monitor"] }; } },
+  { key: "protest", name: "Protest within 1 km of a site", pri: "P2", report: "unrest", spot: true, trig: "A tracked protest within 1 km of a site in the next 48 hours",
+    scan(){ const now = Date.now(); return SHARED.protests.filter(p => !p.deleted && p.status !== "ended" && p.when && p.when - now < 48 * 36e5 && p.when - now > -2 * 36e5).map(p => ({ p, n: protestSites(p)[0] })).filter(x => x.n && x.n.d < 1000).map(x => ({ ref: x.p.id, pid: x.p.id, t0: now, title: `Protest near ${x.n.s.code}: ${x.p.title}`, site: x.n.s.code, city: x.p.city })); },
+    steps: [["ctx"], ["brief"], ["draft", "Draft the spot report"], ["send", "Send the spot report"], ["follow", "Monitor during the protest", 0], ["close"]],
+    ctx(R){ const p = SHARED.protests.find(x => x.id === R.pid); if (!p) return ["Protest no longer in the tracker"]; const ns = protestSites(p), others = SHARED.protests.filter(x => x !== p && !x.deleted && x.city === p.city && x.when && Math.abs(x.when - p.when) < 72 * 36e5);
+      return [`${p.title} — ${rT(p.when)}${p.organiser ? " · " + p.organiser : ""}${p.size ? " · " + p.size : ""}`, `Sites within 1 km: ${ns.filter(x => x.d < 1000).map(x => `${x.s.code} (${kmTxt(x.d / 1000)})`).join(", ")}`, p.assembly || p.march ? `Assembly ${p.assembly || "—"}, march ${p.march || "—"} (local)` : null, others.length ? `${others.length} other protest(s) in ${p.city} within 3 days` : null, p.notes ? "Notes: " + p.notes : null, ...pbSiteCtx(R.site, 24).slice(1).filter(l => !/^Protest nearby/.test(l))]; },
+    msg(R){ const p = SHARED.protests.find(x => x.id === R.pid) || {}, n = p.id ? protestSites(p).find(x => x.s.code === R.site) : null; return `[PSOC] ${p.title || "Protest"} — ${p.when ? rT(p.when) : ""}${p.city ? ", " + p.city : ""}${n ? `, about ${kmTxt(n.d / 1000)} from ${R.site}` : ""}.${p.organiser ? " Organiser: " + p.organiser + "." : ""}${p.size ? " Expected size: " + p.size + "." : ""}\nPlease review access control, staff advisory, lobby and loading bays, and confirm to the PSOC. The PSOC is monitoring and will update you.`; },
+    due(R){ const p = SHARED.protests.find(x => x.id === R.pid); return p && p.when ? p.when : 0; },
+    practice(){ const s = SITES.filter(isLive)[0], ll = [s.lat + 0.003, s.lon + 0.002]; putShared("protests", { id: "pr-practice-" + Date.now(), title: "(PRACTICE) Rally outside the business district", city: metroOf(s) || s.city, when: Date.now() + 3 * 36e5, organiser: "Practice group", size: "300", status: "planned", start: { ll, name: "Practice square" }, updatedAt: Date.now(), practice: true }); return null; } }];
+
+/* ---------- the engine ---------- */
+function pbNew(D, x){ const now = Date.now(), R = Object.assign({ aid: "", pid: "", site: "", city: "", t0: now }, x, { pb: D.key, created: now, training: pbPrac(x.title), steps: D.steps.map(([k, n, h]) => ({ k, n: n || PBS[k].n, who: PBS[k].who, h: h == null ? 24 : h, st: "todo" })), ctx: [], log: [] });
+  pbLog(R, `Started: ${R.title}`, "agent"); audit("Playbook started", D.name, R.title); return R; }
+function pbDo(R, s, by){ const D = pbDef(R.pb); try{ const note = PBS[s.k].run(R, D, s); s.st = "done"; s.at = Date.now(); s.by = by === "agent" ? "agent" : (ME ? ME.name : ""); s.note = note; pbLog(R, `${s.n}: ${note}`, s.by); }catch(e){ s.note = "Could not run: " + e.message; } pbSave(); }
+function pbAdvance(R){ const D = pbDef(R.pb); if (!D || R.closedAt) return false; let ch = false; const now = Date.now();
+  R.steps.forEach(s => { if (s.st === "done" || s.st === "skip") return; const f = PBS[s.k].done, r = f && f(R, D, s); if (r){ s.st = "done"; s.at = now; s.by = s.k === "decide" ? ((pbAct(R) || {}).decision || {}).by || "" : "agent"; s.note = r; pbLog(R, `${s.n}: ${r}`, s.by); ch = true; } });
+  for (let i = 0; i < 8; i++){ const cur = R.steps.find(s => s.st !== "done" && s.st !== "skip"); if (!cur) break;
+    if (cur.st === "todo"){ cur.st = "ready"; cur.readyAt = now; if (cur.k === "follow") cur.due = R.training ? now + 2 * 60e3 : (D.due && D.due(R)) || now + cur.h * 36e5; ch = true; }
+    if (cur.who === "agent" && pbMode(R.pb) === "prepare"){ pbDo(R, cur, "agent"); ch = true; continue; }
+    if (cur.k === "follow" && cur.due && now >= cur.due && !cur.alerted){ cur.alerted = true; ch = true; if (typeof attention === "function") attention(`Playbook follow-up due — ${D.name}`, `${R.title}: ${cur.n}`, () => { UI.agTab = "pb"; UI.pbRun = R.id; saveUI(); setMode("agents"); }); }
+    break; }
+  return ch; }
+function pbTick(quiet){ if (!ME || isLimited()) return; const now = Date.now(); let ch = false;
+  PB_DEFS.forEach(D => { if (pbMode(D.key) === "off") return;
+    if (D.trigger) SHARED.actions.filter(a => now - a.createdAt < 3 * RD && (a.status === "pending" || now - a.createdAt < 36e5) && D.trigger(a)).forEach(a => { const id = "pb" + hashStr(D.key + a.id); if (PB.runs[id]) return; PB.runs[id] = pbNew(D, { id, aid: a.id, t0: a.createdAt, title: a.title, site: a.site || ((a.payload || {}).sites || [])[0] || "", city: a.city || "" }); ch = true; });
+    if (D.scan) D.scan().forEach(x => { const id = "pb" + hashStr(D.key + x.ref); if (PB.runs[id]) return; delete x.ref; PB.runs[id] = pbNew(D, Object.assign({ id }, x)); ch = true; }); });
+  Object.values(PB.runs).forEach(R => { if (pbAdvance(R)) ch = true; });
+  if (ch){ pbSave(); if (!quiet && UI.mode === "agents" && UI.agTab === "pb" && !$("#ov.show") && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#panel select"))) renderPanel(); } }
+setInterval(() => { try{ pbTick(); }catch(e){} }, 30e3); setTimeout(() => { try{ pbTick(); }catch(e){} }, 9000);
+{ const _eq = enqueueAction; enqueueAction = function(o){ const r = _eq.apply(this, arguments); setTimeout(() => { try{ pbTick(); }catch(e){} }, 60); return r; }; }
+document.addEventListener("click", e => { if (e.target.closest("#dcSave")) setTimeout(() => { try{ pbTick(); }catch(err){} }, 400); }, true);
+/* ---------- send the case: the report with the case at the top ---------- */
+function pbDist(D){ const own = CFG.dist.rep["pb:" + D.key]; return own && ["to", "cc", "chat", "channel", "webhook"].some(f => (own[f] || "").trim()) ? rptDist("pb:" + D.key) : rptDist(D.report); }
+function pbPack(R){ const D = pbDef(R.pb), a = pbAct(R), dec = a && a.decision ? `${DEC[a.decision.kind] ? DEC[a.decision.kind][1] : a.decision.kind} (${a.decision.by || ""}${a.decision.note ? ": " + a.decision.note : ""})` : "";
+  const caseSecs = [{ h: "This case", note: D.name + (R.training ? " — PRACTICE, not a real event" : ""), table: { head: ["When", "Who", "Step"], rows: R.log.map(l => [rT(l.t), l.who === "agent" ? "Agent" : l.who || "", l.m]) } }, R.ctx.length ? { h: "Context gathered by the agent", list: R.ctx } : null];
+  if (R.spot && typeof SPOTS !== "undefined"){ const S = SPOTS.find(x => x.id === R.spot); if (S){ const html = spotHtml(S); return rptPlain("pb:" + D.key, `${R.training ? "PRACTICE — " : ""}Spot report — ${S.cat} (${S.stage})${S.loc ? " — " + S.loc : ""}`, html, rHtmlTxt(bodyOf(html))); } }
+  if (D.report === "site" && R.site) UI.rptSite = R.site; const o = rptBuild(D.report); o.sections = caseSecs.concat(o.sections || []); o.subtitle = "case: " + trunc(R.title.replace(/\s*\((TRAINING|PRACTICE)\)\s*/g, " ").trim(), 80);
+  if (R.training) o.title = "PRACTICE — " + o.title; o.judgements = [`This case: ${R.title.replace(/\s*\((TRAINING|PRACTICE)\)\s*/g, " ").trim()}${dec ? " — decided: " + dec : ""}.`].concat(o.judgements || []); o._snap = "pb:" + D.key;
+  return { k: "pb:" + D.key, title: `${trunc(R.title.replace(/\s*\((TRAINING|PRACTICE)\)\s*/g, " ").trim(), 80)} — ${o.title}`, html: iteDoc(o), text: rptText(o), short: rptShort(o), teams: n => rptTeamsHtml(o, n), card: n => rptCard(o, n), o }; }
+async function pbSend(R){ const D = pbDef(R.pb), pk = pbPack(R), d = pbDist(D), out = [];
+  if (!d.to.length && !d.webhook && !d.channel && !d.chat.length && !(CFG.dist.teamsServer && serverBase())){ toast("No distribution yet for this playbook", "Set email and Teams under ⚙", "var(--amber)"); rptDistEdit("pb:" + D.key); return out; }
+  if (d.to.length){ const r = await rptEmail(pk, d, true); if (r.ok) out.push(r.sent ? `emailed to ${d.to.length + d.cc.length}` : "email draft opened"); }
+  if (d.webhook || d.channel || d.chat.length || (CFG.dist.teamsServer && serverBase())){ const r = await rptTeams(pk, d, true); if (r.ok) out.push(r.sent ? "posted to Teams" : "Teams opened"); }
+  return out; }
+function pbClose(R, outcome, note){ const D = pbDef(R.pb), now = Date.now(); R.outcome = outcome; R.closedAt = now; R.steps.forEach(s => { if (s.st !== "done") s.st = s.k === "close" ? "done" : "skip"; if (s.k === "close"){ s.at = now; s.by = ME ? ME.name : ""; s.note = outcome + (note ? " — " + note : ""); } });
+  pbLog(R, `Closed: ${outcome}${note ? " — " + note : ""}`); audit("Playbook closed", D.name, `${R.title} → ${outcome}`); agLog("playbook", `${D.name}: ${R.title}`, outcome, { note });
+  if (R.training){ const a = pbAct(R); if (a && a.status === "pending" && typeof completeAction === "function") completeAction(a.id, "dismiss", "Practice playbook run closed"); const p = R.pid && SHARED.protests.find(x => x.id === R.pid); if (p && p.practice){ p.deleted = true; p.updatedAt = now; putShared("protests", p); } }
+  else if (typeof dsrCur === "function"){ const DR = dsrCur(); if (!DR.sec.obs.some(x => x.src === "pb:" + R.id)){ DR.sec.obs.push({ id: nid("i"), src: "pb:" + R.id, loc: R.site || R.city || "APAC", cat: D.name, status: /real/i.test(outcome) ? "Released" : "Closed", title: D.name.toUpperCase(), text: `${R.title.trim().replace(/([^.!?])$/, "$1.")} Outcome: ${outcome}${note ? " — " + note : ""}. Detected ${rT(R.t0)}, closed ${rT(now)}.` }); dsrSave(); } }
+  pbSave(); }
+/* ---------- metrics and learning ---------- */
+function pbMetrics(D){ const runs = Object.values(PB.runs).filter(R => R.pb === D.key && !R.training), at = (R, k) => (R.steps.find(s => s.k === k && s.st === "done") || {}).at;
+  const dec = runs.map(R => { const a = pbAct(R); return a && a.decision ? a.decision.at - R.t0 : at(R, "brief") ? at(R, "brief") - R.t0 : null; }), sent = runs.map(R => R.sentAt ? R.sentAt - R.t0 : null), close = runs.map(R => R.closedAt ? R.closedAt - R.t0 : null);
+  const done = runs.flatMap(R => R.steps.filter(s => s.st === "done" && s.k !== "close")), agent = done.filter(s => s.by === "agent").length;
+  const base = D.trigger ? SHARED.actions.filter(a => D.trigger(a) && a.decision && a.decision.at && !pbPrac(a.title) && !runs.some(R => R.aid === a.id)).map(a => a.decision.at - a.createdAt) : [];
+  const out = {}; runs.filter(R => R.outcome).forEach(R => { out[R.outcome] = (out[R.outcome] || 0) + 1; });
+  return { n: runs.length, open: runs.filter(R => !R.closedAt).length, closed: runs.filter(R => R.closedAt).length, dec: pbMed(dec), sent: pbMed(sent), close: pbMed(close), agent: done.length ? agent / done.length : null, base: pbMed(base), baseN: base.length, out, prac: Object.values(PB.runs).filter(R => R.pb === D.key && R.training).length }; }
+function pbLearn(D, M){ const L = [], sla = ACT_SLA[D.pri] * 60e3, noImp = (M.out["No impact"] || 0) + (M.out["False alarm"] || 0) + (M.out["Duplicate"] || 0);
+  if (M.dec != null && M.base != null) L.push(M.dec < M.base ? `Decisions ${pbDur(M.base - M.dec)} faster with the playbook (median ${pbDur(M.dec)} against ${pbDur(M.base)} for the same alerts without it).` : `No faster yet: median ${pbDur(M.dec)} with the playbook against ${pbDur(M.base)} without.`);
+  if (M.dec != null && M.dec > sla) L.push(`Decisions take longer than the ${D.pri} target (${ACT_SLA[D.pri]} min) — keep it on Prepare so context and the draft are ready when the officer opens the case.`);
+  if (M.closed >= 3 && noImp / M.closed >= .7) L.push(`${noImp} of ${M.closed} cases ended with no impact — tighten the trigger (watchlist, vendors, zones) or lower its priority.`);
+  if (M.closed >= 3 && (M.out["Real — handled"] || 0) / M.closed >= .5) L.push(`Most cases were real — consider raising the trigger's priority and pre-approving the distribution.`);
+  if (M.closed < 3) L.push(`${M.closed} real case(s) closed — learning starts at 3. Practice runs don't count.`);
+  return L; }
+// the triage agent sees how earlier cases of the same kind ended
+{ const _tr = agTriage; agTriage = function(a){ const g = _tr.apply(this, arguments); try{ const D = PB_DEFS.find(d => d.trigger && d.trigger(a)); if (D && pbMode(D.key) !== "off"){ const prev = Object.values(PB.runs).filter(R => R.pb === D.key && R.outcome && !R.training); g.ctx.push(`Playbook “${D.name}” running — context and draft prepared`); if (prev.length){ const no = prev.filter(R => !/real/i.test(R.outcome)).length; g.ctx.push(`Earlier cases: ${prev.length}, ${no} without real impact`); } } }catch(e){} return g; }; }
+/* ---------- the panel ---------- */
+const PB_ICON = { agent: "🤖", person: "👤", timer: "⏱" };
+function pbRunCard(R){ const D = pbDef(R.pb); if (!D) return ""; const cur = R.steps.find(s => s.st !== "done" && s.st !== "skip"), a = pbAct(R), g = a && AGT.sugg[a.id], now = Date.now();
+  const chips = R.steps.map((s, i) => `<span class="pbchip ${s.st}${s === cur ? " cur" : ""}" title="${esc(PBS[s.k].desc)}${s.note ? " — " + esc(s.note) : ""}">${PB_ICON[s.who]} ${esc(s.n)}</span>${i < R.steps.length - 1 ? '<span class="pbarr">›</span>' : ""}`).join("");
+  let act = "";
+  if (cur && !R.closedAt){ const id = R.id + ":" + R.steps.indexOf(cur), sk = `<button class="tab-mini" data-pbskip="${id}">Skip</button>`;
+    if (cur.who === "agent") act = `<button class="act primary" data-pbdo="${id}">${PB_ICON.agent} Run: ${esc(cur.n)}</button>${sk}<span class="s">The agent waits for you (Suggest mode).</span>`;
+    else if (cur.k === "decide") act = a ? (a.status === "pending" ? `<button class="act primary" data-pbdo="${id}">Open the decision${g && DEC[g.kind] ? ` — agent proposes: ${esc(DEC[g.kind][1])} (${Math.round(g.conf * 100)}%)` : ""}</button>${sk}` : `<span class="s">Decided.</span>`) : `<span class="s">The alert is no longer in the queue.</span>${sk}`;
+    else if (cur.k === "brief") act = `<button class="act primary" data-pbdo="${id}">Copy the message for site security</button>${sk}<details class="pbmsg"><summary>Message</summary><pre>${esc(D.msg(R))}</pre></details>`;
+    else if (cur.k === "send"){ const d = pbDist(D), ch = rptChan(d.channel); act = `<button class="act primary" data-pbdo="${id}">📤 Send now</button><button class="tab-mini" data-pbprev="${R.id}">Preview</button><button class="tab-mini" data-rptdist="pb:${D.key}">⚙</button>${sk}<span class="s">✉ ${d.to.length ? esc(d.to.slice(0, 2).join(", ")) + (d.to.length > 2 ? " +" + (d.to.length - 2) : "") : "no email list"} · 💬 ${d.webhook ? "workflow" : ch ? "#" + esc(ch.name) : d.chat.length ? "chat" : "no Teams destination"}</span>`; }
+    else if (cur.k === "follow") act = `<button class="act primary" data-pbdo="${id}">Record the follow-up</button>${sk}<span class="s">${cur.due ? (now >= cur.due ? `<b style="color:var(--amber)">Due now</b> (since ${esc(rT(cur.due))})` : "Due " + esc(rT(cur.due))) : ""}</span>`;
+    else if (cur.k === "close") act = PB_OUT.map((o, k) => `<button class="act${k ? "" : " primary"}" data-pbclose="${R.id}:${k}">${esc(o)}</button>`).join(""); }
+  return `<div class="pbrun${R.closedAt ? " closed" : ""}${UI.pbRun === R.id ? " focus" : ""}" id="pbr-${R.id}" style="--c:${SEV_C[D.pri] || "var(--teal)"}"><div class="hd"><span class="tag">${esc(D.name)}</span>${R.training ? '<span class="tag pbprac">PRACTICE</span>' : ""}<b>${esc(trunc(R.title, 110))}</b><span class="s" style="margin-left:auto">detected ${esc(ago(R.t0))}${R.closedAt ? " · closed " + esc(ago(R.closedAt)) + " · " + esc(R.outcome) : ""}</span></div>
+    <div class="pbsteps">${chips}</div>${act ? `<div class="acts pbacts">${act}</div>` : ""}
+    ${R.ctx.length ? `<details class="pbctx"${R.closedAt ? "" : " open"}><summary>Context gathered by the agent (${R.ctx.length})</summary><ul>${R.ctx.map(c => `<li>${esc(c)}</li>`).join("")}</ul></details>` : ""}
+    <details class="pbctx"><summary>Timeline (${R.log.length})${R.rep || R.spot ? ` · <button class="linkbtn" data-pbprev="${R.id}">report</button>` : ""}</summary><table class="tttab"><tbody>${R.log.map(l => `<tr><td>${esc(rT(l.t))}</td><td>${l.who === "agent" ? "🤖 agent" : esc(l.who || "")}</td><td>${esc(l.m)}</td></tr>`).join("")}</tbody></table></details></div>`; }
+function pbPanel(){ try{ pbTick(true); }catch(e){} const runs = Object.values(PB.runs), open = runs.filter(R => !R.closedAt && pbDef(R.pb)).sort((a, b) => pbDef(a.pb).pri.localeCompare(pbDef(b.pb).pri) || b.t0 - a.t0), closed = runs.filter(R => R.closedAt).sort((a, b) => b.closedAt - a.closedAt);
+  const lib = PB_DEFS.map(D => { const M = pbMetrics(D), pilot = CFG.pb.pilot === D.key, mode = pbMode(D.key);
+    return `<div class="pbdef${pilot ? " pilot" : ""}"><div class="hd"><span class="sev" style="--c:${SEV_C[D.pri]}">${D.pri}</span><b>${esc(D.name)}</b>${pilot ? '<span class="tag pbpilot">★ pilot</span>' : ""}<select data-pbmode="${D.key}" aria-label="Autonomy">${[["off", "Off"], ["suggest", "Suggest"], ["prepare", "Prepare"]].map(([v, l]) => `<option value="${v}"${mode === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="s">When: ${esc(D.trig)}</div><div class="pbsteps sm">${D.steps.map(([k, n]) => `<span class="pbchip">${PB_ICON[PBS[k].who]} ${esc(n || PBS[k].n)}</span>`).join('<span class="pbarr">›</span>')}</div>
+      <div class="pbm"><span><b>${M.n}</b> cases</span><span><b>${M.open}</b> open</span><span>decision <b>${pbDur(M.dec)}</b>${M.base != null ? ` <i>(without: ${pbDur(M.base)})</i>` : ""}</span><span>sent <b>${pbDur(M.sent)}</b></span><span>closed <b>${pbDur(M.close)}</b></span><span>by agents <b>${M.agent == null ? "—" : Math.round(M.agent * 100) + "%"}</b></span></div>
+      <ul class="pblearn">${pbLearn(D, M).map(l => `<li>${esc(l)}</li>`).join("")}</ul>
+      <div class="acts"><button class="tab-mini" data-pbprac="${D.key}">▶ Practice run</button><button class="tab-mini" data-rptdist="pb:${D.key}">⚙ Distribution</button>${pilot ? "" : `<button class="tab-mini" data-pbpilot="${D.key}">★ Make pilot</button>`}<span class="s">report: ${esc((rptDef(D.report) || {}).title || "")}${M.prac ? ` · ${M.prac} practice` : ""}</span></div></div>`; }).join("");
+  const P = pbDef(CFG.pb.pilot), PM_ = P ? pbMetrics(P) : null;
+  return `<div class="pbintro"><b>Orchestrated playbooks</b> carry a case from the alert to the outcome: the agent gathers context, prepares the hunt and drafts the report with the case in it; people decide, send and close. Each step's result feeds the next, every case is timed, and how cases ended is shown to the triage agent next time. Agents never send, decide, open or close anything.${P ? ` <span class="pbpilotline">★ Pilot: <b>${esc(P.name)}</b> — ${PM_.n} real case(s), median decision ${pbDur(PM_.dec)}${PM_.base != null ? ` against ${pbDur(PM_.base)} without` : ""}, closed ${pbDur(PM_.close)}.</span>` : ""}</div>
+    <div class="pbgrid"><div><div class="sec" style="margin-top:0">Open cases (${open.length})</div>${open.map(pbRunCard).join("") || `<div class="empty">No open cases. They start by themselves from the Action queue and the Protest tracker — or press ▶ Practice run on a playbook.</div>`}
+      ${closed.length ? `<div class="sec">Closed (${closed.length})</div>${closed.slice(0, 12).map(pbRunCard).join("")}` : ""}</div>
+      <div><div class="sec" style="margin-top:0">Playbooks</div>${lib}</div></div>`; }
+{ const _ap2 = agentsPanel; agentsPanel = function(){ let h = _ap2(); const on = UI.agTab === "pb", n = Object.values(PB.runs).filter(R => !R.closedAt).length;
+    h = h.replace('<button class="tab-mini" data-agtab="cases"', `<button class="tab-mini" data-agtab="pb" aria-pressed="${on}">Playbooks${n ? ` (${n})` : ""}</button><button class="tab-mini" data-agtab="cases"`);
+    if (on){ const i = h.indexOf('<div class="pbody">'); if (i >= 0) h = h.slice(0, i) + `<div class="pbody">${pbPanel()}</div>`; }
+    return h; }; }
+KEYS.agents[2] = "Agents and orchestrated playbooks: context, hunts and drafts by agents; decisions, sending and closing by people";
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "agents" || !e.target.dataset.pbmode) return; CFG.pb.mode[e.target.dataset.pbmode] = e.target.value; saveCfg(); audit("Playbook autonomy changed", e.target.dataset.pbmode, e.target.value); pbTick(true); renderPanel(); });
+document.addEventListener("click", async e => { const t = e.target.closest("[data-pbdo],[data-pbskip],[data-pbclose],[data-pbprev],[data-pbprac],[data-pbpilot],[data-pbopen]"); if (!t) return; const d = t.dataset; e.preventDefault(); e.stopImmediatePropagation();
+  if (d.pbopen){ UI.agTab = "pb"; UI.pbRun = d.pbopen; saveUI(); setMode("agents"); setTimeout(() => { const el = document.getElementById("pbr-" + d.pbopen); if (el) el.scrollIntoView({ block: "center" }); }, 200); return; }
+  if (d.pbpilot){ CFG.pb.pilot = d.pbpilot; saveCfg(); audit("Pilot playbook chosen", d.pbpilot, ""); renderPanel(); return; }
+  if (d.pbprac){ const D = pbDef(d.pbprac); if (CFG.pb.mode[D.key] === "off"){ CFG.pb.mode[D.key] = "prepare"; saveCfg(); } const a = D.practice(); if (a) enqueueAction(Object.assign({ payload: Object.assign({ cat: "operational_security", sev: a.pri, desc: a.title.slice(0, 200), src: a.srcKey }, a.payload || {}) }, a)); setTimeout(() => { pbTick(true); const R = Object.values(PB.runs).filter(r => r.pb === D.key && r.training && !r.closedAt).sort((x, y) => y.created - x.created)[0]; if (R) UI.pbRun = R.id; renderPanel(); toast("Practice case started", D.name + " — invented, not counted in the metrics", "var(--teal)"); }, 150); return; }
+  if (d.pbprev){ const R = PB.runs[d.pbprev]; if (!R) return; const pk = pbPack(R); openModal(head(pk.title) + `<div class="bd"><div class="rpdoc" style="max-height:70vh">${bodyOf(pk.html)}</div></div><div class="ft"><button class="pill" data-pbdl="${R.id}">⬇ HTML</button><span style="flex:1"></span><button class="pill" data-x>Close</button></div>`, true);
+    const dl = $("#box [data-pbdl]"); if (dl) dl.onclick = () => downloadHtml(rFile(pk, "html"), pk.html); return; }
+  if (d.pbclose){ const [rid, k] = d.pbclose.split(":"), R = PB.runs[rid]; if (!R) return; const note = PB_OUT[+k] === "Real — handled" ? (prompt("What was done? (optional — goes into the shift report)") || "") : ""; pbClose(R, PB_OUT[+k], note.slice(0, 200)); toast("Case closed", `${PB_OUT[+k]}${R.training ? " — practice" : " — added to the Daily Shift Report"}`, "var(--green)"); renderPanel(); return; }
+  const [rid, si] = (d.pbdo || d.pbskip).split(":"), R = PB.runs[rid], s = R && R.steps[+si]; if (!s || s.st === "done") return; const D = pbDef(R.pb);
+  if (d.pbskip){ s.st = "skip"; s.at = Date.now(); pbLog(R, `${s.n}: skipped`); pbAdvance(R); pbSave(); renderPanel(); return; }
+  if (s.who === "agent"){ pbDo(R, s, ME ? ME.name : ""); pbAdvance(R); pbSave(); renderPanel(); return; }
+  if (s.k === "decide"){ const a = pbAct(R); if (!a) return; const g = AGT.sugg[a.id]; openDecide(a.id, g && DEC[g.kind] ? g.kind : undefined); const n = $("#dcNote"); if (n && !n.value && g) n.value = "Playbook / agent: " + g.why[0]; return; }
+  if (s.k === "brief"){ const m = D.msg(R); await copyRich(`<div>${esc(m).replace(/\n/g, "<br>")}</div>`, m); s.st = "done"; s.at = Date.now(); s.by = ME ? ME.name : ""; s.note = "Message copied for site security"; pbLog(R, `${s.n}: message copied for site security`); pbAdvance(R); pbSave(); toast("Message copied", "Paste it into the site's chat or email", "var(--green)"); renderPanel(); return; }
+  if (s.k === "send"){ t.disabled = true; let out = []; try{ out = await pbSend(R); }finally{ t.disabled = false; } if (out.length){ s.st = "done"; s.at = Date.now(); s.by = ME ? ME.name : ""; s.note = out.join(", "); R.sentAt = R.sentAt || Date.now(); pbLog(R, `${s.n}: ${s.note}`); pbAdvance(R); pbSave(); toast("Case report sent", out.join(", "), "var(--green)"); } renderPanel(); return; }
+  if (s.k === "follow"){ const note = prompt(`${s.n} — what did you hear back?`); if (note == null) return; s.st = "done"; s.at = Date.now(); s.by = ME ? ME.name : ""; s.note = note.slice(0, 200) || "done"; pbLog(R, `${s.n}: ${s.note}`); pbAdvance(R); pbSave(); renderPanel(); return; } }, true);
+// the distribution window names the playbook
+{ const _rde = rptDistEdit; rptDistEdit = function(k){ _rde(k); if (String(k).startsWith("pb:")){ const D = pbDef(k.slice(3)), b = $("#box .tabs-mini b"); if (D && b) b.textContent = `Playbook: ${D.name} (empty = the ${(rptDef(D.report) || {}).title || "report"} list)`; } }; }
+// Action queue: open the case from the alert
+{ const _ap3 = actionsPanel; actionsPanel = function(){ let h = _ap3(); Object.values(PB.runs).forEach(R => { if (!R.aid) return; const tag = `<button class="act" data-decide="${R.aid}" data-kind="">Other…</button>`; if (h.includes(tag)){ const cur = R.steps.find(s => s.st !== "done" && s.st !== "skip"); h = h.replace(tag, tag + `<button class="act pbq" data-pbopen="${R.id}" title="Orchestrated playbook">▶ Playbook${cur ? ": " + esc(cur.n) : ""}</button>`); } }); return h; }; }
+// the scorecard reflects the playbooks
+[["AI-powered workflows and automation", () => ["yes", "Orchestrated playbooks (AI agents › Playbooks) take a case from the alert to context, decision, hunt, report, email / Teams, follow-up and outcome; agents do the legwork, people decide"]],
+  ["Playbooks / SOPs", () => ["yes", `${PB_DEFS.length} playbooks with set autonomy (Off / Suggest / Prepare); REN TTP timers for escalations`]],
+  ["Operational metrics", () => ["yes", "Per playbook: time to decision (with and without it), to report sent and to close; share of steps done by agents; outcomes"]]].forEach(([n, f]) => { const c = AG_CAPS.find(x => x[0] === n); if (c) c[2] = f; });
+if (!AG_CAPS.some(x => /Orchestration/.test(x[0]))) AG_CAPS.push(["Orchestration across stages (Microsoft: “orchestrated intelligence”)", "", () => ["yes", "Each stage's result feeds the next: context into the decision, the decision into the report, outcomes into the next triage"]]);
+{ const st = document.createElement("style"); st.textContent = `
+.pbintro{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--teal);border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:13px;line-height:1.5}.pbpilotline{display:block;margin-top:4px;color:var(--muted)}
+.pbgrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px}
+.pbrun,.pbdef{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c,var(--teal));border-radius:8px;padding:8px 10px;margin:0 0 8px;display:flex;flex-direction:column;gap:6px}.pbrun.closed{opacity:.7}.pbrun.focus{box-shadow:0 0 0 2px var(--teal)}
+.pbrun .hd,.pbdef .hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.pbdef .hd select{margin-left:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 6px}.pbdef.pilot{border-left-color:#E8B04A}
+.pbsteps{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.pbchip{border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:11.5px;white-space:nowrap;color:var(--muted)}.pbchip.done{background:color-mix(in srgb,var(--green) 18%,transparent);border-color:var(--green);color:var(--text)}.pbchip.skip{text-decoration:line-through;opacity:.6}.pbchip.ready,.pbchip.cur{border-color:var(--teal);color:var(--text);box-shadow:0 0 0 1px var(--teal) inset}.pbsteps.sm .pbchip{font-size:11px;padding:1px 6px}.pbarr{color:var(--muted);font-size:12px}
+.pbacts{align-items:center}.pbacts .act.primary{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 22%,transparent);font-weight:600}.pbacts .s{font-size:12px}.pbctx summary{cursor:pointer;color:var(--muted);font-size:12.5px}.pbctx ul{margin:4px 0;padding-left:18px;font-size:12.5px}.pbctx .tttab{font-size:12px}.pbmsg pre{white-space:pre-wrap;font-size:12px;margin:4px 0}
+.pbm{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}.pbm b{color:var(--text)}.pblearn{margin:0;padding-left:18px;font-size:12px}.pbprac{border-color:#E8B04A;color:#E8B04A}.pbpilot{border-color:#E8B04A;color:#E8B04A}.act.pbq{border-color:var(--teal)}
+@media (max-width:1100px){.pbgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>

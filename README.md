@@ -102,6 +102,20 @@ Shodan InternetDB, prioritised, and sent to Defender hunting, copied defanged, t
 added to the shift report. Analysis & brief: weekly trends, most active groups and sectors, key judgements written from
 the numbers, and a cyber threat brief exported as HTML, copied into email, filed or added to the shift report.
 
+## Orchestrated playbooks (Response › AI agents › Playbooks)
+
+Following Microsoft's "orchestrated intelligence" idea: agent-led workflows that carry a case from the alert to the
+outcome, so each stage feeds the next. Six playbooks — supplier named by ransomware, exploited flaw in our vendor,
+verified perimeter intrusion, internet or power outage, Defender incident at a site, protest within 1 km of a site —
+start by themselves from the Action queue and the Protest tracker. The agent gathers context, prepares the hunt (IOC
+workbench) and drafts the report with the case at the top; people record the decision, send the report (one click,
+email and Teams) and close the case with its outcome, which goes into the Daily Shift Report. Autonomy per playbook:
+Off, Suggest (the agent waits for a click) or Prepare (agent steps run themselves); agents never send, decide, open or
+close anything. Every case is timed — detection to decision, report sent and closed — with the median time for the
+same alerts without the playbook, the share of steps done by agents, outcomes and what to change; earlier outcomes
+are shown to the triage agent on the next similar alert. One playbook is the pilot ("start with one priority
+workflow"); practice runs with invented cases are not counted.
+
 ## AI agents (Response › AI agents)
 
 A triage agent proposes a decision for every waiting action with its reasons and context (duplicates, open
