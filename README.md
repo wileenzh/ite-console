@@ -49,6 +49,26 @@ and matched to the vendors of the sites' security, building and network systems 
 per country from the Internet & power tab. Leak-site pages and screenshots are never opened or shown. ransomware.live's
 free API is for personal use — for company use, request its PRO key under its terms.
 
+## Microsoft security (Intelligence Monitoring)
+
+Microsoft Defender XDR incidents and alerts (and Microsoft Sentinel's, once Sentinel is onboarded to the Defender
+portal) through the Microsoft Graph security API, read-only. Devices, IP addresses and accounts are matched to sites
+with an asset map (host-name patterns and IP ranges → site code); active high/medium incidents touching a site become
+PSOC actions. Defender Threat Intelligence articles and actor profiles, host / IP / vulnerability lookups (needs the
+Defender TI licence and API add-on), advanced hunting with PSOC queries (devices exposed to ransomware-used flaws, mass
+file renames, sign-ins from countries without sites, alerts on physical-security servers, contact with indicators
+under review), and ready Security Copilot prompts. Connect by signing in with Microsoft (Entra single-page app,
+delegated SecurityIncident.Read.All, SecurityAlert.Read.All, ThreatHunting.Read.All, ThreatIntelligence.Read.All; the
+console must be served over https) or through the PSOC server.
+
+## Cyber threat intelligence and analysis (Cyber threats › IOC workbench, Analysis & brief)
+
+IOC workbench: paste any text; indicators (IPs, domains, URLs, hashes, CVEs, e-mail) are extracted and re-fanged,
+checked against CISA KEV, EPSS, ransomware victims' domains, the watchlist and (when connected) Defender TI, optionally
+Shodan InternetDB, prioritised, and sent to Defender hunting, copied defanged, turned into a Security Copilot prompt or
+added to the shift report. Analysis & brief: weekly trends, most active groups and sectors, key judgements written from
+the numbers, and a cyber threat brief exported as HTML, copied into email, filed or added to the shift report.
+
 ## AI agents (Response › AI agents)
 
 A triage agent proposes a decision for every waiting action with its reasons and context (duplicates, open

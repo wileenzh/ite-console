@@ -16912,7 +16912,7 @@ const RW = "https://api.ransomware.live/v2";
 const cyClean = s => String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, " ").slice(0, 300);
 const cyLink = u => /^https:\/\/(www\.)?ransomware\.live\//.test(u || "") ? u : "";   // only ransomware.live's own summary pages, never leak sites
 const cyNews = u => /^https?:\/\//.test(u || "") && !/\.onion\b/i.test(u) ? u : "";
-const cyVictim = v => ({ name: cyClean(v.victim), group: cyClean(v.group).slice(0, 40), cc: String(v.country || "").toUpperCase().slice(0, 2), t: Date.parse(v.discovered || v.attackdate) || Date.now(), sector: cyClean(String(v.description || "").split(/[·|]/)[0]).slice(0, 80), domain: cyClean(v.domain).slice(0, 80), link: cyLink(v.url) });
+const cyVictim = v => ({ name: cyClean(v.victim), group: cyClean(v.group).slice(0, 40), cc: String(v.country || "").toUpperCase().slice(0, 2), t: Date.parse(v.discovered || v.attackdate) || Date.now(), sector: cyClean(String(v.description || "").split(/[·|]/)[0]).trim().slice(0, 80), domain: cyClean(v.domain).slice(0, 80), link: cyLink(v.url) });
 const cyAttack = a => ({ name: cyClean(a.victim), cc: String(a.country || "").toUpperCase().slice(0, 2), t: Date.parse(a.date || a.added) || Date.now(), title: cyClean(a.title), url: cyNews(a.url), domain: cyClean(a.domain).slice(0, 80), link: cyLink(a.link), gang: a.claim_gang && typeof a.claim_gang === "string" ? cyClean(a.claim_gang).slice(0, 40) : "" });
 const cyRel = x => new RegExp(CFG.cyber.sectors, "i").test(x.sector || x.title || "");
 const cyWatchHit = x => CFG.cyber.watch.find(w => w && w.length >= 3 && new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(`${x.name} ${x.domain} ${x.title || ""}`));
@@ -17058,6 +17058,277 @@ document.getElementById("panel").addEventListener("change", e => { if (UI.mode !
 { const st = document.createElement("style"); st.textContent = `
 .scsec{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.scgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}.scfigc{width:100%;height:auto;border-radius:6px;display:block}
 @media (max-width:1100px){.scgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   MICROSOFT SECURITY (18 Oct) — Intelligence Monitoring › Microsoft security
+   The company's Microsoft security tools inside the PSOC console, read-only:
+   - Microsoft Defender XDR incidents and alerts (Microsoft Sentinel's too,
+     once Sentinel is onboarded to the Defender portal), with their devices,
+     IP addresses and accounts matched to sites through an asset map
+     (host-name patterns and IP ranges → site code). An active high or
+     medium incident touching a site's assets becomes a PSOC action.
+   - Microsoft Defender Threat Intelligence: articles and threat-actor
+     profiles, and lookups of hosts, IPs and vulnerabilities (needs the
+     Defender TI licence and API add-on on the tenant).
+   - Advanced hunting (KQL), with ready queries for the PSOC: devices
+     exposed to vulnerabilities ransomware uses, ransomware-like file
+     activity, sign-ins from countries without sites, alerts on the
+     physical-security servers, contact with indicators under review.
+   - Security Copilot: a ready prompt for any incident or indicator, to
+     paste into Security Copilot (it has no public API for this).
+   Two ways to connect: sign in with Microsoft in the browser (Entra app
+   registration of type single-page application, delegated read-only
+   permissions; the token lives only in this browser session), or through
+   the PSOC server holding an app registration. Nothing is changed in
+   Defender or Sentinel from here.
+   ===================================================================== */
+CFG.ms = Object.assign({ via: "signin", tenant: "", clientId: "", assets: "", minSev: "medium", unmapped: false }, CFG.ms || {});
+["login.microsoftonline.com", "graph.microsoft.com"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+const MS_SCOPES = ["SecurityIncident.Read.All", "SecurityAlert.Read.All", "ThreatHunting.Read.All", "ThreatIntelligence.Read.All"].map(s => "https://graph.microsoft.com/" + s);
+const MS_LIB = ["@azure/msal-browser@4.30.0/lib/msal-browser.min.js", "sha384-RGxxfG5yRS8DLU7ZJ8OoLhbV/BsJFHyPuMVHrTLbpj3t5Z15LnviJmaznKY/a7LZ"];
+const MS = { pca: null, account: null, inc: [], alerts: [], arts: [], profiles: [], hunt: null, at: 0, err: {}, busy: false, look: {} };
+FEEDS.msgraph = { name: "Microsoft Defender / Sentinel (Graph)", ok: null, err: null, at: 0 };
+SOURCE_CATALOG.push(["msgraph", "Microsoft security", "Microsoft Graph security API (Defender XDR, Sentinel, Defender Threat Intelligence)", "Incidents and alerts matched to sites, threat intelligence articles and actor profiles, advanced hunting", "cyber", "Yes (Entra app)", "5 min"]);
+function msLoadLib(){ if (window.msal) return Promise.resolve(); return [0, 1].reduce((p, i) => p.catch(() => new Promise((ok, bad) => { const x = document.createElement("script"); x.src = (i ? "https://unpkg.com/" : "https://cdn.jsdelivr.net/npm/") + MS_LIB[0]; x.integrity = MS_LIB[1]; x.crossOrigin = "anonymous"; x.dataset.iteLib = "msal"; x.onload = ok; x.onerror = () => { x.remove(); bad(new Error("could not load the Microsoft sign-in library")); }; document.head.appendChild(x); })), Promise.reject()); }
+const msPageOk = () => location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+async function msInit(){ if (MS.pca) return MS.pca; if (!CFG.ms.tenant || !CFG.ms.clientId) throw new Error("set the tenant and application (client) ID in Setup"); if (!msPageOk()) throw new Error("Microsoft sign-in needs the console served over https (or localhost), not opened as a file — or connect through the PSOC server");
+  await msLoadLib(); MS.pca = new msal.PublicClientApplication({ auth: { clientId: CFG.ms.clientId, authority: "https://login.microsoftonline.com/" + encodeURIComponent(CFG.ms.tenant), redirectUri: location.origin + location.pathname }, cache: { cacheLocation: "sessionStorage" } });
+  await MS.pca.initialize(); MS.account = MS.pca.getAllAccounts()[0] || null; return MS.pca; }
+async function msToken(interactive){ const pca = await msInit(); const req = { scopes: MS_SCOPES, account: MS.account || undefined };
+  try{ if (!MS.account) throw new Error("no account"); return (await pca.acquireTokenSilent(req)).accessToken; }
+  catch(e){ if (!interactive) throw new Error("sign in with Microsoft first"); const r = MS.account ? await pca.acquireTokenPopup(req) : await pca.loginPopup({ scopes: MS_SCOPES }); MS.account = r.account; audit("Signed in to Microsoft security", r.account ? r.account.username : "", ""); return r.accessToken || (await pca.acquireTokenSilent({ scopes: MS_SCOPES, account: MS.account })).accessToken; } }
+async function msGraph(path, opts, interactive){ opts = opts || {}; const ver = opts.ver || "v1.0";
+  if (CFG.ms.via === "server"){ if (!serverBase()) throw new Error("set the PSOC server address under Integrations"); const r = await fetch(`${serverBase()}/api/msgraph/${ver}${path}`, { method: opts.method || "GET", headers: { "Content-Type": "application/json" }, body: opts.body ? JSON.stringify(opts.body) : undefined }); if (!r.ok) throw new Error("PSOC server: HTTP " + r.status); return r.json(); }
+  const tok = await msToken(interactive), r = await fetch(`https://graph.microsoft.com/${ver}${path}`, { method: opts.method || "GET", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (!r.ok){ let m = "HTTP " + r.status; try{ const j = await r.json(); m += " — " + ((j.error || {}).message || "").slice(0, 200); }catch(e){} if (r.status === 403) m += " (the signed-in account needs a Security Reader role, and the app the permission)"; throw new Error(m); }
+  return r.json(); }
+const msConnected = () => CFG.ms.via === "server" ? !!serverBase() : !!MS.account;
+/* ---------- asset map: host-name patterns and IP ranges → site ---------- */
+function msAssetRules(){ return String(CFG.ms.assets || "").split(/\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#")).map(l => { const m = /^(.+?)\s*(?:=>|->|,|\s)\s*([A-Za-z0-9_-]{2,12})$/.exec(l); return m ? { pat: m[1].trim(), site: m[2].toUpperCase() } : null; }).filter(Boolean); }
+const msIp = s => { const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s || ""); return m ? ((+m[1] << 24) >>> 0) + (+m[2] << 16) + (+m[3] << 8) + +m[4] : null; };
+function msMatch(rule, host, ip){ const p = rule.pat; if (/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(p)){ const [net, bits] = p.split("/"), n = msIp(net), v = msIp(ip); if (n == null || v == null) return false; const mask = +bits === 0 ? 0 : (~0 << (32 - +bits)) >>> 0; return ((v & mask) >>> 0) === ((n & mask) >>> 0); }
+  if (!host) return false; const re = new RegExp("^" + p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i"); return re.test(host) || re.test(String(host).split(".")[0]); }
+function msEntities(inc){ const out = []; (inc.alerts || []).forEach(a => (a.evidence || []).forEach(e => { const t = String(e["@odata.type"] || "").split(".").pop();
+    if (t === "deviceEvidence") out.push({ kind: "device", name: String(e.deviceDnsName || e.hostName || "").slice(0, 100), ip: String(e.lastIpAddress || "").slice(0, 45) });
+    else if (t === "ipEvidence") out.push({ kind: "ip", name: String(e.ipAddress || "").slice(0, 45), ip: String(e.ipAddress || "").slice(0, 45), cc: e.countryLetterCode || "" });
+    else if (t === "userEvidence" && e.userAccount) out.push({ kind: "user", name: String(e.userAccount.userPrincipalName || e.userAccount.accountName || "").slice(0, 100) }); }));
+  const seen = new Set(); return out.filter(x => x.name && !seen.has(x.kind + x.name) && seen.add(x.kind + x.name)); }
+function msSitesOf(inc){ const rules = msAssetRules(), sites = new Set(); msEntities(inc).forEach(e => rules.forEach(r => { if (msMatch(r, e.kind === "device" ? e.name : "", e.ip)) sites.add(r.site); })); return [...sites]; }
+const MS_SEV = { informational: 0, low: 1, medium: 2, high: 3 };
+async function msLoad(interactive){ if (MS.busy) return; MS.busy = true; MS.err = {};
+  try{ const since = new Date(Date.now() - 14 * 864e5).toISOString(); const j = await msGraph(`/security/incidents?$top=50&$expand=alerts&$filter=lastUpdateDateTime ge ${since}`, null, interactive);
+    MS.inc = (j.value || []).map(i => Object.assign(i, { _sites: msSitesOf(i), _ents: msEntities(i) })).sort((a, b) => (MS_SEV[b.severity] || 0) - (MS_SEV[a.severity] || 0) || Date.parse(b.lastUpdateDateTime) - Date.parse(a.lastUpdateDateTime)); FEEDS.msgraph.ok = true; FEEDS.msgraph.err = null; }
+  catch(e){ MS.err.inc = e.message; FEEDS.msgraph.ok = false; FEEDS.msgraph.err = e.message; }
+  if (!MS.err.inc){ try{ const since = new Date(Date.now() - 3 * 864e5).toISOString(); const j = await msGraph(`/security/alerts_v2?$top=60&$filter=createdDateTime ge ${since}`); MS.alerts = (j.value || []).sort((a, b) => Date.parse(b.createdDateTime) - Date.parse(a.createdDateTime)); }catch(e){ MS.err.alerts = e.message; }
+    try{ const j = await msGraph("/security/threatIntelligence/articles?$top=25&$orderby=createdDateTime desc"); MS.arts = j.value || []; }catch(e){ MS.err.ti = e.message; }
+    try{ const j = await msGraph("/security/threatIntelligence/intelProfiles?$top=25"); MS.profiles = j.value || []; }catch(e){ MS.err.prof = e.message; } }
+  FEEDS.msgraph.at = Date.now(); MS.at = Date.now(); MS.busy = false; msAlerts(); if (UI.mode === "msft") renderPanel(); }
+setInterval(() => { if (ME && !isLimited() && msConnected()) msLoad(false); }, 5 * 60e3);
+function msAlerts(){ const min = MS_SEV[CFG.ms.minSev] || 2; MS.inc.filter(i => i.status !== "resolved" && (MS_SEV[i.severity] || 0) >= min && (i._sites.length || CFG.ms.unmapped)).forEach(i => {
+    const pri = i.severity === "high" ? "P2" : "P3", s = i._sites, key = "msinc:" + i.id + ":" + i.severity;
+    enqueueAction({ srcKey: key, source: "Microsoft security", pri, title: `Defender incident ${s.length ? "at " + s.join(", ") : ""}: ${String(i.displayName || "").slice(0, 120)}`, detail: `${i.severity} · ${i.status}${i.assignedTo ? " · with " + i.assignedTo : " · unassigned"}. Assets: ${i._ents.slice(0, 6).map(e => e.name).join(", ") || "—"}. Agree with the SOC what the site must do (isolate a security server, check badge system, guard the room). ${i.incidentWebUrl || ""}`, site: s.length === 1 ? s[0] : "", suggested: ["intel", "notify", "monitor"], payload: { cat: "operational_security", sev: pri, desc: `${s.join(", ") || "Cyber"} | Defender incident | ${i.displayName}`.slice(0, 200), sites: s, src: key } }); }); }
+/* ---------- lookups (also used by the IOC workbench) ---------- */
+async function msLookup(kind, v){ const k = kind + ":" + v; if (MS.look[k]) return MS.look[k]; let out;
+  if (kind === "cve"){ const j = await msGraph(`/security/threatIntelligence/vulnerabilities/${encodeURIComponent(v)}`); out = { score: j.priorityScore, exploits: j.exploitsAvailable, active: j.activeExploitsObserved, summary: String(((j.summary || {}).content) || j.description && j.description.content || "").slice(0, 400) }; }
+  else { const h = await msGraph(`/security/threatIntelligence/hosts/${encodeURIComponent(v)}`); let rep = null; try{ rep = await msGraph(`/security/threatIntelligence/hosts/${encodeURIComponent(v)}/reputation`); }catch(e){}
+    out = { first: h.firstSeenDateTime, last: h.lastSeenDateTime, rep: rep ? { cls: rep.classification, score: rep.score, rules: (rep.rules || []).map(r => r.name).slice(0, 4) } : null }; }
+  MS.look[k] = out; return out; }
+/* ---------- hunting ---------- */
+function msHuntTemplates(){ const kevRw = typeof CY !== "undefined" ? (CY.kev.list || []).filter(k => k.rw).map(k => k.cve).slice(0, 60) : [], cc = [...SITE_CC], pats = msAssetRules().filter(r => !/\//.test(r.pat)).map(r => r.pat.replace(/\*/g, "")).filter(Boolean).slice(0, 30), iocs = (typeof CTI !== "undefined" ? CTI.items : []);
+  const q = a => a.map(x => `"${String(x).replace(/["\\]/g, "")}"`).join(", ");
+  return [["kev", "Devices exposed to vulnerabilities ransomware uses", `// CISA KEV entries marked "used by ransomware" (last 90 days)\nDeviceTvmSoftwareVulnerabilities\n| where CveId in (${q(kevRw.length ? kevRw : ["CVE-0000-0000"])})\n| summarize CVEs = make_set(CveId), Software = make_set(SoftwareName) by DeviceName, OSPlatform\n| order by array_length(CVEs) desc`],
+    ["rename", "Ransomware-like file activity (mass renames)", "DeviceFileEvents\n| where Timestamp > ago(1d) and ActionType == \"FileRenamed\"\n| summarize Renames = count(), Extensions = make_set(tostring(split(FileName, \".\")[-1]), 10) by DeviceName, bin(Timestamp, 5m)\n| where Renames > 200\n| order by Renames desc"],
+    ["geo", "Sign-ins from countries without sites", `// Site countries: ${cc.join(", ")}\nAADSignInEventsBeta\n| where Timestamp > ago(1d) and ErrorCode == 0\n| where isnotempty(Country) and Country !in (${q(cc)})\n| summarize SignIns = count(), Countries = make_set(Country) by AccountUpn\n| order by SignIns desc`],
+    ["phys", "Alerts on physical-security servers (asset map)", `// Host-name patterns from the asset map in Setup\nAlertEvidence\n| where Timestamp > ago(7d) and EntityType == "Machine"\n| where DeviceName has_any (${q(pats.length ? pats : ["LENEL", "ONGUARD", "VMS", "NVR"])})\n| join kind=inner (AlertInfo) on AlertId\n| project Timestamp, DeviceName, Title, Severity, Category, ServiceSource`],
+    ["ioc", "Contact with indicators under review (IOC workbench)", `DeviceNetworkEvents\n| where Timestamp > ago(30d)\n| where RemoteIP in (${q(iocs.filter(x => x.type === "ip").map(x => x.v).slice(0, 100).concat(["0.0.0.0"]))}) or RemoteUrl has_any (${q(iocs.filter(x => x.type === "domain").map(x => x.v).slice(0, 100).concat(["example.invalid"]))})\n| summarize Hits = count(), First = min(Timestamp), Last = max(Timestamp) by DeviceName, RemoteIP, RemoteUrl\n| order by Hits desc`]]; }
+async function msHunt(query){ const body = { Query: query, Timespan: "P30D" }; let j; try{ j = await msGraph("/security/runHuntingQuery", { method: "POST", body }, true); }catch(e){ if (/HTTP 40[04]/.test(e.message)) j = await msGraph("/security/runHuntingQuery", { method: "POST", body, ver: "beta" }, true); else throw e; }
+  return { cols: (j.schema || []).map(c => c.name || c.Name).slice(0, 12), rows: (j.results || []).slice(0, 500) }; }
+const msCopilot = i => `Summarize Microsoft Defender incident ${i.id} ("${i.displayName}"). List the impacted devices, accounts and IP addresses, which of them belong to these sites: ${(i._sites || []).join(", ") || "none mapped"}, the attack stage reached, and the recommended containment steps. Note anything the physical security team must do on site.`;
+/* ---------- the panel ---------- */
+{ const t = G("intel").tabs; if (!t.some(x => x[0] === "msft")){ const i = t.findIndex(x => x[0] === "cyber"); t.splice(i >= 0 ? i + 1 : t.length, 0, ["msft", "Microsoft security"]); } }
+KEYS.msft = ["MICROSOFT SECURITY", [[3, "high"], [2, "medium"], [1, "low"]], "Microsoft Defender XDR and Sentinel incidents matched to sites, Defender Threat Intelligence, advanced hunting and Security Copilot prompts — read-only"];
+NON_CITY_MODES.push("msft"); if (!FULLW.includes("msft")) FULLW.push("msft");
+const msSevC = s => ({ high: "#E5484D", medium: "#E8873A", low: "#E8B04A" }[s] || "#8A94A0");
+function msftPanel(){ const tab = UI.msTab || (msConnected() ? "inc" : "setup"), conn = msConnected();
+  const bar = `<div class="ptools"><span class="label">Microsoft security</span><span class="innav0">${[["inc", `Incidents (${MS.inc.filter(i => i.status !== "resolved").length})`], ["alerts", "Alerts"], ["ti", "Threat intelligence"], ["hunt", "Hunting"], ["setup", "Setup"]].map(([k, l]) => `<button class="tab-mini" data-mstab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span>
+    <span class="s">${conn ? (CFG.ms.via === "server" ? "via the PSOC server" : "signed in as " + esc(MS.account.username)) + (MS.at ? " · updated " + esc(ago(MS.at)) : "") : "not connected"}</span><span class="sp"></span>${conn ? `<button class="tab-mini" data-msref>↻ Refresh</button>` : `<button class="pill primary" data-mssign>Connect to Microsoft</button>`}</div>`;
+  const errs = Object.entries(MS.err).filter(([, v]) => v).map(([k, v]) => `${{ inc: "Incidents", alerts: "Alerts", ti: "Threat intelligence articles", prof: "Actor profiles" }[k] || k}: ${v}`);
+  let body = "";
+  if (tab === "setup") body = `<div class="pmcols"><div><div class="sec" style="margin-top:0">Connection</div>
+      <label class="ctl"><input type="radio" name="msVia" value="signin"${CFG.ms.via !== "server" ? " checked" : ""}> Sign in with Microsoft in this browser (delegated, read-only)</label><label class="ctl"><input type="radio" name="msVia" value="server"${CFG.ms.via === "server" ? " checked" : ""}> Through the PSOC server (app registration on the server)</label>
+      <div class="fgrid"><label class="fld">Directory (tenant) ID<input id="msT" value="${esc(CFG.ms.tenant)}" placeholder="xxxxxxxx-xxxx-…"></label><label class="fld">Application (client) ID<input id="msC" value="${esc(CFG.ms.clientId)}" placeholder="xxxxxxxx-xxxx-…"></label></div>
+      <ol class="help"><li>In Microsoft Entra admin center › App registrations › New registration: platform <b>Single-page application</b>, redirect URI = this console's address${msPageOk() ? ` (<code>${esc(location.origin + location.pathname)}</code>)` : " (it must be served over https — a file opened from disk can't sign in)"}.</li>
+      <li>API permissions › Microsoft Graph › Delegated: SecurityIncident.Read.All, SecurityAlert.Read.All, ThreatHunting.Read.All, ThreatIntelligence.Read.All — then admin consent.</li>
+      <li>PSOC users need a Defender role with read access (e.g. Security Reader). Threat intelligence needs the Defender Threat Intelligence licence and API add-on.</li>
+      <li>For Sentinel incidents, onboard the Sentinel workspace to the Microsoft Defender portal (unified security operations).</li></ol>
+      <div class="fgrid"><label class="fld">Raise PSOC actions from<select id="msS">${["high", "medium", "low"].map(s => `<option${CFG.ms.minSev === s ? " selected" : ""}>${s}</option>`).join("")}</select></label><label class="ctl" style="align-self:end"><input type="checkbox" id="msU"${CFG.ms.unmapped ? " checked" : ""}> also for incidents not matched to a site</label></div></div>
+      <div><div class="sec" style="margin-top:0">Asset map — which assets belong to which site</div><p class="help">One rule per line: a host-name pattern (* wildcard) or an IP range, then the site code. Kept in this browser only. Example:<br><code>SG11-*  XSG11</code> · <code>*-ONGUARD-TKY*  XJP14</code> · <code>10.21.0.0/16  XSG11</code></p><textarea id="msA" rows="12" placeholder="pattern  SITE">${esc(CFG.ms.assets)}</textarea></div></div>
+      <div class="acts"><button class="act" data-mssave>Save</button>${conn && CFG.ms.via !== "server" ? `<button class="act" data-msout>Sign out</button>` : ""}</div>`;
+  else if (!conn) body = `<div class="empty">Not connected. Open <b>Setup</b> to register the console with Microsoft Entra, then <b>Connect to Microsoft</b>.<br><span class="s">Until then the Cyber threats tab and the IOC workbench work without Microsoft.</span></div>`;
+  else if (tab === "inc") body = MS.inc.length ? MS.inc.slice(0, 50).map((i, n) => `<div class="agp" style="--c:${msSevC(i.severity)}"><div class="hd"><span class="tag" style="border-color:${msSevC(i.severity)};color:${msSevC(i.severity)}">${esc(i.severity)}</span><b>${esc(i.displayName)}</b>${i._sites.map(s => `<span class="tag hot">${esc(s)}</span>`).join("")}<span class="s" style="margin-left:auto">${esc(i.status)} · ${esc(ago(Date.parse(i.lastUpdateDateTime)))}</span></div>
+      <div class="s">${esc(i.classification || "unclassified")}${i.determination && i.determination !== "unknown" ? " · " + esc(i.determination) : ""} · ${i.assignedTo ? "with " + esc(i.assignedTo) : "unassigned"} · ${(i.alerts || []).length} alert(s)</div>
+      ${i._ents.length ? `<div class="pmhits">${i._ents.slice(0, 10).map(e => `<span>${{ device: "💻", ip: "🌐", user: "👤" }[e.kind]} ${esc(e.name)}</span>`).join("")}</div>` : ""}
+      <div class="acts">${/^https:\/\/security\.microsoft\.com\//.test(i.incidentWebUrl || "") ? `<a class="act" href="${esc(i.incidentWebUrl)}" target="_blank" rel="noopener">Open in Defender</a>` : ""}<button class="act" data-mscop="${n}">Copy Security Copilot prompt</button>${i._ents.some(e => e.kind === "ip" || e.kind === "device") ? `<button class="act" data-msioc="${n}">Send to IOC workbench</button>` : ""}</div></div>`).join("") : `<div class="empty">No incidents updated in the last 14 days.</div>`;
+  else if (tab === "alerts") body = `<div class="olscroll"><table class="tttab"><thead><tr><th>When</th><th>Alert</th><th>Severity</th><th>Source</th><th>ATT&amp;CK</th><th>Status</th></tr></thead><tbody>${MS.alerts.slice(0, 60).map(a => `<tr><td>${esc(ago(Date.parse(a.createdDateTime)))}</td><td><b>${esc(a.title)}</b><div class="s">${esc(a.category || "")}</div></td><td style="color:${msSevC(a.severity)}">${esc(a.severity)}</td><td>${esc(a.serviceSource || a.detectionSource || "")}</td><td>${esc((a.mitreTechniques || []).slice(0, 4).join(", "))}</td><td>${esc(a.status)}</td></tr>`).join("") || `<tr><td colspan="6" class="s">No alerts in the last 3 days.</td></tr>`}</tbody></table></div>`;
+  else if (tab === "ti") body = `<div class="agcols"><div><div class="sec" style="margin-top:0">Defender Threat Intelligence — latest articles</div>${MS.arts.map(a => `<div class="agp" style="--c:#5B9BD5"><b>${esc(a.title)}</b><div class="s">${esc(ago(Date.parse(a.createdDateTime)))} · ${esc((a.tags || []).slice(0, 8).join(", "))}</div><div style="font-size:12.5px">${esc(trunc(String((a.summary || {}).content || "").replace(/[#*_>`]/g, ""), 320))}</div></div>`).join("") || `<div class="s">${MS.err.ti ? "Not available: " + esc(MS.err.ti) : "No articles."}</div>`}</div>
+      <div><div class="sec" style="margin-top:0">Threat actors and tools</div>${MS.profiles.map(p => `<div class="agp" style="--c:#C77DDB"><b>${esc(p.title)}</b> <span class="tag">${esc(p.kind || "")}</span><div class="s">${esc((p.aliases || []).slice(0, 6).join(", "))}${(p.countriesOrRegionsOfOrigin || []).length ? " · origin " + esc(p.countriesOrRegionsOfOrigin.map(c => c.label || c.code || c).join(", ")) : ""}</div><div style="font-size:12.5px">${esc(trunc(String((p.summary || {}).content || "").replace(/[#*_>`]/g, ""), 260))}</div></div>`).join("") || `<div class="s">${MS.err.prof ? "Not available: " + esc(MS.err.prof) : "None."}</div>`}</div></div>`;
+  else if (tab === "hunt"){ const T = msHuntTemplates(), cur = UI.msQ || T[0][2];
+    body = `<p class="help">Advanced hunting in Microsoft Defender (and Sentinel tables in the unified portal) — read-only KQL. Pick a PSOC query or write your own.</p><div class="acts" style="flex-wrap:wrap">${T.map(([k, n]) => `<button class="tab-mini" data-msqt="${k}">${esc(n)}</button>`).join("")}</div>
+      <textarea id="msQ" rows="9" class="mono" spellcheck="false">${esc(cur)}</textarea><div class="acts"><button class="act" data-msrun>Run query</button><button class="act" data-mscopyq>Copy</button></div>
+      ${MS.hunt ? (MS.hunt.err ? `<div class="banner warn">${esc(MS.hunt.err)}</div>` : `<div class="s">${MS.hunt.rows.length} row(s)</div><div class="olscroll"><table class="tttab"><thead><tr>${MS.hunt.cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${MS.hunt.rows.slice(0, 200).map(r => `<tr>${MS.hunt.cols.map(c => `<td>${esc(typeof r[c] === "object" ? JSON.stringify(r[c]) : String(r[c] == null ? "" : r[c])).slice(0, 160)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`) : ""}`; }
+  return bar + `<div class="pbody">${errs.length && conn ? `<div class="banner warn" style="margin:0 0 8px">${errs.map(esc).join(" · ")}</div>` : ""}${body}</div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "msft") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = msftPanel(); }; }
+document.getElementById("panel").addEventListener("click", async e => { if (UI.mode !== "msft") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.mstab){ UI.msTab = d.mstab; saveUI(); renderPanel(); return; }
+  if (d.mssign !== undefined){ try{ if (CFG.ms.via === "server"){ await msLoad(false); } else { await msToken(true); await msLoad(true); } UI.msTab = "inc"; saveUI(); }catch(err){ toast("Could not connect to Microsoft", err.message, "var(--red)"); } renderPanel(); return; }
+  if (d.msref !== undefined){ msLoad(true); renderPanel(); return; }
+  if (d.msout !== undefined){ try{ const a = MS.account; MS.account = null; if (MS.pca && a) await MS.pca.logoutPopup({ account: a }); }catch(err){} MS.inc = []; MS.alerts = []; MS.arts = []; MS.profiles = []; renderPanel(); return; }
+  if (d.mssave !== undefined){ const via = ($$("[name=msVia]").find(i => i.checked) || {}).value || "signin", ten = $("#msT").value.trim(), cid = $("#msC").value.trim(), guid = /^[0-9a-f-]{36}$/i;
+    if (ten && !guid.test(ten) && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(ten)){ toast("Tenant ID looks wrong", "Use the Directory (tenant) ID or the tenant's domain.", "var(--amber)"); return; } if (cid && !guid.test(cid)){ toast("Client ID looks wrong", "Use the Application (client) ID from the app registration.", "var(--amber)"); return; }
+    Object.assign(CFG.ms, { via, tenant: ten, clientId: cid, assets: $("#msA").value.slice(0, 20000), minSev: $("#msS").value, unmapped: $("#msU").checked }); MS.pca = null; saveCfg(); audit("Microsoft security settings changed", via, `${msAssetRules().length} asset rules`);
+    MS.inc.forEach(i => { i._sites = msSitesOf(i); }); msAlerts(); toast("Saved", `${msAssetRules().length} asset rule(s)`, "var(--green)"); renderPanel(); return; }
+  if (d.mscop){ const i = MS.inc[+d.mscop]; if (i){ const txt = msCopilot(i); copyRich(`<p>${esc(txt)}</p>`, txt); toast("Prompt copied", "Paste it into Security Copilot (securitycopilot.microsoft.com)", "var(--green)"); } return; }
+  if (d.msioc){ const i = MS.inc[+d.msioc]; if (i && typeof ctiAdd === "function"){ ctiAdd(i._ents.filter(x => x.kind !== "user").map(x => x.ip || x.name).join("\n"), "Defender incident " + i.id); UI.cyTab = "ioc"; saveUI(); setMode("cyber"); } return; }
+  if (d.msqt){ const q = msHuntTemplates().find(x => x[0] === d.msqt); if (q){ UI.msQ = q[2]; saveUI(); renderPanel(); } return; }
+  if (d.mscopyq !== undefined){ const q = $("#msQ").value; copyRich(`<pre>${esc(q)}</pre>`, q); toast("Query copied", "", "var(--green)"); return; }
+  if (d.msrun !== undefined){ const q = $("#msQ").value; UI.msQ = q; saveUI(); t.disabled = true; try{ MS.hunt = await msHunt(q); audit("Advanced hunting query run", q.split("\n").find(l => l.trim() && !l.trim().startsWith("//")) || "", MS.hunt.rows.length + " rows"); }catch(err){ MS.hunt = { err: err.message }; } t.disabled = false; renderPanel(); return; } });
+{ const st = document.createElement("style"); st.textContent = `.mono{font:12.5px ui-monospace,Consolas,monospace;width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   CYBER THREAT INTELLIGENCE AND ANALYSIS (18 Oct)
+   Two more views in Intelligence Monitoring › Cyber threats:
+   - IOC workbench: paste any text (an advisory, an email, a report); the
+     indicators are pulled out and re-fanged (IPs, domains, URLs, hashes,
+     CVEs, e-mail addresses), checked against what the console knows
+     (CISA KEV, ransomware victims' domains, the watchlist), enriched from
+     free sources (EPSS exploit-probability scores; optional Shodan
+     InternetDB for IPs — non-commercial unless licensed) and from Microsoft
+     Defender Threat Intelligence when connected, prioritised, and handed
+     on: hunt for them in Defender, copy them defanged, a Security Copilot
+     prompt, or a line in the Daily Shift Report.
+   - Analysis & brief: trends (ransomware victims in site countries by
+     week, most active groups, sectors; exploited flaws by week; Defender
+     incidents at sites), key judgements written from the numbers, and a
+     cyber threat brief exported as HTML, copied into email, filed or added
+     to the shift report.
+   ===================================================================== */
+CFG.cti = Object.assign({ internetdb: false }, CFG.cti || {});
+["api.first.org", "internetdb.shodan.io"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+const CTI_KEY = "psoc.uni.cti.v1";
+const CTI = Object.assign({ items: [] }, lsGet(CTI_KEY, {})); CTI.kevAll = null; CTI.busy = false;
+const ctiSave = () => lsSet(CTI_KEY, { items: CTI.items.slice(0, 400) });
+const CTI_FILE_EXT = /\.(exe|dll|js|ps1|bat|cmd|vbs|zip|rar|7z|doc|docx|xls|xlsx|pdf|txt|png|jpg|gif|log|tmp|dat|bin|msi|lnk|iso|sh|py|html?|php|aspx?)$/i;
+function ctiRefang(s){ return String(s || "").replace(/hxxp/gi, "http").replace(/\[\s*\.\s*\]|\(\s*\.\s*\)|\{\s*\.\s*\}|\[dot\]|\(dot\)|\s\[\.\]\s/gi, ".").replace(/\[:\]|\[\s*:\s*\]/g, ":").replace(/\[at\]|\(at\)|\[@\]/gi, "@").replace(/\\\./g, "."); }
+const ctiDefang = (t, v) => t === "ip" || t === "domain" || t === "email" ? v.replace(/\./g, "[.]").replace(/@/g, "[@]") : t === "url" ? v.replace(/^http/i, "hxxp").replace(/\./g, "[.]") : v;
+function ctiPrivate(ip){ const p = ip.split(".").map(Number); return p[0] === 10 || p[0] === 127 || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168) || (p[0] === 169 && p[1] === 254) || p[0] === 0 || p[0] >= 224 || (p[0] === 100 && p[1] >= 64 && p[1] <= 127); }
+function ctiExtract(text){ const t = ctiRefang(text), out = [], seen = new Set(), add = (type, v) => { v = v.replace(/[).,;:'"\]]+$/, ""); const k = type + ":" + v.toLowerCase(); if (!v || seen.has(k)) return; seen.add(k); out.push({ type, v }); };
+  (t.match(/https?:\/\/[^\s"'<>()]+/gi) || []).forEach(u => add("url", u.slice(0, 500)));
+  (t.match(/\bCVE-\d{4}-\d{4,7}\b/gi) || []).forEach(c => add("cve", c.toUpperCase()));
+  (t.match(/\b[a-f0-9]{64}\b/gi) || []).forEach(h => add("sha256", h.toLowerCase())); (t.match(/\b[a-f0-9]{40}\b/gi) || []).forEach(h => add("sha1", h.toLowerCase())); (t.match(/\b[a-f0-9]{32}\b/gi) || []).forEach(h => add("md5", h.toLowerCase()));
+  (t.match(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}\b/gi) || []).forEach(m => add("email", m.toLowerCase()));
+  (t.match(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g) || []).forEach(ip => add("ip", ip));
+  const noUrl = t.replace(/https?:\/\/[^\s"'<>()]+/gi, " ").replace(/\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}\b/gi, " ");
+  (noUrl.match(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/gi) || []).forEach(d => { if (!CTI_FILE_EXT.test(d) && !/^\d+(\.\d+)+$/.test(d)) add("domain", d.toLowerCase()); });
+  return out.slice(0, 300); }
+function ctiAdd(text, src){ const found = ctiExtract(text), have = new Set(CTI.items.map(i => i.type + ":" + i.v)); let n = 0;
+  found.forEach(f => { if (have.has(f.type + ":" + f.v)) return; CTI.items.unshift(Object.assign(f, { id: nid("ioc"), src: String(src || "pasted").slice(0, 80), at: Date.now(), enr: {}, notes: [] })); n++; });
+  ctiSave(); audit("Indicators added", src || "pasted", n + " new"); ctiEnrich(); return n; }
+async function ctiKev(){ if (CTI.kevAll) return CTI.kevAll; let txt; try{ txt = await fetchVia("https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json", null, 40000); }catch(e){ txt = await fetchVia("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", null, 40000); }
+  const m = {}; (JSON.parse(txt).vulnerabilities || []).forEach(v => { m[String(v.cveID).toUpperCase()] = { vendor: String(v.vendorProject || "").slice(0, 60), product: String(v.product || "").slice(0, 80), rw: v.knownRansomwareCampaignUse === "Known", added: v.dateAdded }; }); return (CTI.kevAll = m); }
+// what the item means, as a priority and a one-line verdict
+function ctiAssess(i){ const e = i.enr || {}, why = []; let p = 0;
+  if (i.type === "cve"){ if (e.kev){ p = Math.max(p, 2); why.push(`exploited now (CISA KEV, ${e.kev.vendor} ${e.kev.product})`); if (e.kev.rw){ p = 3; why.push("used by ransomware"); } } else if (e.kev === false) why.push("not in CISA KEV");
+    if (e.epss != null){ why.push(`EPSS ${(e.epss * 100).toFixed(1)}% (${Math.round(e.pct * 100)}th percentile)`); if (e.epss >= .5) p = Math.max(p, 2); else if (e.epss >= .1) p = Math.max(p, 1); }
+    if (e.kev && typeof cyVendorHit === "function" && cyVendorHit({ vendor: e.kev.vendor, product: e.kev.product })){ p = 3; why.push("affects a vendor of your systems"); } }
+  if (i.type === "ip"){ if (e.private){ why.push("private / internal address"); } if (e.idb){ if ((e.idb.vulns || []).length){ p = Math.max(p, 1); why.push(`${e.idb.vulns.length} known vulnerabilities on exposed services`); } if ((e.idb.tags || []).length) why.push("tags: " + e.idb.tags.slice(0, 4).join(", ")); if ((e.idb.ports || []).length) why.push("open ports " + e.idb.ports.slice(0, 8).join(", ")); } }
+  if (e.msrep){ why.push(`Microsoft reputation: ${e.msrep.cls}${e.msrep.score != null ? " (" + e.msrep.score + ")" : ""}`); if (/malicious/i.test(e.msrep.cls)) p = 3; else if (/suspicious/i.test(e.msrep.cls)) p = Math.max(p, 2); }
+  if (e.msvuln && e.msvuln.active) { p = Math.max(p, 2); why.push("active exploitation seen by Microsoft"); }
+  if (/^(md5|sha1|sha256)$/.test(i.type) && !why.length) why.push("no automatic check for file hashes — hunt for it in Defender or open the links");
+  if (e.victim){ p = Math.max(p, 2); why.push(`domain of a ransomware victim: ${e.victim}`); } if (e.watch){ p = 3; why.push(`watchlist: ${e.watch}`); }
+  return { p, why }; }
+async function ctiEnrich(){ if (CTI.busy) return; CTI.busy = true; const todo = CTI.items.filter(i => !i.enr.done).slice(0, 60);
+  const cves = todo.filter(i => i.type === "cve"); if (cves.length){ try{ const K = await ctiKev(); cves.forEach(i => { i.enr.kev = K[i.v] || false; }); }catch(e){ cves.forEach(i => { i.enr.err = "KEV: " + e.message; }); }
+    try{ const j = JSON.parse(await fetchVia("https://api.first.org/data/v1/epss?cve=" + cves.map(i => i.v).join(","), null, 25000)); (j.data || []).forEach(d => { const i = cves.find(x => x.v === String(d.cve).toUpperCase()); if (i){ i.enr.epss = +d.epss; i.enr.pct = +d.percentile; } }); }catch(e){} }
+  const vicDom = typeof cyAllVictims === "function" ? cyAllVictims().filter(v => v.domain).map(v => [v.domain.toLowerCase().replace(/^www\./, ""), v.name + " (" + v.group + ")"]) : [];
+  for (const i of todo){ const host = i.type === "url" ? (() => { try{ return new URL(i.v).hostname; }catch(e){ return ""; } })() : i.type === "email" ? i.v.split("@")[1] : i.type === "domain" ? i.v : "";
+    if (host){ const h = host.replace(/^www\./, ""), m = vicDom.find(([d]) => d === h || h.endsWith("." + d)); if (m) i.enr.victim = m[1]; }
+    if (typeof cyWatchHit === "function"){ const w = cyWatchHit({ name: i.v, domain: host, title: "" }); if (w) i.enr.watch = w; }
+    if (i.type === "ip"){ i.enr.private = ctiPrivate(i.v); if (!i.enr.private && CFG.cti.internetdb){ try{ const r = await fetch("https://internetdb.shodan.io/" + i.v); if (r.ok){ const j = await r.json(); i.enr.idb = { ports: (j.ports || []).slice(0, 20), tags: (j.tags || []).slice(0, 8).map(String), vulns: (j.vulns || []).slice(0, 30).map(String), hostnames: (j.hostnames || []).slice(0, 5).map(String) }; } else if (r.status === 404) i.enr.idb = { ports: [], tags: ["not seen"], vulns: [] }; }catch(e){} } }
+    if (typeof msConnected === "function" && msConnected()){ try{
+      if (i.type === "cve"){ i.enr.msvuln = await msLookup("cve", i.v); } else if ((i.type === "ip" && !i.enr.private) || host){ const r = await msLookup("host", i.type === "ip" ? i.v : host); i.enr.msrep = r.rep; i.enr.msseen = r.last; } }catch(e){ i.enr.mserr = e.message.slice(0, 120); } }
+    i.enr.done = true; i.assess = ctiAssess(i); }
+  CTI.busy = false; ctiSave(); if (UI.mode === "cyber") renderPanel(); }
+const CTI_LINKS = { ip: [["VirusTotal", "https://www.virustotal.com/gui/ip-address/"], ["AbuseIPDB", "https://www.abuseipdb.com/check/"]], domain: [["VirusTotal", "https://www.virustotal.com/gui/domain/"], ["urlscan", "https://urlscan.io/search/#domain:"]], url: [["urlscan", "https://urlscan.io/search/#page.url:"]], sha256: [["VirusTotal", "https://www.virustotal.com/gui/file/"], ["MalwareBazaar", "https://bazaar.abuse.ch/sample/"]], sha1: [["VirusTotal", "https://www.virustotal.com/gui/file/"]], md5: [["VirusTotal", "https://www.virustotal.com/gui/file/"]], cve: [["NVD", "https://nvd.nist.gov/vuln/detail/"], ["CISA KEV", "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search_api_fulltext="]] };
+/* ---------- analysis: the numbers and the key judgements ---------- */
+function ctiAnalysis(){ const now = Date.now(), wk = 7 * 864e5, all = typeof cyAllVictims === "function" ? cyAllVictims() : [], mine = all.filter(v => SITE_CC.has(v.cc));
+  const weeks = Array.from({ length: 8 }, (_, i) => { const end = now - i * wk, start = end - wk; return { label: new Date(start + 8 * 36e5).toISOString().slice(5, 10), n: mine.filter(v => v.t >= start && v.t < end).length, rel: mine.filter(v => v.t >= start && v.t < end && cyRel(v)).length }; }).reverse();
+  const c30 = mine.filter(v => now - v.t < 30 * 864e5), p30 = mine.filter(v => now - v.t >= 30 * 864e5 && now - v.t < 60 * 864e5);
+  const top = (arr, f) => Object.entries(arr.reduce((m, x) => { const k = f(x); if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]);
+  const groups = top(mine.filter(v => now - v.t < 60 * 864e5), v => v.group).slice(0, 8), sectors = top(c30, v => (v.sector || "unknown").toLowerCase()).slice(0, 8), countries = top(c30, v => v.cc).slice(0, 8);
+  const kev = (typeof CY !== "undefined" ? CY.kev.list : []) || [], kevWeeks = Array.from({ length: 8 }, (_, i) => { const end = now - i * wk, start = end - wk, l = kev.filter(k => { const t = Date.parse(k.added); return t >= start && t < end; }); return { label: new Date(start + 8 * 36e5).toISOString().slice(5, 10), n: l.length, rel: l.filter(k => k.rw).length }; }).reverse();
+  const kevMine = kev.filter(k => now - Date.parse(k.added) < 14 * 864e5 && cyVendorHit(k)), watch = all.filter(v => cyWatchHit(v) && now - v.t < 30 * 864e5);
+  const msInc = typeof MS !== "undefined" ? MS.inc.filter(i => i.status !== "resolved") : [], msSite = msInc.filter(i => (i._sites || []).length);
+  const net = typeof infCountry === "function" ? [...SITE_CC].map(infCountry).filter(c => c.io && c.io.ongoing) : [];
+  const J = [], chg = p30.length ? Math.round((c30.length - p30.length) / p30.length * 100) : null;
+  J.push(`Ransomware gangs named ${c30.length} organisation${c30.length === 1 ? "" : "s"} in countries with sites in the last 30 days${chg != null ? ` (${chg >= 0 ? "+" : ""}${chg}% on the 30 days before)` : ""}${c30.filter(cyRel).length ? `, ${c30.filter(cyRel).length} in sectors close to ours (${sectors.filter(([s]) => new RegExp(CFG.cyber.sectors, "i").test(s)).slice(0, 3).map(x => x[0]).join(", ")})` : ""}.`);
+  if (groups.length) J.push(`Most active against these countries: ${groups.slice(0, 3).map(([g, n]) => `${g} (${n})`).join(", ")}.`);
+  J.push(watch.length ? `Watchlist: ${[...new Set(watch.map(cyWatchHit))].join(", ")} named on leak sites — supplier risk to be assessed with IT security.` : "No supplier or partner on the watchlist has been named on a leak site in the last 30 days.");
+  J.push(kevMine.length ? `${kevMine.length} actively exploited flaw${kevMine.length === 1 ? "" : "s"} in our systems' vendors added in 14 days${kevMine.some(k => k.rw) ? ", including " + kevMine.filter(k => k.rw).map(k => `${k.vendor} ${k.product} (${k.cve})`).slice(0, 3).join(", ") + " used by ransomware" : ""}; system owners to confirm patching.` : "No newly exploited flaws in our systems' vendors in the last 14 days.");
+  if (typeof MS !== "undefined" && msConnected()) J.push(msSite.length ? `Microsoft Defender: ${msSite.length} open incident${msSite.length === 1 ? "" : "s"} touching site assets (${[...new Set(msSite.flatMap(i => i._sites))].join(", ")}), ${msSite.filter(i => i.severity === "high").length} high.` : `Microsoft Defender: no open incidents touching site assets (${msInc.length} open overall).`);
+  J.push(net.length ? `Internet disruption now in ${net.map(c => c.name).join(", ")}${net.some(c => c.cause) ? " — " + net.map(c => c.cause).filter(Boolean)[0] : ""}.` : "Internet connectivity normal in all site countries.");
+  return { weeks, groups, sectors, countries, kevWeeks, kevMine, watch, msSite, net, J, c30 }; }
+function ctiBars(rows, fmt){ const max = Math.max(1, ...rows.map(r => r.n)); return `<div class="ctibars">${rows.map(r => `<div class="ctib"><span class="ctibv" style="height:${Math.round(r.n / max * 100)}%"><i style="height:${r.n ? Math.round((r.rel || 0) / r.n * 100) : 0}%"></i></span><b>${r.n}</b><span class="s">${esc(r.label)}</span></div>`).join("")}</div><div class="s">${fmt}</div>`; }
+function ctiBriefHtml(A){ const F = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;", navy = "#12284B", d = new Date(), team = (CFG.reports || {}).team || "THE APAC PSOC", sec = t => `<tr><td style="${F}padding:18px 0 6px;font-size:14px;font-weight:700;color:${navy};border-bottom:2px solid ${navy};text-transform:uppercase">${esc(t)}</td></tr>`, li = a => `<tr><td style="${F}padding:8px 0;font-size:13px;line-height:1.55"><ul style="margin:0;padding-left:18px">${a.map(x => `<li style="margin:3px 0">${esc(x)}</li>`).join("")}</ul></td></tr>`;
+  const rows = (h, r) => `<tr><td><table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:6px 0"><tr>${h.map(x => `<th style="${F}text-align:left;background:${navy};color:#fff;font-size:12px;padding:6px 8px">${esc(x)}</th>`).join("")}</tr>${r.map((x, i) => `<tr>${x.map(c => `<td style="${F}font-size:12.5px;padding:6px 8px;border-bottom:1px solid #E3E6EA;background:${i % 2 ? "#F7F9FB" : "#fff"}">${esc(c)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${h.length}" style="${F}font-size:12.5px;padding:6px 8px;color:#5F6B78">Nil</td></tr>`}</table></td></tr>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(team)} — Cyber Threat Brief — ${esc(d.toDateString())}</title></head><body style="margin:0;background:#EEF1F4"><table cellpadding="0" cellspacing="0" style="width:100%"><tr><td align="center" style="padding:20px 10px"><table cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background:#fff;color:#1A1A1A;border:1px solid #D5DBE1">
+<tr><td style="${F}background:${navy};color:#fff;padding:20px 24px"><div style="font-size:12px;letter-spacing:1.4px;opacity:.85">${esc(team)}</div><div style="font-size:24px;font-weight:700;margin:4px 0">Cyber Threat Brief</div><div style="font-size:13px">${esc(d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))} · ransomware · exploited flaws · Microsoft Defender · connectivity</div></td></tr>
+<tr><td style="padding:4px 24px 22px"><table cellpadding="0" cellspacing="0" style="width:100%">${sec("Key judgements")}${li(A.J)}
+${sec("Ransomware in site countries — most active groups (60 days)")}${rows(["Group", "Victims"], A.groups.map(([g, n]) => [g, String(n)]))}
+${sec("Victims by sector (30 days)")}${rows(["Sector", "Victims"], A.sectors.map(([s, n]) => [s, String(n)]))}
+${sec("Exploited flaws in our systems' vendors (14 days)")}${rows(["CVE", "Vendor / product", "Ransomware", "US fix deadline"], A.kevMine.map(k => [k.cve, `${k.vendor} ${k.product}`, k.rw ? "Yes" : "—", k.due || ""]))}
+${A.msSite.length ? sec("Microsoft Defender incidents touching sites") + rows(["Severity", "Incident", "Sites", "Status"], A.msSite.map(i => [i.severity, i.displayName, i._sites.join(", "), i.status])) : ""}
+${sec("Sources and confidence")}${li(["Ransomware victims: ransomware.live (leak-site listings; claims by criminal groups — not confirmed by victims). Confidence: medium.", "Exploited flaws: CISA Known Exploited Vulnerabilities catalog. Confidence: high.", "Microsoft Defender XDR / Sentinel incidents (if connected). Confidence: high.", "Internet connectivity: IODA, Georgia Tech. Confidence: medium."])}
+</table></td></tr><tr><td style="${F}background:${navy};color:#fff;font-size:11px;letter-spacing:1.2px;text-align:center;padding:9px">${esc(team)} | CYBER THREAT BRIEF | ${esc((CFG.reports || {}).footer || "INTERNAL")}</td></tr></table></td></tr></table></body></html>`; }
+/* ---------- extend the Cyber threats panel with the two views ---------- */
+{ const _cp = cyberPanel; cyberPanel = function(){ let h = _cp(); const tab = UI.cyTab || "rw";
+    h = h.replace('</span><span class="s">', `${[["ioc", `IOC workbench (${CTI.items.length})`], ["brief", "Analysis &amp; brief"]].map(([k, l]) => `<button class="tab-mini" data-cytab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span><span class="s">`);
+    if (tab !== "ioc" && tab !== "brief") return h; let body = "";
+    if (tab === "ioc"){ const ms = typeof msConnected === "function" && msConnected(), sorted = CTI.items.slice().sort((a, b) => ((b.assess || {}).p || 0) - ((a.assess || {}).p || 0) || b.at - a.at), P = ["Low", "Medium", "High", "Critical"], PC = ["#8A94A0", "#E8B04A", "#E8873A", "#E5484D"];
+      body = `<div class="agcols"><div><label class="fld">Paste an advisory, e-mail or report — the indicators are pulled out (defanged ones too)<textarea id="ctiT" rows="6" placeholder="e.g. C2 at 185[.]220[.]101[.]4, payload hxxps://update-check[.]example/a.exe, CVE-2026-1111, SHA256 …"></textarea></label>
+        <div class="acts"><button class="act" data-ctiadd>Extract and check</button>${CTI.items.length ? `<button class="act" data-ctihunt>Hunt for these in Defender</button><button class="act" data-cticopy>Copy defanged</button><button class="act" data-cticop>Copy Security Copilot prompt</button><button class="act" data-ctidsr>Add to shift report</button><button class="act" data-cticlr>Clear</button>` : ""}</div>
+        <p class="help">Checked automatically: CISA KEV and EPSS for CVEs; ransomware victims' domains and your watchlist; ${ms ? "Microsoft Defender Threat Intelligence (reputation, first/last seen, vulnerability data)" : "Microsoft Defender Threat Intelligence once connected (Microsoft security tab)"}${CFG.cti.internetdb ? "; Shodan InternetDB for public IPs" : ""}. Links open the indicator on other services — that shares it with them.</p>
+        <label class="ctl"><input type="checkbox" data-ctiidb${CFG.cti.internetdb ? " checked" : ""}> Look up public IPs in Shodan InternetDB (free for non-commercial use; company use needs a Shodan licence)</label></div>
+        <div><div class="sec" style="margin-top:0">Indicators (${CTI.items.length})${CTI.busy ? " — checking…" : ""}</div>${sorted.slice(0, 120).map(i => { const a = i.assess || { p: 0, why: [] }; return `<div class="ctii" style="--c:${PC[a.p]}"><div class="hd"><span class="tag">${esc(i.type)}</span><b class="mono1">${esc(ctiDefang(i.type, i.v))}</b><span class="tag" style="border-color:${PC[a.p]};color:${PC[a.p]}">${i.enr.done ? P[a.p] : "checking"}</span><span class="s" style="margin-left:auto">${esc(i.src)}</span><button class="tab-mini" data-ctidel="${i.id}" aria-label="Remove">×</button></div>
+          ${a.why.length ? `<div class="s">${a.why.map(esc).join(" · ")}</div>` : ""}${i.enr.mserr ? `<div class="s">Microsoft: ${esc(i.enr.mserr)}</div>` : ""}<div class="s">${(CTI_LINKS[i.type] || []).map(([n, u]) => `<a href="${esc(u + encodeURIComponent(i.v))}" target="_blank" rel="noopener noreferrer">${n}</a>`).join(" · ")}</div></div>`; }).join("") || `<div class="s">None yet.</div>`}</div></div>`; }
+    if (tab === "brief"){ const A = ctiAnalysis();
+      body = `<div class="agcols"><div><div class="sec" style="margin-top:0">Key judgements</div><ul class="ctij">${A.J.map(j => `<li>${esc(j)}</li>`).join("")}</ul>
+          <div class="acts"><button class="act" data-ctidl>⬇ Cyber threat brief (HTML)</button><button class="act" data-ctimail>Copy for email</button><button class="act" data-ctirep>File in repository</button><button class="act" data-ctidsrj>Add to shift report</button></div>
+          <p class="help">The judgements are written from the numbers on this page; check them before sending. Ransomware listings are criminals' claims, not confirmed by the victims.</p></div>
+        <div><div class="sec" style="margin-top:0">Ransomware victims in site countries, by week</div>${ctiBars(A.weeks, "Darker part: sectors close to ours")}
+          <div class="sec">Exploited flaws added to CISA KEV, by week</div>${ctiBars(A.kevWeeks, "Darker part: used by ransomware")}
+          <div class="pmcols"><div><div class="sec">Most active groups (60 days)</div>${A.groups.map(([g, n]) => `<div class="ctirow"><span>${esc(g)}</span><b>${n}</b></div>`).join("") || `<div class="s">—</div>`}</div><div><div class="sec">Sectors (30 days)</div>${A.sectors.map(([s, n]) => `<div class="ctirow"><span>${esc(s)}</span><b>${n}</b></div>`).join("") || `<div class="s">—</div>`}</div></div></div></div>`; }
+    return h.slice(0, h.lastIndexOf("</div>")) + body + "</div>"; }; }
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "cyber") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.ctiadd !== undefined){ const n = ctiAdd($("#ctiT").value, "pasted"); toast(n ? `${n} indicator(s) found` : "No new indicators found", n ? "Checking them now" : "", n ? "var(--teal)" : "var(--amber)"); renderPanel(); return; }
+  if (d.ctidel){ CTI.items = CTI.items.filter(i => i.id !== d.ctidel); ctiSave(); renderPanel(); return; }
+  if (d.cticlr !== undefined){ CTI.items = []; ctiSave(); renderPanel(); return; }
+  if (d.cticopy !== undefined){ const txt = CTI.items.map(i => `${i.type}\t${ctiDefang(i.type, i.v)}`).join("\n"); copyRich(`<pre>${esc(txt)}</pre>`, txt); toast("Copied, defanged", CTI.items.length + " indicators", "var(--green)"); return; }
+  if (d.cticop !== undefined){ const txt = `Assess these indicators for our organisation. For each, give reputation, related threat actors or campaigns, first/last seen, and whether any device in our tenant contacted it in the last 30 days:\n${CTI.items.slice(0, 50).map(i => `- ${i.type}: ${ctiDefang(i.type, i.v)}`).join("\n")}`; copyRich(`<pre>${esc(txt)}</pre>`, txt); toast("Prompt copied", "Paste it into Security Copilot", "var(--green)"); return; }
+  if (d.ctihunt !== undefined){ const q = msHuntTemplates().find(x => x[0] === "ioc"); UI.msQ = q[2]; UI.msTab = "hunt"; saveUI(); setMode("msft"); return; }
+  if (d.ctidsr !== undefined || d.ctidsrj !== undefined){ if (typeof dsrCur !== "function") return; const R = dsrCur();
+    if (d.ctidsr !== undefined){ const hi = CTI.items.filter(i => (i.assess || {}).p >= 2); R.sec.intel.push({ id: nid("i"), src: "cti:" + Date.now(), loc: "Cyber", cat: "Threat Assessment", status: "Monitoring", title: "INDICATORS UNDER REVIEW", text: `${CTI.items.length} indicator(s) reviewed; ${hi.length} high or critical: ${hi.slice(0, 6).map(i => `${ctiDefang(i.type, i.v)} (${(i.assess.why[0] || "").slice(0, 60)})`).join("; ") || "none"}.` }); }
+    else ctiAnalysis().J.forEach((j, n) => R.sec.intel.push({ id: nid("i"), src: "ctij:" + new Date().toISOString().slice(0, 10) + ":" + n, loc: "Cyber", cat: "Threat Assessment", status: "Informational", title: n === 0 ? "CYBER THREAT BRIEF" : "CYBER", text: j }));
+    dsrSave(); toast("Added to the Daily Shift Report", "Under Intelligence", "var(--green)"); return; }
+  if (d.ctidl !== undefined){ downloadHtml(`PSOC_Cyber_Threat_Brief_${new Date().toISOString().slice(0, 10)}.html`, ctiBriefHtml(ctiAnalysis())); audit("Cyber threat brief exported", "", "HTML"); return; }
+  if (d.ctimail !== undefined){ const A = ctiAnalysis(); copyRich(bodyOf(ctiBriefHtml(A)), "CYBER THREAT BRIEF\n" + A.J.map(j => "• " + j).join("\n")); toast("Brief copied", "Paste it into the email", "var(--green)"); return; }
+  if (d.ctirep !== undefined){ const A = ctiAnalysis(); putShared("repo", { id: "ctb-" + new Date().toISOString().slice(0, 10), createdAt: Date.now(), author: ME ? ME.name : "", type: "Cyber threat brief", repo: "intel", title: `Cyber Threat Brief — ${new Date().toDateString()}`, content: A.J.join("\n"), summary: A.J[0] }); audit("Cyber threat brief filed", "", ""); toast("Filed", "Intelligence repository", "var(--green)"); return; } });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "cyber" || !e.target.matches("[data-ctiidb]")) return; CFG.cti.internetdb = e.target.checked; saveCfg(); if (CFG.cti.internetdb){ CTI.items.filter(i => i.type === "ip").forEach(i => { i.enr.done = false; }); ctiEnrich(); } renderPanel(); });
+{ const st = document.createElement("style"); st.textContent = `
+.ctii{border:1px solid var(--line);border-left:5px solid var(--c);border-radius:7px;padding:6px 9px;margin:5px 0;display:flex;flex-direction:column;gap:3px;font-size:12.5px}.ctii .hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mono1{font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.ctibars{display:flex;gap:6px;align-items:flex-end;height:120px;margin:6px 0 2px}.ctib{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end;font-size:11px}.ctibv{width:100%;background:#5B9BD5;border-radius:3px 3px 0 0;display:flex;align-items:flex-end;min-height:2px}.ctibv i{display:block;width:100%;background:#12284B;border-radius:3px 3px 0 0}
+.ctirow{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 0;font-size:12.5px}.ctij{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px}`; document.head.appendChild(st); }
 
 boot();
 
