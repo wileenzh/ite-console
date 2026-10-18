@@ -40,6 +40,15 @@ from the news (GDELT), matched to site countries and cities, and a register for 
 report. Per country the signals are read together (an internet outage with power-cut news is most likely a power
 problem). Ongoing disruptions and major power cuts near sites go to the Action queue.
 
+## Cyber threats (Intelligence Monitoring)
+
+Ransomware victims named on leak sites and cyber attacks reported in the press (ransomware.live), for site countries and
+key sectors (technology, telecoms, data and cloud, energy, logistics, facilities); a watchlist of suppliers and
+partners (a match is a P2 action); exploited vulnerabilities from CISA's KEV catalog, marked when used by ransomware
+and matched to the vendors of the sites' security, building and network systems (P2/P3 actions); internet connectivity
+per country from the Internet & power tab. Leak-site pages and screenshots are never opened or shown. ransomware.live's
+free API is for personal use — for company use, request its PRO key under its terms.
+
 ## AI agents (Response › AI agents)
 
 A triage agent proposes a decision for every waiting action with its reasons and context (duplicates, open
@@ -91,6 +100,10 @@ camera's own normal raise tamper alarms for a smeared or out-of-focus lens, a mo
 **model analysis** (COCO-SSD people, vehicle and bag detection with its speed and confidence) and **decision** (every
 rule with its current value against its threshold, and the alarms raised into triage). Behaviour only: faces are not
 identified or matched.
+
+**Glass and reflections**: for a camera looking out through a window, the analytics separate the real view outside
+(E1, E2…) from reflections of the room (I1, I2…) — reflections are soft and lit by warm room light — show each area
+enlarged next to the frame, and can ignore the reflection areas in motion and object detection.
 
 "▶ Test videos" runs one or more video clips as test cameras for the session (they are not kept).
 

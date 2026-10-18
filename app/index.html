@@ -16883,6 +16883,182 @@ setInterval(() => { if (ME && !isLimited() && CFG.agents.writer === "prepare" &&
 [data-agpick]{box-shadow:0 0 0 2px var(--teal) inset}[data-agpick]::after{content:" ✦";color:var(--teal)}
 @media (max-width:1100px){.agcols{grid-template-columns:1fr}.agrow{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   CYBER THREATS (18 Oct) — Intelligence Monitoring › Cyber threats
+   Threat intelligence a PSOC for data centres keeps an eye on:
+   - Ransomware: victims named on ransomware gangs' leak sites and cyber
+     attacks reported in the press (ransomware.live), for the countries
+     with sites, the sectors that matter (technology, telecoms, data and
+     cloud, energy and utilities, logistics, building services) and the
+     PSOC's own watchlist of suppliers and partners — a watchlist name on
+     a leak site is a P2 action.
+   - Actively exploited vulnerabilities (CISA KEV), marked when ransomware
+     gangs use them, matched to the vendors of the site's security and
+     network systems — a match is a P3 action for the system owner.
+   - Internet connectivity per site country, from the Internet & power tab.
+   Leak-site pages and screenshots are not shown or stored; only the names
+   and links to ransomware.live's summary pages.
+   ===================================================================== */
+["api.ransomware.live", "raw.githubusercontent.com", "www.cisa.gov"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+CFG.cyber = Object.assign({ watch: [], vendors: ["Lenel", "LenelS2", "Carrier", "Genetec", "Milestone", "Axis", "Hikvision", "Dahua", "Hanwha", "Avigilon", "Motorola Solutions", "Honeywell", "Johnson Controls", "Bosch", "Siemens", "Schneider Electric", "Fortinet", "Cisco", "Palo Alto Networks", "Ivanti", "Citrix", "VMware", "Microsoft", "Veeam", "SonicWall", "Zyxel", "Juniper", "F5"], sectors: "technology|telecommunication|telecom|information technology|it services|data|cloud|hosting|software|energy|utilit|power|electric|transport|logistic|construction|engineering|facility|facilities" }, CFG.cyber || {});
+const CY_KEY = "psoc.uni.cyber.v1";
+const CY = Object.assign({ victims: [], attacks: [], byCC: {}, kev: { at: 0, list: [] }, at: 0, err: {}, hits: {} }, lsGet(CY_KEY, {})); CY.busy = false;
+const cySave = () => lsSet(CY_KEY, { victims: CY.victims.slice(0, 200), attacks: CY.attacks.slice(0, 200), byCC: CY.byCC, kev: CY.kev, at: CY.at, err: CY.err, hits: CY.hits });
+FEEDS.rwlive = { name: "Ransomware victims and attacks (ransomware.live)", ok: null, err: null, at: 0 }; FEEDS.kev = { name: "Exploited vulnerabilities (CISA KEV)", ok: null, err: null, at: 0 };
+SOURCE_CATALOG.push(["rwlive", "Ransomware", "ransomware.live (public API v2)", "Victims named on ransomware leak sites and cyber attacks reported in the press, by country and sector", "cyber", "No", "30 min (1 call per minute per endpoint)"],
+  ["kev", "Exploited vulnerabilities", "CISA Known Exploited Vulnerabilities catalog", "Vulnerabilities attackers are using now; marked when used in ransomware campaigns", "cyber", "No", "12 h"]);
+const RW = "https://api.ransomware.live/v2";
+const cyClean = s => String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, " ").slice(0, 300);
+const cyLink = u => /^https:\/\/(www\.)?ransomware\.live\//.test(u || "") ? u : "";   // only ransomware.live's own summary pages, never leak sites
+const cyNews = u => /^https?:\/\//.test(u || "") && !/\.onion\b/i.test(u) ? u : "";
+const cyVictim = v => ({ name: cyClean(v.victim), group: cyClean(v.group).slice(0, 40), cc: String(v.country || "").toUpperCase().slice(0, 2), t: Date.parse(v.discovered || v.attackdate) || Date.now(), sector: cyClean(String(v.description || "").split(/[·|]/)[0]).slice(0, 80), domain: cyClean(v.domain).slice(0, 80), link: cyLink(v.url) });
+const cyAttack = a => ({ name: cyClean(a.victim), cc: String(a.country || "").toUpperCase().slice(0, 2), t: Date.parse(a.date || a.added) || Date.now(), title: cyClean(a.title), url: cyNews(a.url), domain: cyClean(a.domain).slice(0, 80), link: cyLink(a.link), gang: a.claim_gang && typeof a.claim_gang === "string" ? cyClean(a.claim_gang).slice(0, 40) : "" });
+const cyRel = x => new RegExp(CFG.cyber.sectors, "i").test(x.sector || x.title || "");
+const cyWatchHit = x => CFG.cyber.watch.find(w => w && w.length >= 3 && new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(`${x.name} ${x.domain} ${x.title || ""}`));
+async function cyLoad(force){ if (CY.busy || (!force && Date.now() - CY.at < 30 * 60e3)) return; if (!force && Date.now() - (CY.failAt || 0) < 2 * 60e3) return; CY.busy = true; let ok = 0;
+  try{ const j = JSON.parse(await fetchVia(RW + "/recentvictims", null, 30000)); if (Array.isArray(j)){ CY.victims = j.slice(0, 200).map(cyVictim).filter(v => v.name); ok++; } CY.err.rw = ""; }catch(e){ CY.err.rw = e.message; }
+  try{ const j = JSON.parse(await fetchVia(RW + "/recentcyberattacks", null, 30000)); if (Array.isArray(j)){ CY.attacks = j.slice(0, 200).map(cyAttack).filter(v => v.name); ok++; } }catch(e){ CY.err.rw = CY.err.rw || e.message; }
+  FEEDS.rwlive.ok = !!ok; FEEDS.rwlive.err = ok ? null : CY.err.rw; FEEDS.rwlive.at = Date.now();
+  if (force || Date.now() - CY.kev.at > 12 * 36e5){ try{ let txt; try{ txt = await fetchVia("https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json", null, 40000); }catch(e){ txt = await fetchVia("https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", null, 40000); }
+      const j = JSON.parse(txt), since = Date.now() - 90 * 864e5; CY.kev = { at: Date.now(), version: cyClean(j.catalogVersion).slice(0, 20), total: +j.count || (j.vulnerabilities || []).length, list: (j.vulnerabilities || []).filter(v => Date.parse(v.dateAdded) >= since).map(v => ({ cve: cyClean(v.cveID).slice(0, 20), vendor: cyClean(v.vendorProject).slice(0, 60), product: cyClean(v.product).slice(0, 80), name: cyClean(v.vulnerabilityName).slice(0, 160), added: v.dateAdded, due: v.dueDate, rw: v.knownRansomwareCampaignUse === "Known", action: cyClean(v.requiredAction).slice(0, 200) })).sort((a, b) => b.added.localeCompare(a.added)) };
+      CY.err.kev = ""; FEEDS.kev.ok = true; FEEDS.kev.err = null; }catch(e){ CY.err.kev = e.message; FEEDS.kev.ok = false; FEEDS.kev.err = e.message; } FEEDS.kev.at = Date.now(); }
+  if (ok || CY.kev.at) CY.at = Date.now(); else CY.failAt = Date.now(); CY.busy = false; cySave(); cyAlerts(); if (UI.mode === "cyber") renderPanel(); }
+// one site country per minute (the free API allows one call a minute per endpoint), each kept for 12 h
+setInterval(async () => { if (!ME || isLimited() || document.hidden) return; const cc = [...SITE_CC].find(c => !CY.byCC[c] || Date.now() - CY.byCC[c].at > 12 * 36e5); if (!cc) return;
+  try{ const j = JSON.parse(await fetchVia(`${RW}/countryvictims/${cc}`, null, 30000)); CY.byCC[cc] = { at: Date.now(), list: (Array.isArray(j) ? j : []).map(cyVictim).filter(v => v.name && Date.now() - v.t < 120 * 864e5).sort((a, b) => b.t - a.t).slice(0, 60) }; cySave(); cyAlerts(); if (UI.mode === "cyber") renderPanel(); }
+  catch(e){ CY.byCC[cc] = Object.assign(CY.byCC[cc] || { list: [] }, { at: Date.now() - 11 * 36e5, err: e.message }); } }, 65e3);
+setTimeout(() => { if (ME && !isLimited()) cyLoad(); }, 30000); setInterval(() => { if (ME && !isLimited()) cyLoad(); }, 30 * 60e3);
+function cyAllVictims(){ const seen = new Set(), out = []; CY.victims.concat(...Object.values(CY.byCC).map(x => x.list || [])).forEach(v => { const k = v.name.toLowerCase() + "|" + v.group; if (!seen.has(k)){ seen.add(k); out.push(v); } }); return out.sort((a, b) => b.t - a.t); }
+const cyVendorHit = k => CFG.cyber.vendors.find(v => v && (k.vendor.toLowerCase() === v.toLowerCase() || k.vendor.toLowerCase().includes(v.toLowerCase()) || k.product.toLowerCase().includes(v.toLowerCase())));
+function cyAlerts(){ cyAllVictims().forEach(v => { const w = cyWatchHit(v); if (!w || Date.now() - v.t > 30 * 864e5) return;
+    enqueueAction({ srcKey: "rw:" + hashStr(v.name + v.group), source: "Cyber threats", pri: "P2", title: `Watchlist: "${w}" named by ransomware group ${v.group}`, detail: `${v.name}${v.cc ? " (" + v.cc + ")" : ""} listed on ${v.group}'s leak site ${ago(v.t)}${v.sector ? " · " + v.sector : ""}. Tell the vendor / partner owner and IT security; check what PSOC or site data and access they hold (badges, remote access, floor plans).`, suggested: ["intel", "notify", "monitor"], payload: { cat: "operational_security", sev: "P2", desc: `Cyber | Ransomware | ${w} named by ${v.group}`.slice(0, 200), src: "rw:" + hashStr(v.name + v.group) } }); });
+  CY.attacks.forEach(a => { const w = cyWatchHit(a); if (!w || Date.now() - a.t > 30 * 864e5) return; enqueueAction({ srcKey: "rwa:" + hashStr(a.title), source: "Cyber threats", pri: "P2", title: `Watchlist: "${w}" in a reported cyber attack`, detail: `${a.title}${a.url ? " — " + a.url : ""}`, suggested: ["intel", "notify", "monitor"], payload: { cat: "operational_security", sev: "P2", desc: `Cyber | Attack report | ${w}`.slice(0, 200), src: "rwa:" + hashStr(a.title) } }); });
+  (CY.kev.list || []).filter(k => Date.now() - Date.parse(k.added) < 14 * 864e5).forEach(k => { const v = cyVendorHit(k); if (!v) return;
+    enqueueAction({ srcKey: "kev:" + k.cve, source: "Cyber threats", pri: k.rw ? "P2" : "P3", title: `Exploited flaw in ${k.vendor} ${k.product}${k.rw ? " — used by ransomware" : ""}`, detail: `${k.cve}: ${k.name}. Added to CISA's exploited list ${k.added}${k.due ? ", US federal fix deadline " + k.due : ""}. Ask the owner of any ${v} system at the sites (security, building or network) whether it is affected and patched. ${k.action}`, suggested: ["intel", "notify", "monitor"], payload: { cat: "operational_security", sev: k.rw ? "P2" : "P3", desc: `Cyber | Exploited vulnerability | ${k.vendor} ${k.product} ${k.cve}`.slice(0, 200), src: "kev:" + k.cve } }); }); }
+/* ---------- the panel ---------- */
+{ const t = G("intel").tabs; if (!t.some(x => x[0] === "cyber")){ const i = t.findIndex(x => x[0] === "infra"); t.splice(i >= 0 ? i + 1 : t.length, 0, ["cyber", "Cyber threats"]); } }
+KEYS.cyber = ["CYBER THREATS", [[3, "watchlist / your vendors"], [2, "site countries, key sectors"], [1, "other"]], "Ransomware victims and attacks in site countries and key sectors, your suppliers on leak sites, exploited flaws in your systems' vendors, and internet connectivity"];
+NON_CITY_MODES.push("cyber"); if (!FULLW.includes("cyber")) FULLW.push("cyber");
+function cyberPanel(){ if (!CY.at && !CY.busy && Date.now() - (CY.failAt || 0) > 2 * 60e3) setTimeout(() => cyLoad(true), 30);
+  const tab = UI.cyTab || "rw", all = cyAllVictims(), mine = all.filter(v => SITE_CC.has(v.cc)), rel = mine.filter(cyRel), watch = all.filter(cyWatchHit), atk = CY.attacks.filter(a => SITE_CC.has(a.cc) || cyWatchHit(a)), kev = CY.kev.list || [], kevMine = kev.filter(cyVendorHit);
+  const d30 = x => Date.now() - x.t < 30 * 864e5, cnt = {}; mine.filter(d30).forEach(v => cnt[v.cc] = (cnt[v.cc] || 0) + 1);
+  const ccs = [...SITE_CC].map(cc => { const c = typeof infCountry === "function" ? infCountry(cc) : null; return { cc, name: typeof infName === "function" ? infName(cc) : cc, n: cnt[cc] || 0, rel: rel.filter(v => v.cc === cc && d30(v)).length, net: c ? (c.io && c.io.ongoing ? "outage now" : c.io ? "disrupted today" : "normal") : "—", loaded: !!(CY.byCC[cc] && CY.byCC[cc].at) }; }).sort((a, b) => b.rel - a.rel || b.n - a.n);
+  const vrow = v => { const w = cyWatchHit(v); return `<tr class="${w ? "cyhit" : ""}"><td>${esc(ago(v.t))}</td><td><b>${esc(v.name)}</b>${v.domain ? `<div class="s">${esc(v.domain)}</div>` : ""}</td><td>${esc(v.cc)}</td><td>${esc(v.sector || "—")}${cyRel(v) ? ` <span class="tag">key sector</span>` : ""}${w ? ` <span class="tag hot">watchlist: ${esc(w)}</span>` : ""}</td><td>${esc(v.group)}</td><td>${v.link ? `<a href="${esc(v.link)}" target="_blank" rel="noopener noreferrer">summary</a>` : ""}</td></tr>`; };
+  const bar = `<div class="ptools"><span class="label">Cyber threats</span><span class="innav0">${[["rw", `Ransomware (${mine.filter(d30).length})`], ["atk", `Attacks reported (${atk.length})`], ["kev", `Exploited flaws (${kevMine.length})`], ["watch", `Watchlist (${CFG.cyber.watch.length})`]].map(([k, l]) => `<button class="tab-mini" data-cytab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span><span class="s">${CY.busy ? "checking…" : CY.at ? "updated " + esc(ago(CY.at)) : ""}</span><span class="sp"></span><button class="tab-mini" data-cyref>↻ Refresh</button></div>`;
+  const errs = [CY.err.rw && "ransomware.live: " + CY.err.rw, CY.err.kev && "CISA KEV: " + CY.err.kev].filter(Boolean);
+  const strip = `<div class="cystrip">${ccs.map(c => `<div class="cyc ${c.rel ? "hot" : c.n ? "warm" : ""}"><b>${esc(c.name)}</b><span>${c.n} ransomware victim${c.n === 1 ? "" : "s"} (30 d)${c.rel ? ` · <b>${c.rel} key sector</b>` : ""}${c.loaded ? "" : ` <span class="s">· full country list loading</span>`}</span><span class="s">🌐 internet ${esc(c.net)}</span></div>`).join("")}</div>`;
+  let body = "";
+  if (tab === "rw") body = (watch.length ? `<div class="banner warn" style="margin:0 0 8px"><b>${watch.length} watchlist match${watch.length === 1 ? "" : "es"}</b> on ransomware leak sites — see the highlighted rows.</div>` : "") + `<div class="olscroll"><table class="tttab"><thead><tr><th>Listed</th><th>Victim</th><th>Country</th><th>Sector</th><th>Group</th><th></th></tr></thead><tbody>${(UI.cyAll ? all : mine).slice(0, 150).map(vrow).join("") || `<tr><td colspan="6" class="s">No victims in site countries in the loaded data.</td></tr>`}</tbody></table></div>
+      <label class="ctl" style="margin-top:6px"><input type="checkbox" data-cyall${UI.cyAll ? " checked" : ""}> Show all countries</label>`;
+  if (tab === "atk") body = `<div class="olscroll"><table class="tttab"><thead><tr><th>Date</th><th>Victim</th><th>Country</th><th>Report</th></tr></thead><tbody>${atk.slice(0, 100).map(a => `<tr class="${cyWatchHit(a) ? "cyhit" : ""}"><td>${esc(ago(a.t))}</td><td><b>${esc(a.name)}</b>${a.gang ? `<div class="s">claimed by ${esc(a.gang)}</div>` : ""}</td><td>${esc(a.cc)}</td><td>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a>` : esc(a.title)}</td></tr>`).join("") || `<tr><td colspan="4" class="s">No reported attacks in site countries in the latest list.</td></tr>`}</tbody></table></div>`;
+  if (tab === "kev") body = `<p class="help">CISA's list of vulnerabilities attackers are using now${CY.kev.version ? ` (version ${esc(CY.kev.version)}, ${CY.kev.total} in total)` : ""} — added in the last 90 days. Rows for the vendors of your security, building and network systems are highlighted and go to the Action queue when new.</p>
+      <div class="olscroll"><table class="tttab"><thead><tr><th>Added</th><th>Vendor / product</th><th>Vulnerability</th><th>Ransomware</th></tr></thead><tbody>${(UI.cyKevAll ? kev : kevMine).slice(0, 150).map(k => `<tr class="${cyVendorHit(k) ? "cyhit" : ""}"><td>${esc(k.added)}</td><td><b>${esc(k.vendor)}</b><div class="s">${esc(k.product)}</div></td><td>${esc(k.cve)} — ${esc(k.name)}</td><td>${k.rw ? `<span class="tag hot">used by ransomware</span>` : "—"}</td></tr>`).join("") || `<tr><td colspan="4" class="s">None for your vendors in the last 90 days.</td></tr>`}</tbody></table></div>
+      <label class="ctl" style="margin-top:6px"><input type="checkbox" data-cykevall${UI.cyKevAll ? " checked" : ""}> Show all vendors</label>`;
+  if (tab === "watch") body = `<div class="pmcols"><div><div class="sec" style="margin-top:0">Suppliers and partners to watch</div><p class="help">Company names (one per line) — security contractors, guard companies, facilities and building-systems vendors, colocation and telecom partners. A name appearing on a ransomware leak site or in a reported attack becomes a P2 action. Kept in this browser only.</p><textarea id="cyW" rows="10" placeholder="One name per line">${esc(CFG.cyber.watch.join("\n"))}</textarea></div>
+      <div><div class="sec" style="margin-top:0">Vendors of your systems</div><p class="help">Exploited flaws in these vendors' products are highlighted and become actions.</p><textarea id="cyV" rows="10">${esc(CFG.cyber.vendors.join("\n"))}</textarea><label class="fld">Key sectors (words, separated by |)<input id="cyS" value="${esc(CFG.cyber.sectors)}"></label></div></div><div class="acts"><button class="act" data-cysave>Save</button></div>
+      <p class="help">ransomware.live's free API is meant for personal use; for company use, read its terms and request its free PRO key, which the PSOC server can hold. Leak-site pages and screenshots are never opened or shown here — only names and links to ransomware.live's summaries.</p>`;
+  return bar + `<div class="pbody">${errs.length ? `<div class="banner warn" style="margin:0 0 8px">${errs.map(esc).join(" · ")} — tries again in 2 minutes.</div>` : ""}${strip}${body}</div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "cyber") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = cyberPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "cyber") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.cytab){ UI.cyTab = d.cytab; saveUI(); renderPanel(); return; }
+  if (d.cyref !== undefined){ CY.failAt = 0; cyLoad(true); renderPanel(); return; }
+  if (d.cysave !== undefined){ const lines = id => $(id).value.split(/\n/).map(x => x.trim()).filter(x => x.length >= 2).slice(0, 200); CFG.cyber.watch = lines("#cyW"); CFG.cyber.vendors = lines("#cyV"); const s = $("#cyS").value.trim(); try{ new RegExp(s); CFG.cyber.sectors = s || CFG.cyber.sectors; }catch(err){}
+    saveCfg(); audit("Cyber watchlist changed", CFG.cyber.watch.length + " names", CFG.cyber.vendors.length + " vendors"); cyAlerts(); toast("Saved", `${CFG.cyber.watch.length} watched names, ${CFG.cyber.vendors.length} vendors`, "var(--green)"); renderPanel(); } });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "cyber") return; if (e.target.matches("[data-cyall]")){ UI.cyAll = e.target.checked; saveUI(); renderPanel(); } if (e.target.matches("[data-cykevall]")){ UI.cyKevAll = e.target.checked; saveUI(); renderPanel(); } });
+{ const st = document.createElement("style"); st.textContent = `
+.cystrip{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-bottom:10px}.cyc{background:var(--panel);border:1px solid var(--line);border-left:4px solid #2FB170;border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;font-size:12px}.cyc.warm{border-left-color:#E8B04A}.cyc.hot{border-left-color:#E5484D}
+tr.cyhit td{background:rgba(229,72,77,.08)}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   GLASS AND REFLECTIONS (18 Oct) — Camera analytics › Vision pipeline
+   For a camera that looks out through glass, the analytics tell apart the
+   real view outside (E1, E2…, red) from reflections of the room behind the
+   camera (I1, I2…, yellow), and show each area enlarged next to the frame:
+   - per cell of the picture, over the last frames: sharpness relative to
+     contrast (reflections are out of focus — the lens focuses outside),
+     contrast, colour warmth (room lighting is warm) and point lights;
+   - neighbouring cells of the same kind become areas; a person can switch
+     an area's kind or remove it;
+   - "Ignore reflection areas": the reflection areas are blanked before
+     motion and object detection, so someone walking inside the room no
+     longer raises motion or person alarms. Operators still see the full
+     picture, with the ignored areas hatched.
+   ===================================================================== */
+const SC_W = 160, SC_H = 90, SC_GX = 16, SC_GY = 9;
+const SC = { c: document.createElement("canvas"), stats: {} }; SC.c.width = SC_W; SC.c.height = SC_H; SC.g = SC.c.getContext("2d", { willReadFrequently: true });
+function scCells(src){ const g = SC.g; g.drawImage(src, 0, 0, SC_W, SC_H); const px = g.getImageData(0, 0, SC_W, SC_H).data, cw = SC_W / SC_GX, ch = SC_H / SC_GY, out = [];
+  for (let gy = 0; gy < SC_GY; gy++) for (let gx = 0; gx < SC_GX; gx++){ let n = 0, s = 0, s2 = 0, r = 0, b = 0, lap = 0, lap2 = 0, pts = 0;
+    for (let y = gy * ch; y < (gy + 1) * ch; y++) for (let x = gx * cw; x < (gx + 1) * cw; x++){ const i = (y * SC_W + x) * 4, L = .299 * px[i] + .587 * px[i + 1] + .114 * px[i + 2]; n++; s += L; s2 += L * L; r += px[i]; b += px[i + 2];
+      if (x > 0 && y > 0 && x < SC_W - 1 && y < SC_H - 1){ const lum = j => .299 * px[j] + .587 * px[j + 1] + .114 * px[j + 2], l4 = 4 * L - lum(i - 4) - lum(i + 4) - lum(i - SC_W * 4) - lum(i + SC_W * 4); lap += l4; lap2 += l4 * l4; if (L > 225 && l4 > 60) pts++; } }
+    const mean = s / n, sd = Math.sqrt(Math.max(0, s2 / n - mean * mean)), lv = lap2 / n - (lap / n) ** 2; out.push({ mean, sd, sharp: lv / (sd * sd + 25), warm: (r - b) / (r + b + 1), pts }); }
+  return out; }
+// keep a running picture of each cell over the frames the camera has shown
+function scAccum(S, src){ try{ const cells = scCells(src), st = SC.stats[S.cam.id] = SC.stats[S.cam.id] || { n: 0, c: cells.map(() => ({ mean: 0, sd: 0, sharp: 0, warm: 0, pts: 0 })) }; st.n++;
+    const a = Math.max(.05, 1 / st.n); cells.forEach((x, i) => { const y = st.c[i]; ["mean", "sd", "sharp", "warm", "pts"].forEach(k => { y[k] += (x[k] - y[k]) * a; }); }); }catch(e){} }
+function scClassify(st){ const c = st.c, sh = c.map(x => x.sharp).sort((a, b) => a - b), med = sh[Math.floor(sh.length / 2)] || 0, wm = c.map(x => x.warm).sort((a, b) => a - b), wmed = wm[Math.floor(wm.length / 2)] || 0;
+  return c.map(x => { if (x.mean < 12) return ""; const soft = x.sharp < med * .55, warm = x.warm > wmed + .06, crisp = x.sharp > med * .9 || x.pts > .5;
+    if (soft && (warm || x.sd < 18)) return "I"; if (crisp && !warm) return "E"; return soft ? "i" : crisp ? "e" : ""; }); }
+function scRegions(st){ const k = scClassify(st), seen = new Array(k.length).fill(false), regs = [];
+  const kind = i => k[i] === "I" || k[i] === "i" ? "I" : k[i] === "E" || k[i] === "e" ? "E" : "";
+  for (let i = 0; i < k.length; i++){ if (seen[i] || !kind(i)) continue; const t = kind(i), q = [i], cells = []; seen[i] = true; let strong = 0;
+    while (q.length){ const j = q.pop(); cells.push(j); if (k[j] === t) strong++; const x = j % SC_GX, y = Math.floor(j / SC_GX); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const nx = x + dx, ny = y + dy, n = ny * SC_GX + nx; if (nx >= 0 && ny >= 0 && nx < SC_GX && ny < SC_GY && !seen[n] && kind(n) === t){ seen[n] = true; q.push(n); } }); }
+    if (cells.length < 3 || strong < 2) continue;
+    // tighten the box around the dense part of the area, so outside and reflection boxes don't swallow each other
+    const set = new Set(cells); let x0 = Math.min(...cells.map(j => j % SC_GX)), x1 = Math.max(...cells.map(j => j % SC_GX)), y0 = Math.min(...cells.map(j => Math.floor(j / SC_GX))), y1 = Math.max(...cells.map(j => Math.floor(j / SC_GX)));
+    const fillOf = (a0, a1, b0, b1) => { let n = 0; for (let y = b0; y <= b1; y++) for (let x = a0; x <= a1; x++) if (set.has(y * SC_GX + x)) n++; return n / ((a1 - a0 + 1) * (b1 - b0 + 1)); };
+    for (let guard = 0; guard < 40 && fillOf(x0, x1, y0, y1) < .75 && (x1 > x0 || y1 > y0); guard++){ const opts = []; if (x1 > x0){ opts.push([fillOf(x0, x0, y0, y1), () => x0++]); opts.push([fillOf(x1, x1, y0, y1), () => x1--]); } if (y1 > y0){ opts.push([fillOf(x0, x1, y0, y0), () => y0++]); opts.push([fillOf(x0, x1, y1, y1), () => y1--]); } opts.sort((p, q) => p[0] - q[0])[0][1](); }
+    const inBox = cells.filter(j => { const x = j % SC_GX, y = Math.floor(j / SC_GX); return x >= x0 && x <= x1 && y >= y0 && y <= y1; }); if (inBox.length < 3) continue; const avg = f => inBox.reduce((s, j) => s + st.c[j][f], 0) / inBox.length;
+    regs.push({ type: t, idx: cells.slice(), x: x0 / SC_GX, y: y0 / SC_GY, w: (x1 - x0 + 1) / SC_GX, h: (y1 - y0 + 1) / SC_GY, cells: inBox.length, sharp: avg("sharp"), warm: avg("warm"), pts: avg("pts") }); }
+  const pick = t => regs.filter(r => r.type === t).sort((a, b) => b.cells - a.cells).slice(0, t === "E" ? 5 : 4).map((r, i) => Object.assign(r, { id: t + (i + 1) }));
+  return pick("E").concat(pick("I")); }
+// the picture: frame with labelled areas, each area enlarged below it, joined by lines — like a reflection-separation figure
+function scFigure(S){ const src = S.lastRaw; if (!src) return null; const R = (S.cam.reflect || {}).regions || [], W = 640, fw = src.videoWidth || src.naturalWidth || src.width || 640, fh = src.videoHeight || src.naturalHeight || src.height || 360, H = Math.round(W * fh / fw);
+  const ins = R.slice(0, 9), cols = Math.max(1, Math.min(ins.length, 5)), iw = Math.floor((W - (cols - 1) * 8) / cols), ih = Math.round(iw * .66), rows = Math.ceil(ins.length / cols), c = document.createElement("canvas"); c.width = W; c.height = H + (ins.length ? 40 + rows * (ih + 30) : 0);
+  const g = c.getContext("2d"); g.fillStyle = "#0b1114"; g.fillRect(0, 0, c.width, c.height); try{ g.drawImage(src, 0, 0, W, H); }catch(e){ return null; }
+  const col = t => t === "I" ? "#E8C547" : "#E5484D"; g.lineWidth = 2; g.font = "bold 13px Segoe UI, Arial";
+  ins.forEach((r, i) => { const x = r.x * W, y = r.y * H, w = r.w * W, h = r.h * H, cx = (i % cols) * (iw + 8), cy = H + 40 + Math.floor(i / cols) * (ih + 30);
+    g.strokeStyle = col(r.type); g.strokeRect(x, y, w, h); g.globalAlpha = .55; g.beginPath(); g.moveTo(x + w / 2, y + h); g.lineTo(cx + iw / 2, cy); g.stroke(); g.globalAlpha = 1;
+    g.fillStyle = col(r.type); const tw = g.measureText(r.id).width + 10; g.fillRect(x, y, tw, 18); g.fillRect(cx, cy - 20, tw, 18); g.fillStyle = r.type === "I" ? "#111" : "#fff"; g.fillText(r.id, x + 5, y + 14); g.fillText(r.id, cx + 5, cy - 6);
+    try{ let sx = r.x * fw, sy = r.y * fh, sw = r.w * fw, sh = r.h * fh; const want = iw / ih; if (sw / sh > want){ const nw = sh * want; sx += (sw - nw) / 2; sw = nw; } else { const nh = sw / want; sy += (sh - nh) / 2; sh = nh; } g.drawImage(src, sx, sy, sw, sh, cx, cy, iw, ih); }catch(e){}   /* enlarged, filling the inset */
+    g.strokeStyle = col(r.type); g.strokeRect(cx, cy, iw, ih); });
+  return c; }
+function scAnalyse(S){ const st = SC.stats[S.cam.id]; if (!st || st.n < 5){ toast("Not enough frames yet", "Let the camera run for a few seconds, then analyse again.", "var(--amber)"); return; }
+  const regs = scRegions(st), keep = (S.cam.reflect || {}).ignore; S.cam.reflect = { regions: regs.map(r => ({ id: r.id, type: r.type, idx: r.idx, x: r.x, y: r.y, w: r.w, h: r.h, sharp: +r.sharp.toFixed(3), warm: +r.warm.toFixed(3), cells: r.cells })), ignore: !!keep, at: Date.now(), frames: st.n }; saveCams();
+  audit("Camera scene analysed", S.cam.name, `${regs.filter(r => r.type === "E").length} outside, ${regs.filter(r => r.type === "I").length} reflection areas`); }
+const scMasked = {};
+function scMask(S, src){ const R = (S.cam.reflect || {}); if (!R.ignore || !(R.regions || []).some(r => r.type === "I")) return src; const w = src.videoWidth || src.naturalWidth || src.width, h = src.videoHeight || src.naturalHeight || src.height; if (!w || !h) return src;
+  const c = scMasked[S.cam.id] = scMasked[S.cam.id] || document.createElement("canvas"), W = Math.min(w, 960), H = Math.round(h * W / w); if (c.width !== W){ c.width = W; c.height = H; } const g = c.getContext("2d"); g.drawImage(src, 0, 0, W, H);
+  g.fillStyle = "#7f7f7f"; const cw = W / SC_GX, ch = H / SC_GY; R.regions.filter(r => r.type === "I").forEach(r => (r.idx || []).forEach(j => g.fillRect(Math.floor((j % SC_GX) * cw), Math.floor(Math.floor(j / SC_GX) * ch), Math.ceil(cw) + 1, Math.ceil(ch) + 1))); return c; }
+{ const _ca = cvAnalyse; cvAnalyse = function(S, src, snapshot){ S.lastRaw = src; S.scN = (S.scN || 0) + 1; if (S.scN % 2 === 1) scAccum(S, src);
+    const m = scMask(S, src); const r = _ca(S, m, snapshot);
+    if (m !== src){ try{ S.vctx.drawImage(src, 0, 0, S.view.width, S.view.height); cvOverlay(S); const g = S.vctx, W = S.view.width, H = S.view.height; g.save(); g.strokeStyle = "rgba(232,197,71,.8)"; g.lineWidth = 1;
+        S.cam.reflect.regions.filter(x => x.type === "I").forEach(x => { const X = x.x * W, Y = x.y * H, w = x.w * W, h = x.h * H, cw = W / SC_GX, ch = H / SC_GY; g.strokeRect(X, Y, w, h); g.save(); g.beginPath(); (x.idx || []).forEach(j => g.rect((j % SC_GX) * cw, Math.floor(j / SC_GX) * ch, cw, ch)); g.clip(); g.beginPath(); for (let d = -h; d < w; d += 12){ g.moveTo(X + d, Y + h); g.lineTo(X + d + h, Y); } g.globalAlpha = .35; g.stroke(); g.restore(); g.fillStyle = "#E8C547"; g.font = "bold 11px sans-serif"; g.fillText(x.id + " ignored", X + 4, Y + 13); }); g.restore(); }catch(e){} }
+    return r; }; }
+// the section under the vision pipeline
+function scRender(){ const box = CV.root && CV.root.querySelector(".cvpipe"); if (!box || UI.mode !== "cv") return; const sel = CV.streams[UI.cvPipe] || Object.values(CV.streams)[0]; let sec = CV.root.querySelector(".scsec");
+  if (!sec){ box.insertAdjacentHTML("afterend", `<div class="scsec"></div>`); sec = CV.root.querySelector(".scsec"); }
+  if (!sel){ sec.innerHTML = ""; return; } const R = sel.cam.reflect, st = SC.stats[sel.cam.id], key = sel.cam.id + "|" + (R ? R.at + "|" + R.ignore + "|" + R.regions.map(r => r.id + r.type).join() : "none");
+  if (sec.dataset.key === key) return; sec.dataset.key = key;
+  sec.innerHTML = `<div class="cvph"><span class="sec" style="margin:0">Glass and reflections — ${esc(sel.cam.name)}</span><span class="s">for a camera that looks out through a window: which parts are the real view outside, which are reflections of the room</span><span class="sp"></span><button class="act" data-scgo>${R ? "Analyse again" : "Analyse the scene"}</button></div>
+    ${R ? `<div class="scgrid"><div class="scfig"></div><div><table class="tttab"><thead><tr><th>Area</th><th>Kind</th><th>Size</th><th>Why</th><th></th></tr></thead><tbody>${R.regions.map(r => `<tr><td><b style="color:${r.type === "I" ? "#C9A227" : "#E5484D"}">${esc(r.id)}</b></td><td>${r.type === "I" ? "Reflection of the room" : "Real view outside"}</td><td>${Math.round((r.idx ? r.idx.length / (SC_GX * SC_GY) : r.w * r.h) * 100)}% of picture</td>
+        <td class="s">${r.type === "I" ? `soft (sharpness ${r.sharp.toFixed(2)})${r.warm > .05 ? ", warm room light" : ""}` : `sharp (${r.sharp.toFixed(2)})${r.warm < 0 ? ", cool outdoor light" : ""}`}</td><td><button class="tab-mini" data-scflip="${esc(r.id)}">${r.type === "I" ? "It's outside" : "It's a reflection"}</button><button class="tab-mini" data-scdel="${esc(r.id)}" aria-label="Remove">×</button></td></tr>`).join("") || `<tr><td colspan="5" class="s">No clear areas found — the picture looks the same everywhere (no glass, or not enough frames yet).</td></tr>`}</tbody></table>
+      <label class="ctl" style="margin-top:8px"><input type="checkbox" data-scign${R.ignore ? " checked" : ""}> Ignore reflection areas in motion and object detection</label>
+      <p class="help">${R.regions.some(r => r.type === "I") ? `About ${Math.round(R.regions.filter(r => r.type === "I").reduce((s, r) => s + (r.idx ? r.idx.length / (SC_GX * SC_GY) : r.w * r.h), 0) * 100)}% of the picture is reflection; only those parts are ignored, so watch that no real approach route lies inside them. On site: put the lens against the glass with a rubber hood, dim or shade the lights behind the camera at night, or use a polarising filter.` : "No reflections found."} Analysed over ${R.frames} frames, ${esc(ago(R.at))}.</p></div></div>`
+      : `<div class="s">${st && st.n >= 5 ? "Press Analyse to map the scene." : "Collecting frames…"}</div>`}`;
+  const f = sec.querySelector(".scfig"); if (f){ const c = scFigure(sel); if (c){ c.className = "scfigc"; f.appendChild(c); } else f.innerHTML = `<div class="s">No frame available.</div>`; } }
+setInterval(() => { try{ scRender(); }catch(e){} }, 1500);
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "cv") return; const t = e.target.closest("[data-scgo],[data-scflip],[data-scdel]"); if (!t) return; const S = CV.streams[UI.cvPipe] || Object.values(CV.streams)[0]; if (!S) return; const d = t.dataset, R = S.cam.reflect;
+  if (d.scgo !== undefined){ scAnalyse(S); scRender(); return; }
+  const r = R && R.regions.find(x => x.id === (d.scflip || d.scdel)); if (!r) return;
+  if (d.scflip){ r.type = r.type === "I" ? "E" : "I"; const n = { I: 0, E: 0 }; R.regions.sort((a, b) => a.type.localeCompare(b.type)).forEach(x => { x.id = x.type + (++n[x.type]); }); }
+  if (d.scdel) R.regions = R.regions.filter(x => x !== r); R.at = Date.now(); saveCams(); audit("Camera scene corrected", S.cam.name, d.scflip ? "kind switched" : "area removed"); scRender(); });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "cv" || !e.target.matches("[data-scign]")) return; const S = CV.streams[UI.cvPipe] || Object.values(CV.streams)[0]; if (!S || !S.cam.reflect) return; S.cam.reflect.ignore = e.target.checked; S.prev = null; saveCams(); audit("Reflection areas " + (e.target.checked ? "ignored" : "watched again"), S.cam.name, ""); scRender(); });
+{ const st = document.createElement("style"); st.textContent = `
+.scsec{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.scgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}.scfigc{width:100%;height:auto;border-radius:6px;display:block}
+@media (max-width:1100px){.scgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>
