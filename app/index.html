@@ -16327,7 +16327,7 @@ function pmLog(P, d, kind, text, zone){ PM.ev.unshift({ at: Date.now(), site: P.
 // two independent kinds of sensor in the same zone within the confirmation window = verified
 function pmEvaluate(I){ if (I.closed || I.level === "verified") return; const P = pmSite(I.site); const kinds = new Set(I.hits.filter(h => h.kind !== "held").map(h => h.type === "fibre" ? "fence" : h.type)), latest = Math.max(...I.hits.map(h => h.at)), win = I.hits.filter(h => h.kind !== "held" && latest - h.at <= CFG.perim.confirmSec * 1000);   /* any two sensor types within the window, also an approach followed by a fence alarm */
   const kindsWin = new Set(win.map(h => h.type === "fibre" ? "fence" : h.type));
-  if (kindsWin.size >= 2 || (I.hits.some(h => h.kind === "forced") && kinds.has("thermal"))){ const was = I.level; I.level = "verified"; I.verifiedAt = Date.now();
+  if (kindsWin.size >= 2 || (I.hits.some(h => h.kind === "forced") && kinds.has("thermal"))){ const was = I.level; I.level = "verified"; I.verifiedAt = Date.now(); I.gap = Math.round((latest - Math.min(...win.map(h => h.at))) / 1000);
     I.why = [`${[...kindsWin].map(k => PM_T[k][0].toLowerCase()).join(" + ")} in zone ${I.zone} within ${Math.max(1, Math.round((latest - Math.min(...win.map(h => h.at))) / 1000))} s`].concat(I.hits.filter(h => h.object).map(h => `${h.dev} saw a ${h.object}`).slice(0, 2));
     const cam = pmDevZone(P, I.zone, "thermal")[0];
     pmAction(P, I.zone, "P1", `VERIFIED perimeter intrusion — ${P.code} zone ${I.zone}`, `${I.why.join("; ")}. Dispatch guards to zone ${I.zone}${cam ? `, watch ${cam.name}` : ""}, notify the site security lead, consider lockdown of the nearest entrances.`, "ver:" + I.id, I.training, true);
@@ -16341,7 +16341,7 @@ setInterval(() => { const now = Date.now(); let ch = false; PM.inc.filter(i => !
     if (n24 >= CFG.perim.nuisance24 - 1) why.push(`zone ${I.zone} has raised ${n24 + 1} unverified alarms in 24 h — likely nuisance; schedule a sensitivity check`);
     if (!why.length && t0 === "thermal") why.push(`the camera saw a ${I.hits[0].object || "person"} near the fence but no fence sensor triggered — watch the camera; it may be someone passing outside`);
     if (!why.length) why.push("only one sensor type responded and the camera saw nothing — possible animal, debris or a fault; check the camera recording");
-    I.level = "unverified"; I.why = [`${PM_T[I.hits[0].type][0]} alone, not confirmed within ${CFG.perim.confirmSec} s`].concat(why);
+    I.level = "unverified"; I.why = [`${PM_T[I.hits[0].type][0]} alone, not confirmed within ${CFG.perim.confirmSec} s`].concat(why); I.gust = wx ? Math.round(wx.gust) : null;
     pmAction(P, I.zone, forced ? "P2" : "P3", forced ? `Gate forced, not confirmed — ${P.code} zone ${I.zone}` : track ? `Approach detected by radar — ${P.code} zone ${I.zone}` : `Unverified perimeter alarm — ${P.code} zone ${I.zone}`, I.why.join("; ") + ". Review the camera covering the zone; send a guard if in doubt.", "unv:" + I.id, I.training); });
   // automatic heartbeats for simulated example devices
   Object.values(PM.sites).forEach(P => P.devices.forEach(d => { if (d.sim && d.state !== "fault" && !d.simOff && now - d.lastSeen > 50e3) d.lastSeen = now; }));
@@ -16482,6 +16482,150 @@ document.addEventListener("click", e => { if (e.target.closest("[data-pmdraw]"))
 .pmlab span{display:inline-block;background:rgba(10,15,18,.8);color:#fff;border:2px solid;border-radius:4px;font:700 10.5px var(--font);padding:0 3px}.pmhot{animation:pmblink 1s infinite}@keyframes pmblink{50%{opacity:.35}}
 .pmctl button{background:#16242B;color:#EEF3F5;border:1px solid #2C3D45;border-radius:6px;padding:5px 9px;font:600 12.5px var(--font);cursor:pointer}
 @media (max-width:1100px){.pmgrid,.pmcols{grid-template-columns:1fr}.pmmap{height:55vh}.pmside{max-height:none}}@media (max-width:760px){.pmprow{grid-template-columns:34px 1fr}.pmprow input{grid-column:1/-1}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   TEST & TUNE (18 Oct) — Security Operations › Test & tune
+   Where to start testing camera analytics and perimeter sensors, free test
+   material, and what the console has learned from the operators' answers:
+   every alarm closed as "False alarm" or as real teaches it which rule is
+   too sensitive, and it suggests the exact setting to change (one click to
+   apply where the setting lives in ITE; otherwise what to change on the
+   device). A "practice week" of simulated history shows the advisor at work
+   straight away; practice data is marked and can be cleared.
+   ===================================================================== */
+const ttTz = code => { const s = SITES.find(x => x.code === code), c = s && CITIES.find(x => x.name === metroOf(s)); return (c && c.tz) || "Asia/Singapore"; };
+const ttHour = (t, code) => +new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: ttTz(code) }).format(t) % 24;
+const ttNight = h => h >= 19 || h < 7;
+const ttPct = x => Math.round(x * 100) + "%";
+const ttQ = (xs, f) => { const a = xs.slice().sort((p, q) => p - q); return a.length ? a[Math.min(a.length - 1, Math.floor((a.length - 1) * f))] : null; };
+// the measured value of a camera alarm, read from its detail
+function ttVal(a){ const d = String(a.detail || ""); const m = { motion: /([\d.]+)% of the zone/, crowd: /(\d+) people/, person: /(\d+) person/, loiter: /for (\d+) s/, vehicle: /^(.*) in the zone/ }[a.type]; const r = m && m.exec(d);
+  return !r ? null : a.type === "vehicle" ? r[1].split(",").length : +r[1]; }
+const TT_REAL = ["monitor", "dispatch", "incident"];
+/* ---------- what the camera analytics learned ---------- */
+function ttCamAdvice(){ const out = [], by = {};
+  SHARED.cvalerts.filter(a => !a.deleted && a.status !== "new").forEach(a => { const k = a.cam + "|" + a.type; (by[k] = by[k] || []).push(a); });
+  Object.entries(by).forEach(([k, list]) => { const [camId, type] = k.split("|"), cam = CV.cams.find(c => c.id === camId), R = Object.assign({}, CV_DEF_RULES, (cam || {}).rules || {}), n = list.length;
+    const fa = list.filter(a => a.status === "false"), real = list.filter(a => TT_REAL.includes(a.status)), rate = fa.length / n, fv = fa.map(ttVal).filter(v => v != null), rv = real.map(ttVal).filter(v => v != null);
+    const row = { camId, cam: cam ? cam.name : (list[0].camName || camId), site: cam ? cam.site : list[0].site, type, n, fa: fa.length, rate, practice: list.some(a => a.practice), sug: "", why: "", apply: null };
+    if (n < 3){ row.sug = "Keep marking alarms"; row.why = `${n} answered so far — suggestions start at 3`; out.push(row); return; }
+    if (rate < .25){ row.sug = "Working well — no change"; row.why = `${fa.length} of ${n} were false`; out.push(row); return; }
+    const sep = (lim, above) => rv.length ? rv.filter(v => above ? v > lim : v >= lim).length / rv.length : 1;   // share of real alarms a new limit would still catch
+    if (type === "motion"){ const lim = Math.min(50, Math.ceil((ttQ(fv, .8) || R.minMotion) + .5)); row.sug = `Raise the motion threshold from ${R.minMotion}% to ${lim}%`; row.why = `False alarms changed ${fv.length ? Math.min(...fv).toFixed(1) + "–" + Math.max(...fv).toFixed(1) : "?"}% of the zone; real ones ${rv.length ? Math.min(...rv).toFixed(1) + "–" + Math.max(...rv).toFixed(1) + "%" : "—"}. The new threshold keeps ${ttPct(sep(lim))} of the real ones.${cam && !cam.zone ? " Also draw a zone around the area that matters — the whole picture is watched now." : ""}`; row.apply = { minMotion: lim }; }
+    else if (type === "person"){ const fh = fa.map(a => ttHour(a.createdAt, row.site)), rh = real.map(a => ttHour(a.createdAt, row.site)), dayF = fh.filter(h => !ttNight(h)).length / Math.max(fh.length, 1), nightR = rh.length ? rh.filter(ttNight).length / rh.length : 0;
+      if (dayF >= .7 && (nightR >= .6 || !rh.length)){ row.sug = "Only alarm on people out of hours (19-07)"; row.why = `${ttPct(dayF)} of the false alarms were in working hours (staff, visitors); ${rh.length ? ttPct(nightR) + " of real ones were at night" : "no real ones yet"}.`; row.apply = { hours: "19-07" }; }
+      else { row.sug = "Draw a tighter zone"; row.why = `${fa.length} of ${n} people alarms were false at all hours — the zone probably includes a walkway or the street.`; } }
+    else if (type === "crowd"){ const lim = (Math.max(...fv, R.crowd - 1) || R.crowd) + 1; row.sug = `Raise the crowd threshold from ${R.crowd} to ${lim} people`; row.why = `False crowd alarms had up to ${fv.length ? Math.max(...fv) : "?"} people (shift changes, deliveries); real ones ${rv.length ? Math.min(...rv) + "+" : "—"}. Keeps ${ttPct(sep(lim - 1, true))} of real ones.`; row.apply = { crowd: lim }; }
+    else if (type === "loiter"){ const lim = Math.min(900, Math.ceil(((ttQ(fv, .8) || R.loiterSec) + 15) / 15) * 15); row.sug = `Raise loitering from ${R.loiterSec} s to ${lim} s`; row.why = `False loitering alarms lasted up to ${fv.length ? Math.max(...fv) : "?"} s (smokers, people waiting); real ones ${rv.length ? Math.min(...rv) + " s+" : "—"}. Note: the rule counts anyone present, not one person — busy areas need a longer time or a tighter zone.`; row.apply = { loiterSec: lim }; }
+    else if (type === "vehicle"){ row.sug = "Turn off vehicle alarms, or zone the road out"; row.why = `${fa.length} of ${n} vehicle alarms were false — passing traffic or the car park is in view.`; row.apply = { vehicle: false }; }
+    else if (type === "object"){ row.sug = "Turn off unattended-bag alarms here"; row.why = `${fa.length} of ${n} were false — bins, bags and equipment that belong there.`; row.apply = { object: false }; }
+    else if (type === "anomaly"){ row.sug = "Let it learn longer"; row.why = "Unusual-activity alarms improve as each hour of the week collects 60 minutes of history."; }
+    else { row.sug = "Check the camera and its stream"; row.why = `${fa.length} of ${n} ${CV_TYPES[type] ? CV_TYPES[type][0].toLowerCase() : type} alarms were false — usually a weak network link, a camera that auto-adjusts sharply at dusk, or one mounted where it shakes.`; }
+    out.push(row); });
+  return out.sort((a, b) => (b.apply ? 1 : 0) - (a.apply ? 1 : 0) || b.rate - a.rate); }
+/* ---------- what the perimeter learned ---------- */
+function ttPmAdvice(){ const out = [], closed = PM.inc.filter(i => i.closed), isFalse = i => /False|clear/.test(i.closed), isReal = i => /dispatched/.test(i.closed);
+  const bySite = {}; closed.forEach(i => (bySite[i.site] = bySite[i.site] || []).push(i));
+  Object.entries(bySite).forEach(([code, list]) => { const P = PM.sites[code];
+    // wind: at what gust do the false alarms start?
+    const fw = list.filter(i => isFalse(i) && i.level === "unverified" && i.gust != null), rw = list.filter(i => isReal(i) && i.gust != null);
+    const fwx = fw.filter(i => i.gust >= 20);
+    if (fwx.length >= 3){ const lim = Math.max(20, Math.floor(Math.min(...fwx.map(i => i.gust)) / 5) * 5); if (lim < CFG.perim.windKmh) out.push({ site: code, zone: "all", sug: `Treat gusts from ${lim} km/h as the likely cause (now ${CFG.perim.windKmh})`, why: `${fwx.length} false fence alarms came with gusts of ${Math.min(...fwx.map(i => i.gust))}–${Math.max(...fwx.map(i => i.gust))} km/h, some below the ${CFG.perim.windKmh} km/h now used. Alarms in that wind are labelled "likely wind" so the PSOC can check the camera before sending a guard.`, apply: { cfg: { windKmh: lim } }, practice: list.some(i => i.practice) }); }
+    // confirmation window: did real second sensors arrive late?
+    const gaps = list.filter(i => i.level === "verified" && i.gap != null).map(i => i.gap); if (gaps.length && Math.max(...gaps) > CFG.perim.confirmSec * .75){ const lim = Math.min(300, Math.ceil(Math.max(...gaps) * 1.4 / 10) * 10); out.push({ site: code, zone: "all", sug: `Lengthen the confirmation window to ${lim} s (now ${CFG.perim.confirmSec})`, why: `In real intrusions the second sensor took up to ${Math.max(...gaps)} s — close to the limit, so some would be missed as "unverified".`, apply: { cfg: { confirmSec: lim } }, practice: list.some(i => i.practice) }); }
+    const zones = [...new Set(list.map(i => i.zone))];
+    zones.forEach(z => { const zl = list.filter(i => i.zone === z), f = zl.filter(isFalse), r = zl.filter(isReal), n = zl.length, prac = zl.some(i => i.practice);
+      const realSingle = r.filter(i => i.level === "unverified"); if (realSingle.length) out.push({ site: code, zone: z, sug: `Add a second detection layer or a camera on zone ${z}`, why: `${realSingle.length} real event(s) were seen by only one sensor (${[...new Set(realSingle.map(i => PM_T[i.hits[0].type][0].toLowerCase()))].join(", ")}), so they arrived as "unverified". A second layer would have made them P1 at once.`, apply: null, practice: prac, level: "bad" });
+      const fv = f.filter(i => i.level === "verified"); if (fv.length) out.push({ site: code, zone: z, sug: `Check the camera analytics zone on ${z}`, why: `${fv.length} alarm(s) were verified by two sensors but nothing was found — often headlights or reflections setting off the camera together with a fence sensor. Tighten the camera's detection area to the fence line.`, apply: null, practice: prac });
+      if (n < 3) return; const ff = f.filter(i => i.level === "unverified"), windy = ff.filter(i => i.gust != null && i.gust >= Math.min(CFG.perim.windKmh, 30)).length, night = ff.filter(i => ttNight(ttHour(i.start, code))).length;
+      if (ff.length / n >= .5){ if (windy / Math.max(ff.length, 1) >= .6) out.push({ site: code, zone: z, sug: `Zone ${z}: lower the fence sensor's sensitivity in wind (on the fence controller)`, why: `${ff.length} of ${n} alarms were false, ${windy} of them in strong wind. Most fence controllers have wind compensation or a separate sensitivity per zone — tighten loose fence fabric too.`, apply: null, practice: prac });
+        else if (night / Math.max(ff.length, 1) >= .6) out.push({ site: code, zone: z, sug: `Zone ${z}: look for animals and vegetation`, why: `${ff.length} of ${n} alarms were false, ${night} at night in calm weather — typical of animals, birds or branches touching the fence. Clear vegetation; consider an animal-proof skirt at the base.`, apply: null, practice: prac });
+        else out.push({ site: code, zone: z, sug: `Zone ${z}: walk-test and check the sensor`, why: `${ff.length} of ${n} alarms were false with no clear pattern — test the sensor and its cabling.`, apply: null, practice: prac }); }
+      else if (n >= 5 && !r.length) out.push({ site: code, zone: z, sug: `Zone ${z}: working as intended`, why: `${n} alarms, ${f.length} false.`, apply: null, practice: prac, level: "ok" }); });
+    if (!P) return; });
+  return out; }
+/* ---------- practice history (simulated, clearly marked) ---------- */
+function ttPracticeCams(){ const id = "cam-practice", base = Math.floor((Date.now() + 8 * 36e5) / 864e5) * 864e5 - 8 * 36e5 - 7 * 864e5;   /* midnight SGT a week ago */ if (!CV.cams.some(c => c.id === id)){ CV.cams.push({ id, name: "PRACTICE · Loading bay", site: (SITES.find(s => isLive(s) && !isOffice(s)) || {}).code || "", kind: "sim", src: "", practice: true, enabled: false, zone: null, rules: Object.assign({}, CV_DEF_RULES, { motion: true, minMotion: 1, person: true, crowd: 5, loiterSec: 30, vehicle: true }) }); saveCams(); }
+  const cam = CV.cams.find(c => c.id === id), add = (type, detail, status, t) => putShared("cvalerts", { id: nid("cv"), createdAt: t, cam: id, camName: cam.name, site: cam.site, type, detail, conf: null, snap: "", status, by: "practice", at: t, practice: true, test: true });
+  let r = 7; const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280, at = (d, h) => base + d * 864e5 + h * 36e5 + Math.round(rnd() * 50) * 6e4;
+  for (let i = 0; i < 14; i++) add("motion", `${(1 + rnd() * 2.6).toFixed(1)}% of the zone changed`, "false", at(i % 7, 9 + rnd() * 8));            // trees and shadows
+  for (let i = 0; i < 4; i++) add("motion", `${(7 + rnd() * 9).toFixed(1)}% of the zone changed`, i % 2 ? "dispatch" : "monitor", at(i * 2, 22 + rnd()));
+  for (let i = 0; i < 9; i++) add("person", `${1 + Math.floor(rnd() * 3)} person(s) in the zone`, "false", at(i % 7, 8 + rnd() * 9));                  // staff by day
+  for (let i = 0; i < 3; i++) add("person", "1 person(s) in the zone", "dispatch", at(i * 2 + 1, 1 + rnd() * 3));                                      // someone at night
+  for (let i = 0; i < 6; i++) add("loiter", `Person in the zone for ${35 + Math.floor(rnd() * 70)} s`, "false", at(i, 10 + rnd() * 6));                 // smokers
+  add("loiter", "Person in the zone for 340 s", "dispatch", at(5, 2));
+  for (let i = 0; i < 5; i++) add("crowd", `${5 + Math.floor(rnd() * 3)} people in the zone (threshold 5)`, "false", at(i, 7.5));                      // shift change
+  add("crowd", "14 people in the zone (threshold 5)", "incident", at(6, 15));
+  for (let i = 0; i < 4; i++) add("vehicle", "car in the zone", "false", at(i, 11)); add("tamper", "Image blacked out (brightness 4)", "dispatch", at(3, 3)); }
+function ttPracticePerim(){ let code = Object.keys(PM.sites).find(c => PM.sites[c].example); if (!code){ code = (SITES.find(s => isLive(s) && !isOffice(s)) || {}).code; PM.sites[code] = pmExample(code); }
+  const base = Math.floor((Date.now() + 8 * 36e5) / 864e5) * 864e5 - 8 * 36e5 - 7 * 864e5; let r = 11; const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+  const inc = (zone, level, closed, hits, extra, d, h) => { const t = base + d * 864e5 + h * 36e5 + Math.round(rnd() * 40) * 6e4; PM.inc.push(Object.assign({ id: nid("pi"), site: code, zone, start: t, level, hits: hits.map((x, i) => ({ at: t + (x[2] || 0) * 1000, dev: x[0], type: x[1], kind: x[3] || "alarm", object: x[4] || "" })), training: true, practice: true, why: ["practice history"], closed, by: "practice", closedAt: t + 6e5 }, extra || {})); };
+  for (let i = 0; i < 7; i++) inc(i % 2 ? "E1" : "E2", "unverified", "False alarm", [["FV-" + (i % 2 ? "E1" : "E2"), "fence"]], { gust: 32 + Math.round(rnd() * 28) }, i, 13 + rnd() * 5);   // wind
+  for (let i = 0; i < 5; i++) inc("W1", "unverified", "Checked — clear", [["FV-W1", "fence"]], { gust: 8 + Math.round(rnd() * 10) }, i + 1, 1 + rnd() * 4);                                  // animals at night
+  inc("N2", "verified", "Guard dispatched", [["FV-N2", "fence"], ["TC-N", "thermal", 49, "detect", "person"]], { gap: 49 }, 3, 2.5);                                                          // real, slow confirmation
+  inc("S2", "unverified", "Guard dispatched", [["RD-S", "radar", 0, "track"]], { gust: 12 }, 4, 23);                                                                                         // real, one layer only
+  inc("S1", "verified", "False alarm", [["FV-S1", "fence"], ["TC-S", "thermal", 5, "detect", "car"]], { gap: 5 }, 5, 20);                                                                     // headlights
+  for (let i = 0; i < 5; i++) inc("N1", "unverified", "Checked — clear", [["FV-N1", "fence"]], { gust: 10 }, i, 12);
+  inc("N1", "verified", "Guard dispatched", [["FV-N1", "fence"], ["MW-N", "beam", 6]], { gap: 6 }, 6, 3);
+  PM.inc.sort((a, b) => b.start - a.start); pmSave(); return code; }
+function ttClearPractice(){ SHARED.cvalerts.filter(a => a.practice).forEach(a => { a.deleted = true; a.updatedAt = Date.now(); }); lsSet(SH_KEYS.cvalerts, SHARED.cvalerts); CV.cams = CV.cams.filter(c => !c.practice); saveCams(); PM.inc = PM.inc.filter(i => !i.practice); pmSave(); }
+/* ---------- the panel ---------- */
+{ const g = G("secops"); if (g && !g.tabs.some(t => t[0] === "testtune")){ const i = g.tabs.findIndex(t => t[0] === "perimeter"); g.tabs.splice(i >= 0 ? i + 1 : g.tabs.length, 0, ["testtune", "Test & tune"]); } }
+KEYS.testtune = ["TEST & TUNE", [], "How to test camera analytics and perimeter sensors, free test material, and what the console has learned from your answers — with the settings to change"]; NON_CITY_MODES.push("testtune"); if (!FULLW.includes("testtune")) FULLW.push("testtune");
+function testTunePanel(){ const answered = SHARED.cvalerts.filter(a => !a.deleted && a.status !== "new" && !a.practice).length, camOn = Object.keys(CV.streams).length, hasP = Object.keys(PM.sites).length, pmClosed = PM.inc.filter(i => i.closed && !i.practice).length, pmTrained = PM.inc.some(i => i.training && !i.practice);
+  const step = (done, n, t, s, btns) => `<div class="ttstep${done ? " done" : ""}"><span class="ttn">${done ? "✓" : n}</span><div style="flex:1"><b>${t}</b><div class="s">${s}</div><div class="acts">${btns}</div></div></div>`;
+  const ca = ttCamAdvice(), pa = ttPmAdvice(), anyPrac = SHARED.cvalerts.some(a => a.practice && !a.deleted) || PM.inc.some(i => i.practice);
+  const camRows = ca.map((r, i) => `<tr class="${r.apply ? "" : "noap"}"><td><b>${esc(r.cam)}</b>${r.practice ? ` <span class="tag">PRACTICE</span>` : ""}<div class="s">${esc(CV_TYPES[r.type] ? CV_TYPES[r.type][0] : r.type)}</div></td><td>${r.n}</td><td class="${r.rate >= .5 ? "bad" : r.rate >= .25 ? "warn" : "ok"}">${ttPct(r.rate)}</td><td><b>${esc(r.sug)}</b><div class="s">${esc(r.why)}</div></td><td>${r.apply ? (CV.cams.some(c => c.id === r.camId) ? `<button class="act" data-ttcam="${i}">Apply</button>` : `<span class="s">camera removed</span>`) : ""}</td></tr>`).join("");
+  const pmRows = pa.map((r, i) => `<tr><td><b>${esc(r.site)}</b> ${esc(r.zone === "all" ? "all zones" : r.zone)}${r.practice ? ` <span class="tag">PRACTICE</span>` : ""}</td><td class="${r.level || (r.apply ? "warn" : "")}"><b>${esc(r.sug)}</b><div class="s">${esc(r.why)}</div></td><td>${r.apply ? `<button class="act" data-ttpm="${i}">Apply</button>` : `<span class="s">${r.level === "ok" ? "" : "on site / device"}</span>`}</td></tr>`).join("");
+  return `<div class="ptools"><span class="label">Test &amp; tune</span><span class="sp"></span>${anyPrac ? `<button class="tab-mini" data-ttclr>Clear practice data</button>` : ""}</div><div class="pbody"><div class="ttgrid">
+    <div><div class="ttcard"><h3>Start here — cameras</h3>
+      ${step(CV.modelState === "ready", 1, "Turn on AI detection", "Loads the free people / vehicle detector into this browser (one-off download of about 5 MB).", `<button class="act" data-tt="ai">${CV.modelState === "loading" ? "Loading…" : CV.modelState === "failed" ? "Try again" : "Turn on"}</button>`)}
+      ${step(camOn > 0, 2, "Give it something to watch", "Choose video clips (the ITE test clip pack, or free downloads below), or use the built-in simulated camera. Each clip runs as a TEST camera.", `<label class="act">Choose video files<input type="file" accept="video/*,.mp4,.webm" multiple hidden data-cvtestin></label><button class="act" data-tt="sim">Use the simulated camera</button><button class="act" data-tt="gocv">Open Camera analytics</button>`)}
+      ${step(answered >= 3, 3, "Answer each alarm", `In Camera analytics › Alarms to triage, press <b>False alarm</b> when it was nothing, or Monitor / Dispatch guard / Create incident when it was real. Every answer teaches it. ${answered} answered so far.`, `<button class="act" data-tt="gocv">Go to the alarms</button>`)}
+      ${step(ca.some(r => !r.practice && r.n >= 3), 4, "Read what it learned", "Suggestions appear below once a camera has 3 answered alarms of one kind. Apply the ones that make sense.", `<button class="act" data-tt="pcam">Load a practice week to see it now</button>`)}</div>
+    <div class="ttcard"><h3>Start here — perimeter</h3>
+      ${step(hasP, 1, "Create an example perimeter", "A simulated compound with eight fence zones and twenty sensors around one of your sites.", `<button class="act" data-tt="pex">Create it</button>`)}
+      ${step(pmTrained, 2, "Run the training scenarios", "Fence climb, wind, fence cut, gate forced, radar approach, sensor offline — one at a time from the Perimeter tab.", `<button class="act" data-tt="pclimb">Run "Fence climb" now</button><button class="act" data-tt="gopm">Open Perimeter</button>`)}
+      ${step(pmClosed >= 3, 3, "Close each alarm with what it was", `False alarm, Checked — clear, or Guard dispatched. ${pmClosed} closed so far.`, `<button class="act" data-tt="gopm">Go to the alarms</button>`)}
+      ${step(pa.some(r => !r.practice), 4, "Read what it learned", "Wind levels, slow confirmations, zones that need a second layer, nuisance zones.", `<button class="act" data-tt="ppm">Load a practice week to see it now</button>`)}</div>
+    <div class="ttcard"><h3>Free test material</h3><ul class="ttlist">
+      <li><b>ITE test clip pack</b> — 8 clips that each trigger one check (sent in the chat as ITE_camera_test_clips.zip).</li>
+      <li><b>Pexels</b> (pexels.com/search/videos/cctv) and <b>Pixabay</b> (pixabay.com/videos/search/security camera) — free stock videos you may use; download the MP4, then "Choose video files".</li>
+      <li><b>Your own phone</b> — film a car park or corridor for a minute; at night for a low-light test.</li>
+      <li><b>A real camera feed without connecting the camera</b> — OBS Studio (free) can play a video file or an IP camera stream as a "virtual webcam"; then add "This computer's webcam" in Camera analytics.</li>
+      <li><b>Perimeter events</b> — Perimeter › Connect accepts pasted events in the same format a real perimeter system would send.</li></ul></div></div>
+    <div><div class="ttcard"><h3>What it learned — cameras</h3>${ca.length ? `<div class="olscroll"><table class="tttab"><thead><tr><th>Camera / alarm</th><th>Answered</th><th>False</th><th>Suggestion</th><th></th></tr></thead><tbody>${camRows}</tbody></table></div>` : `<div class="s">Nothing yet — answer alarms in Camera analytics, or load a practice week.</div>`}
+      <p class="help">It learns only from your answers: what you mark as false teaches it which limits are too low; what you mark as real makes sure a new limit still catches them. It cannot learn about events it never alarmed on — if something was missed, lower that rule or redraw the zone by hand.</p></div>
+    <div class="ttcard"><h3>What it learned — perimeter</h3>${pa.length ? `<div class="olscroll"><table class="tttab"><thead><tr><th>Site / zone</th><th>Suggestion</th><th></th></tr></thead><tbody>${pmRows}</tbody></table></div>` : `<div class="s">Nothing yet — close alarms on the Perimeter tab, or load a practice week.</div>`}
+      <p class="help">Sensor sensitivity itself is set on the fence controller or radar, not in ITE — those suggestions say what to ask the site or the installer to change.</p></div></div></div></div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "testtune") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = testTunePanel(); }; }
+document.getElementById("panel").addEventListener("click", async e => { if (UI.mode !== "testtune") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.tt === "ai"){ cvLoadModel(); toast("Loading the detector", "This takes a few seconds the first time.", "var(--teal)"); const iv = setInterval(() => { if (CV.modelState !== "loading"){ clearInterval(iv); if (UI.mode === "testtune") renderPanel(); toast(CV.modelState === "ready" ? "AI detection is on" : "The detector could not load", CV.modelState === "ready" ? "" : (CV.modelErr || "") + " — your network may block cdn.jsdelivr.net or storage.googleapis.com", CV.modelState === "ready" ? "var(--green)" : "var(--red)"); } }, 500); renderPanel(); return; }
+  if (d.tt === "sim"){ if (!CV.root) cvMount(document.createElement("div")); const cam = { id: nid("cam"), name: "TEST · Simulated yard", site: "", kind: "sim", src: "", test: true, enabled: true, zone: null, rules: Object.assign({}, CV_DEF_RULES, { person: true, loiterSec: 20 }) }; CV.cams.push(cam); cvStart(cam); toast("Simulated camera running", "A figure crosses the yard every minute and the lens is covered briefly.", "var(--teal)"); renderPanel(); return; }
+  if (d.tt === "gocv"){ setMode("cv"); return; } if (d.tt === "gopm"){ setMode("perimeter"); return; }
+  if (d.tt === "pex"){ const code = UI.pmSite && SITES.find(s => s.code === UI.pmSite) ? UI.pmSite : (SITES.find(s => isLive(s) && !isOffice(s)) || {}).code; if (!PM.sites[code]) PM.sites[code] = pmExample(code); UI.pmSite = code; saveUI(); pmSave(); renderPanel(); return; }
+  if (d.tt === "pclimb"){ let code = Object.keys(PM.sites)[0]; if (!code){ code = (SITES.find(s => isLive(s) && !isOffice(s)) || {}).code; PM.sites[code] = pmExample(code); pmSave(); } UI.pmSite = code; UI.pmTab = "live"; saveUI(); setMode("perimeter"); setTimeout(() => pmRun("climb"), 300); return; }
+  if (d.tt === "pcam"){ ttPracticeCams(); audit("Practice camera history loaded", "", ""); renderPanel(); return; }
+  if (d.tt === "ppm"){ const c = ttPracticePerim(); audit("Practice perimeter history loaded", c, ""); renderPanel(); return; }
+  if (d.ttclr !== undefined){ ttClearPractice(); audit("Practice data cleared", "", ""); renderPanel(); return; }
+  if (d.ttcam){ const r = ttCamAdvice()[+d.ttcam], cam = r && CV.cams.find(c => c.id === r.camId); if (!cam) return; cam.rules = Object.assign({}, CV_DEF_RULES, cam.rules || {}, r.apply); saveCams();
+    SHARED.cvalerts.filter(a => a.cam === cam.id && a.type === r.type && a.status !== "new").forEach(a => { a.tuned = true; });
+    audit("Camera rule tuned", `${cam.name}: ${r.type}`, JSON.stringify(r.apply)); toast("Applied", `${cam.name}: ${r.sug}`, "var(--green)"); renderPanel(); return; }
+  if (d.ttpm){ const r = ttPmAdvice()[+d.ttpm]; if (!r || !r.apply) return; Object.assign(CFG.perim, r.apply.cfg); saveCfg(); audit("Perimeter setting tuned", r.site, JSON.stringify(r.apply.cfg)); toast("Applied", r.sug, "var(--green)"); renderPanel(); return; } });
+// shortcuts from the two working screens
+{ const _cmTT = cvMount; cvMount = function(p){ _cmTT(p); const tb = CV.root && CV.root.querySelector(".ptools"); if (tb && !tb.querySelector("[data-gott]")) tb.insertAdjacentHTML("beforeend", `<button class="tab-mini" data-gott title="How to test, and what it has learned">Test &amp; tune</button>`); }; }
+{ const _pp = perimeterPanel; perimeterPanel = function(){ return _pp().replace('<span class="sp"></span>', '<span class="sp"></span><button class="tab-mini" data-gott>Test &amp; tune</button>'); }; }
+document.addEventListener("click", e => { if (e.target.closest("[data-gott]")) setMode("testtune"); });
+setInterval(() => { if (UI.mode === "testtune" && !$("#ov.show") && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#panel"))) renderPanel(); }, 15000);
+{ const st = document.createElement("style"); st.textContent = `
+.ttgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px;align-items:start}.ttcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}.ttcard h3{margin:0 0 8px;font-size:14.5px}
+.ttstep{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.ttstep:first-of-type{border-top:0}.ttn{flex:none;width:24px;height:24px;border-radius:50%;background:var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px}
+.ttstep.done .ttn{background:var(--green);color:#fff}.ttstep.done b{opacity:.75}.ttstep .acts{margin-top:6px;flex-wrap:wrap}.ttstep label.act{cursor:pointer}
+.ttlist{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.tttab{width:100%;border-collapse:collapse;font-size:12.5px}.tttab th,.tttab td{text-align:left;padding:6px 7px;border-bottom:1px solid var(--line);vertical-align:top}.tttab td.bad{color:var(--red);font-weight:700}.tttab td.warn{color:#D69E2E;font-weight:700}.tttab td.ok{color:var(--green)}
+.tttab td.bad b,.tttab td.warn b{color:var(--text)}.tttab td .s{color:var(--muted);font-weight:400}.tttab td.bad b{border-left:3px solid var(--red);padding-left:6px}.tttab td.warn b{border-left:3px solid #D69E2E;padding-left:6px}
+@media (max-width:1100px){.ttgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 
 boot();
 

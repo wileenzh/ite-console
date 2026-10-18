@@ -57,6 +57,15 @@ the result can go into the Daily Shift Report). **Design** shows which layer cov
 JSON event format the PSOC server forwards from the perimeter system, and a device-list import. An example perimeter
 with simulated devices and six training scenarios can be created for any site.
 
+## Test & tune (Security Operations › Test & tune)
+
+Step-by-step start for testing camera analytics and perimeter sensors, free test material, and what the console has
+learned from operators' answers. Every alarm marked "False alarm" or as real teaches it which rule is too sensitive;
+it suggests the setting to change (motion threshold, hours, crowd size, loitering time, vehicle/bag alarms; wind level
+and confirmation window for perimeters) with one-click apply, and says what to change on the device where the setting
+lives there (fence sensitivity, camera detection area, a second detection layer). A practice week of simulated history
+shows the advisor straight away; practice data is marked and can be cleared.
+
 ## Camera analytics: the vision pipeline (BAU Operations › Camera analytics)
 
 Every frame goes through five stages, shown live per camera: **image acquisition** (source, resolution, frame rate,
