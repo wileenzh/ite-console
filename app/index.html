@@ -16627,6 +16627,262 @@ setInterval(() => { if (UI.mode === "testtune" && !$("#ov.show") && !(document.a
 .tttab td.bad b,.tttab td.warn b{color:var(--text)}.tttab td .s{color:var(--muted);font-weight:400}.tttab td.bad b{border-left:3px solid var(--red);padding-left:6px}.tttab td.warn b{border-left:3px solid #D69E2E;padding-left:6px}
 @media (max-width:1100px){.ttgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 
+
+/* =====================================================================
+   INTERNET & POWER (18 Oct) — Intelligence Monitoring › Internet & power
+   What a data-centre PSOC watches besides physical security:
+   - Internet disruptions by country from IODA (Georgia Tech's Internet
+     Outage Detection and Analysis; free, no key): which site countries
+     have an outage now or in the last 24 h, with its start and size.
+   - Undersea cable faults and power outages from the news (GDELT, the
+     same source as the protest monitor), matched to site countries and
+     cities, with an estimate of how serious they are.
+   - A register for what the NOC, telcos and utilities report by email or
+     phone (cable cut, planned grid work, utility outage), with affected
+     sites and expected restoration.
+   - Per country, the signals are read together: an internet outage with
+     power-cut news at the same time is most likely a power problem; with
+     cable news, a cable problem.
+   Ongoing disruptions in a site country go to the Action queue.
+   ===================================================================== */
+["api.ioda.inetintel.cc.gatech.edu"].forEach(h => { if (!SG_EXTRA.includes(h)) SG_EXTRA.push(h); });
+const INF_KEY = "psoc.uni.infra.v1";
+const INF = Object.assign({ ioda: { at: 0, by: {}, err: "" }, news: { at: 0, cable: [], power: [], err: "" }, reg: [] }, lsGet(INF_KEY, {})); INF.busy = false;
+const infSave = () => lsSet(INF_KEY, { ioda: INF.ioda, news: INF.news, reg: INF.reg.slice(0, 300) });
+FEEDS.ioda = { name: "Internet outages (IODA)", ok: null, err: null, at: 0, busy: false }; FEEDS.infnews = { name: "Cable and power news (GDELT)", ok: null, err: null, at: 0, busy: false };
+SOURCE_CATALOG.push(["ioda", "Internet outages", "IODA — Internet Outage Detection and Analysis (Georgia Tech)", "Country-level internet disruptions from BGP, active probing and telescope signals, last 24 h", "infrastructure", "No", "15 min"],
+  ["infnews", "Cable and power news", "GDELT Project (DOC 2.0)", "News of undersea cable faults (7 days) and power outages in site countries (72 h)", "infrastructure", "No", "30 min"]);
+const INF_CC = [...SITE_CC];
+const infName = cc => (PROTEST_COUNTRIES.find(c => c[2] === cc) || [0, COUNTRY_NAME[cc] || cc])[1];
+const infGd = cc => (PROTEST_COUNTRIES.find(c => c[2] === cc) || [""])[0];
+const infSites = cc => SITES.filter(s => isLive(s) && (s.country === infName(cc) || CITY_CC[metroOf(s)] === cc));
+// IODA: the countries with an outage in the last 24 h, then the events for the site countries among them
+async function infIoda(){ const until = Math.floor(Date.now() / 1000), from = until - 24 * 3600, base = "https://api.ioda.inetintel.cc.gatech.edu/v2";
+  const j = JSON.parse(await fetchVia(`${base}/outages/summary?from=${from}&until=${until}&entityType=country&ignoreMethods=*.sarima`, null, 30000)), list = Array.isArray(j.data) ? j.data : [];
+  const by = {}; list.forEach(x => { const e = x.entity || {}, cc = String(e.code || "").toUpperCase(); if (!/^[A-Z]{2}$/.test(cc)) return; const sc = +((x.scores || {}).overall) || 0; by[cc] = { cc, name: String(e.name || cc).slice(0, 60), score: sc, events: [], ongoing: false }; });
+  const mine = INF_CC.filter(cc => by[cc]).slice(0, 10);
+  for (const cc of mine){ try{ const ev = JSON.parse(await fetchVia(`${base}/outages/events?from=${from}&until=${until}&entityType=country&entityCode=${cc}&ignoreMethods=*.sarima`, null, 30000)), es = (Array.isArray(ev.data) ? ev.data : []).filter(e => isFinite(+e.start)).map(e => ({ start: +e.start * 1000, end: (+e.start + (+e.duration || 0)) * 1000, score: +e.score || 0, src: String(e.datasource || e.location || "").slice(0, 40) }));
+      by[cc].events = es.sort((a, b) => b.start - a.start).slice(0, 8); by[cc].ongoing = es.some(e => Date.now() - e.end < 30 * 60e3); }catch(e){ by[cc].evErr = e.message; } }
+  INF.ioda = { at: Date.now(), by, err: "" }; }
+// GDELT: undersea cable faults (any country, 7 days) and power outages (site countries, 72 h)
+const INF_SEV = /nationwide|widespread|massive|major|millions|grid collapse|island-?wide|state-wide|statewide|entire city|whole city|all of /i;
+async function infNews(){ const q1 = '("submarine cable" OR "undersea cable" OR "subsea cable") (cut OR damaged OR damage OR fault OR outage OR severed OR repair OR disruption)';
+  const cs = INF_CC.map(infGd).filter(Boolean), q2 = '(blackout OR "power outage" OR "power cut" OR "power cuts" OR "load shedding" OR "grid failure" OR "power interruption") (' + cs.map(c => "sourcecountry:" + c).join(" OR ") + ")";
+  const get = async (q, span, n) => { const j = JSON.parse(await fetchVia("https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q) + `&mode=artlist&maxrecords=${n}&timespan=${span}&sort=datedesc&format=json`, { cache: "no-store" }, 30000)); return (j.articles || []).slice(0, n); };
+  const names = INF_CC.map(cc => [cc, infName(cc)]).concat([["HK", "Hong Kong"], ["KR", "Korea"], ["VN", "Vietnam"], ["TW", "Taiwan"], ["PH", "Philippine"], ["ID", "Indonesia"], ["MY", "Malaysia"], ["SG", "Singapore"], ["JP", "Japan"], ["AU", "Australia"], ["IN", "India"], ["CN", "China"], ["NZ", "New Zealand"], ["TH", "Thailand"]]);
+  const cable = (await get(q1, "7d", 75)).map(a => { const t = String(a.title || ""), ccs = [...new Set(names.filter(([, n]) => new RegExp("\\b" + n, "i").test(t)).map(x => x[0]))]; return { t: gdeltDate(a.seendate), title: t.slice(0, 220), url: /^https?:/.test(a.url || "") ? a.url : "", domain: String(a.domain || "").slice(0, 60), ccs }; });
+  await new Promise(ok => setTimeout(ok, 5500));   // GDELT asks for one request every 5 s
+  const metros = CITIES.filter(c => (METRO_SITES[c.name] || { all: [] }).all.some(isLive)).map(c => c.name);
+  const power = (await get(q2, "72h", 150)).map(a => { const t = String(a.title || ""), sc = String(a.sourcecountry || "").toLowerCase().replace(/\s+/g, ""), cc = (PROTEST_COUNTRIES.find(c => c[0] === sc) || [])[2] || "", city = metros.find(m => new RegExp("\\b" + m, "i").test(t)) || "";
+    return { t: gdeltDate(a.seendate), title: t.slice(0, 220), url: /^https?:/.test(a.url || "") ? a.url : "", domain: String(a.domain || "").slice(0, 60), cc, city, major: INF_SEV.test(t) }; }).filter(x => x.cc);
+  INF.news = { at: Date.now(), cable, power, err: "" }; }
+async function infLoad(force){ if (INF.busy || (!force && Date.now() - INF.ioda.at < 15 * 60e3 && Date.now() - INF.news.at < 30 * 60e3)) return; if (!force && Date.now() - (INF.failAt || 0) < 2 * 60e3) return; INF.busy = true;
+  try{ await infIoda(); FEEDS.ioda.ok = true; FEEDS.ioda.err = null; }catch(e){ INF.ioda.err = e.message; FEEDS.ioda.ok = false; FEEDS.ioda.err = e.message; } FEEDS.ioda.at = Date.now();
+  if (force || Date.now() - INF.news.at > 30 * 60e3){ try{ await new Promise(ok => setTimeout(ok, 500)); await infNews(); FEEDS.infnews.ok = true; FEEDS.infnews.err = null; }catch(e){ INF.news.err = e.message; FEEDS.infnews.ok = false; FEEDS.infnews.err = e.message; } FEEDS.infnews.at = Date.now(); }
+  if (!INF.ioda.at && !INF.news.at) INF.failAt = Date.now(); INF.busy = false; infSave(); infAlerts(); if (UI.mode === "infra") renderPanel(); }
+setTimeout(() => { if (ME && !isLimited()) infLoad(); }, 25000); setInterval(() => { if (ME && !isLimited()) infLoad(); }, 15 * 60e3);
+// reading the signals together, per site country
+function infCountry(cc){ const io = INF.ioda.by[cc], pw = INF.news.power.filter(x => x.cc === cc && Date.now() - x.t < 48 * 36e5), cb = INF.news.cable.filter(x => x.ccs.includes(cc)), rg = INF.reg.filter(r => r.cc === cc && r.status === "open");
+  const cause = io && io.ongoing ? (pw.length ? "likely power-related" : cb.length ? "possibly cable-related" : rg.length ? "see NOC / telco report" : "cause not known yet") : "";
+  const level = io && io.ongoing || rg.some(r => r.impact === "high") || pw.some(x => x.major && x.city) ? 3 : io || pw.some(x => x.major) || rg.length ? 2 : pw.length || cb.length ? 1 : 0;
+  return { cc, name: infName(cc), io, pw, cb, rg, cause, level, sites: infSites(cc) }; }
+function infAlerts(){ INF_CC.forEach(cc => { const c = infCountry(cc); if (!c.sites.length) return;
+    if (c.io && c.io.ongoing){ const s = (c.io.events[0] || {}).start || Date.now(); enqueueAction({ srcKey: `ioda:${cc}:${Math.floor(s / 36e5)}`, source: "Internet & power", pri: "P3", title: `Internet disruption in ${c.name} — ${c.cause}`, detail: `IODA detects an ongoing internet outage in ${c.name} (since ${sgt(s)}). ${c.sites.length} site(s) in the country. Ask the NOC whether site connectivity is affected.`, site: c.sites.length === 1 ? c.sites[0].code : "", suggested: ["intel", "monitor", "notify"], payload: { cat: "operational_security", sev: "P3", desc: `${c.name} | Internet disruption | ${c.cause}`, country: c.name, src: `ioda:${cc}:${Math.floor(s / 36e5)}` } }); }
+    c.pw.filter(x => x.major && x.city && Date.now() - x.t < 12 * 36e5).slice(0, 1).forEach(x => enqueueAction({ srcKey: "pwr:" + hashStr(x.url || x.title), source: "Internet & power", pri: "P3", title: `Power outage reported near sites — ${x.city}`, detail: `${x.title} (${x.domain}). Check the sites in ${x.city} are on generator / UPS and that the outage is not affecting them.`, city: x.city, suggested: ["check", "monitor"], payload: { cat: "operational_security", sev: "P3", desc: `${x.city} | Power outage | ${x.title}`.slice(0, 200), country: c.name, src: "pwr:" + hashStr(x.url || x.title) } })); }); }
+/* ---------- the panel ---------- */
+{ const t = G("intel").tabs; if (!t.some(x => x[0] === "infra")){ const i = t.findIndex(x => x[0] === "volcano"); t.splice(i >= 0 ? i + 1 : t.length, 0, ["infra", "Internet & power"]); } }
+KEYS.infra = ["INTERNET & POWER", [[3, "outage now"], [2, "earlier today / major news"], [1, "news only"]], "Internet outages by country (IODA), undersea cable faults and power outages from the news, and what the NOC, telcos and utilities report"];
+NON_CITY_MODES.push("infra"); if (!FULLW.includes("infra")) FULLW.push("infra");
+const INF_LV = [["Normal", "#2FB170"], ["In the news", "#5B9BD5"], ["Disrupted", "#E8B04A"], ["Outage now", "#E5484D"]];
+function infraPanel(){ if (!INF.ioda.at && !INF.busy && Date.now() - (INF.failAt || 0) > 2 * 60e3) setTimeout(() => infLoad(true), 30);
+  const rows = INF_CC.map(infCountry).filter(c => c.sites.length).sort((a, b) => b.level - a.level || b.sites.length - a.sites.length);
+  const card = c => { const [lab, col] = INF_LV[c.level]; return `<div class="infc" style="--c:${col}"><div class="hd"><b>${esc(c.name)}</b><span class="tag">${c.sites.length} site${c.sites.length === 1 ? "" : "s"}</span><span class="infst" style="background:${col}">${esc(lab)}</span></div>
+      <div class="infl"><span>🌐 Internet</span><span>${c.io ? (c.io.ongoing ? `<b style="color:#E5484D">outage now</b>` : "disrupted in the last 24 h") + (c.io.events[0] ? ` · since ${esc(sgt(c.io.events[0].start).slice(0, 13))}` : "") + ` · <a href="https://ioda.inetintel.cc.gatech.edu/country/${c.cc}" target="_blank" rel="noopener">IODA</a>` : INF.ioda.at ? "normal" : "—"}</span></div>
+      <div class="infl"><span>⚡ Power</span><span>${c.pw.length ? `${c.pw.length} news report${c.pw.length === 1 ? "" : "s"}${c.pw.some(x => x.major) ? " · <b>major</b>" : ""}${c.pw.some(x => x.city) ? " · near " + esc([...new Set(c.pw.filter(x => x.city).map(x => x.city))].join(", ")) : ""}` : "no reports"}</span></div>
+      <div class="infl"><span>🌊 Cables</span><span>${c.cb.length ? `${c.cb.length} cable fault report${c.cb.length === 1 ? "" : "s"} (7 days)` : "no reports"}</span></div>
+      ${c.rg.length ? `<div class="infl"><span>📋 Reported</span><span>${c.rg.map(r => esc(r.kind + ": " + r.summary)).join("; ")}</span></div>` : ""}${c.cause ? `<div class="infcause">Outage ${esc(c.cause)}</div>` : ""}</div>`; };
+  const news = (list, cable) => list.slice(0, 25).map(x => `<div class="infn"><span class="s">${esc(ago(x.t))}</span>${cable ? (x.ccs.length ? `<span class="tag">${esc(x.ccs.join(", "))}</span>` : "") : `<span class="tag">${esc(x.cc)}</span>${x.city ? `<span class="tag hot">${esc(x.city)}</span>` : ""}${x.major ? `<span class="tag hot">major</span>` : ""}`}<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a><span class="s">${esc(x.domain)}</span></div>`).join("") || `<div class="s">None found.</div>`;
+  const reg = INF.reg.slice(0, 30).map(r => `<div class="infr${r.status === "open" ? "" : " closed"}"><b>${esc(r.kind)}</b> · ${esc(infName(r.cc))}${r.city ? " · " + esc(r.city) : ""} · ${esc(r.impact)} impact<div>${esc(r.summary)}</div><div class="s">from ${esc(r.source || "—")} · started ${esc(sgt(r.start))}${r.etr ? " · expected back " + esc(sgt(r.etr)) : ""} · ${r.sites.length ? "sites " + esc(r.sites.join(", ")) : "no site named"} · by ${esc(r.by)}</div>${r.status === "open" ? `<button class="tab-mini" data-infclose="${r.id}">Restored — close</button>` : `<span class="s">closed ${esc(ago(r.closedAt))}</span>`}</div>`).join("") || `<div class="s">Nothing reported. Record what the NOC, a telco or a utility tells you (cable cut, planned grid work, outage) so it sits with the other signals.</div>`;
+  const err = [INF.ioda.err && "IODA: " + INF.ioda.err, INF.news.err && "News: " + INF.news.err].filter(Boolean);
+  return `<div class="ptools"><span class="label">Internet &amp; power</span><span class="s">${INF.busy ? "checking…" : INF.ioda.at ? "internet " + esc(ago(INF.ioda.at)) + (INF.news.at ? " · news " + esc(ago(INF.news.at)) : "") : ""}</span><span class="sp"></span><button class="tab-mini" data-infref>↻ Refresh</button><button class="pill primary" data-infadd>+ Report an outage</button></div>
+    <div class="pbody">${err.length ? `<div class="banner warn" style="margin:0 0 8px">${err.map(esc).join(" · ")} — tries again in 2 minutes${!serverBase() ? "; if your network blocks these services, the PSOC server can fetch them" : ""}.</div>` : ""}
+    <div class="infgrid">${rows.map(card).join("")}</div>
+    <div class="infcols"><div><div class="sec">Undersea cable faults — news, 7 days</div>${news(INF.news.cable, true)}<p class="help">Cable routes and landing stations: <a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> (TeleGeography; its data is licensed for non-commercial use, so it is linked, not built in).</p></div>
+      <div><div class="sec">Power outages — news, 72 h</div>${news(INF.news.power, false)}</div>
+      <div><div class="sec">Reported by NOC, telcos and utilities</div>${reg}<p class="help">More sources: <a href="https://radar.cloudflare.com/outage-center" target="_blank" rel="noopener">Cloudflare Radar outage center</a> (an API with a free token can be added through the PSOC server), your telcos' and utilities' service notices.</p></div></div></div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "infra") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = infraPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "infra") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.infref !== undefined){ INF.failAt = 0; infLoad(true); renderPanel(); return; }
+  if (d.infclose){ const r = INF.reg.find(x => x.id === d.infclose); if (r){ r.status = "closed"; r.closedAt = Date.now(); infSave(); audit("Outage report closed", r.kind, r.summary); renderPanel(); } return; }
+  if (d.infadd !== undefined){ openModal(head("Report an outage") + `<div class="bd"><div class="fgrid3"><label class="fld">What<select id="irK"><option>Internet / telco</option><option>Undersea cable</option><option>Power / grid</option><option>Planned works</option></select></label>
+      <label class="fld">Country<select id="irC">${INF_CC.map(cc => `<option value="${cc}">${esc(infName(cc))}</option>`).join("")}</select></label><label class="fld">City (optional)<input id="irY" list="irCities"></label><datalist id="irCities">${CITIES.map(c => `<option>${esc(c.name)}</option>`).join("")}</datalist>
+      <label class="fld">Impact<select id="irI"><option>low</option><option selected>medium</option><option>high</option></select></label><label class="fld">Expected back (optional)<input id="irE" type="datetime-local"></label><label class="fld">Source<input id="irS" placeholder="NOC, telco notice, utility"></label></div>
+      <label class="fld">Summary<input id="irT" placeholder="e.g. SJC2 cable fault off Taiwan; traffic rerouted, higher latency to Tokyo"></label></div>
+      <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="irGo">Save</button></div>`);
+    $("#irGo").onclick = () => { const cc = $("#irC").value, city = $("#irY").value.trim(), sum = $("#irT").value.trim(); if (!sum){ toast("Add a short summary", "", "var(--amber)"); return; }
+      const sites = (city ? SITES.filter(s => isLive(s) && metroOf(s) === city) : infSites(cc)).map(s => s.code).slice(0, 60), etr = $("#irE").value ? Date.parse($("#irE").value) : null;
+      const r = { id: nid("ir"), kind: $("#irK").value, cc, city, impact: $("#irI").value, summary: sum.slice(0, 300), source: $("#irS").value.trim().slice(0, 80), start: Date.now(), etr, sites, status: "open", by: ME ? ME.name : "" }; INF.reg.unshift(r); infSave(); audit("Outage reported", r.kind, `${infName(cc)}: ${r.summary}`);
+      if (r.impact === "high") enqueueAction({ srcKey: "infreg:" + r.id, source: "Internet & power", pri: "P2", title: `${r.kind} — ${infName(cc)}${city ? ", " + city : ""} (high impact)`, detail: `${r.summary}. Source: ${r.source || "—"}. Sites: ${sites.join(", ") || "none named"}.`, city, suggested: ["notify", "escalate", "monitor"], payload: { cat: "operational_security", sev: "P2", desc: `${infName(cc)} | ${r.kind} | ${r.summary}`.slice(0, 200), country: infName(cc), sites, src: "infreg:" + r.id } });
+      $("#ov").classList.remove("show"); renderPanel(); }; } });
+{ const st = document.createElement("style"); st.textContent = `
+.infgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-bottom:12px}.infc{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.infc .hd{display:flex;gap:6px;align-items:center}.infst{margin-left:auto;color:#fff;font-weight:700;font-size:11px;border-radius:10px;padding:1px 8px}.infl{display:grid;grid-template-columns:78px 1fr;gap:6px}.infl>span:first-child{color:var(--muted)}.infcause{font-weight:700;color:#E5484D}
+.infcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.infn{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px}.infn a{color:var(--text)}.tag.hot{border-color:#E5484D;color:#E5484D}
+.infr{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin:5px 0;font-size:12.5px;display:flex;flex-direction:column;gap:3px}.infr.closed{opacity:.55}
+@media (max-width:1100px){.infcols{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
+
+/* =====================================================================
+   AGENTIC PSOC (18 Oct) — Response › AI agents
+   Agents that do the legwork of a watch officer and hand over a decision:
+   - Triage agent: for every waiting action, gathers what else the console
+     knows (other alarms at the same site, open escalations, hazards in the
+     city, internet and power in the country, duplicates) and proposes a
+     decision with its reasons and a confidence.
+   - Correlation agent: groups signals from different sources about the
+     same place in the last 6 h into one proposed case.
+   - Writer agent: notices reports that are due (shift report items not yet
+     in, protests without a spot report) and prepares drafts.
+   - Watchdog agent: decisions overdue, escalation updates overdue, feeds
+     down, sensors and cameras offline.
+   Guardrails: each agent is Off, Suggest or Prepare drafts; none of them
+   sends a message, records a decision, opens or closes anything — a person
+   accepts or rejects every proposal, and every step is logged with reasons.
+   Acceptance rates show where the agents can be trusted more.
+   ===================================================================== */
+CFG.agents = Object.assign({ triage: "suggest", correlate: "suggest", writer: "suggest", watchdog: "suggest" }, CFG.agents || {});
+const AG_KEY = "psoc.uni.agents.v1";
+const AGT = Object.assign({ sugg: {}, cases: {}, log: [], drafts: {} }, lsGet(AG_KEY, {})); AGT.at = 0;
+const agSave = () => { clearTimeout(agSave.t); agSave.t = setTimeout(() => lsSet(AG_KEY, { sugg: AGT.sugg, cases: AGT.cases, log: AGT.log.slice(0, 500), drafts: AGT.drafts }), 400); };
+const AG_NAMES = { triage: ["Triage agent", "Proposes a decision for every waiting action, with reasons"], correlate: ["Correlation agent", "Groups signals about the same place into one case"], writer: ["Writer agent", "Prepares the shift report and spot reports that are due"], watchdog: ["Watchdog agent", "Overdue decisions and updates, feeds down, sensors offline"] };
+const agLog = (agent, what, result, extra) => { AGT.log.unshift(Object.assign({ at: Date.now(), agent, what: String(what).slice(0, 200), result, by: ME ? ME.name : "" }, extra || {})); agSave(); };
+const agWords = s => new Set(String(s || "").toLowerCase().replace(/\(training\)|[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 3));
+const agSim = (a, b) => { const A = agWords(a), B = agWords(b); if (!A.size || !B.size) return 0; let n = 0; A.forEach(w => { if (B.has(w)) n++; }); return n / Math.min(A.size, B.size); };
+function agPlace(a){ const s = a.site && SITES.find(x => x.code === a.site), city = a.city || (s && metroOf(s)) || "", pc = a.payload && a.payload.country ? (PROTEST_COUNTRIES.find(c => c[1] === a.payload.country) || [])[2] : "", cc = city ? CITY_CC[city] : s ? CITY_CC[metroOf(s)] : pc || ""; return { s, city, cc }; }
+/* ---------- triage ---------- */
+function agTriage(a){ const now = Date.now(), { s, city, cc } = agPlace(a), why = [], ctx = []; let kind = a.suggested[0] || "monitor", conf = .5;
+  const pend = SHARED.actions.filter(x => x.status === "pending" && x.id !== a.id);
+  if (/TRAINING|PRACTICE/.test(a.title)){ kind = "dismiss"; conf = .9; why.push("Training or practice item — no real-world action"); }
+  const dup = pend.find(x => (x.site || x.city) && (x.site || x.city) === (a.site || a.city) && x.createdAt <= a.createdAt && now - x.createdAt < 6 * 36e5 && agSim(x.title, a.title) >= .6);
+  if (dup && kind !== "dismiss"){ kind = "dismiss"; conf = .8; why.push(`Duplicate of "${trunc(dup.title, 70)}" (${ago(dup.createdAt)}) — decide that one`); }
+  const ev = (typeof openEvents === "function" ? openEvents() : []).find(e => (a.site && (e.sites || []).includes(a.site)) || (city && String(e.desc || "").includes(city)));
+  if (ev && !dup && kind !== "dismiss"){ kind = "monitor"; conf = .7; why.push(`Already covered by the open escalation "${trunc(ev.desc, 60)}" — add it there rather than opening another`); }
+  const camN = a.site ? SHARED.cvalerts.filter(x => x.site === a.site && !x.test && now - x.createdAt < 2 * 36e5 && x.status !== "false").length : 0, pmOpen = a.site && typeof PM !== "undefined" ? PM.inc.filter(i => i.site === a.site && !i.closed && !i.training).length : 0;
+  const siteN = a.site ? pend.filter(x => x.site === a.site && now - x.createdAt < 2 * 36e5 && x.source !== a.source).length : 0, sources = (camN ? 1 : 0) + (pmOpen ? 1 : 0) + (siteN ? 1 : 0);
+  if (camN) ctx.push(`${camN} camera alarm(s) at ${a.site} in 2 h`); if (pmOpen) ctx.push(`${pmOpen} open perimeter alarm(s) at ${a.site}`); if (siteN) ctx.push(`${siteN} other waiting action(s) at ${a.site} from other sources`);
+  if (!why.length && sources >= 2){ kind = a.suggested.includes("dispatch") ? "dispatch" : "escalate"; conf = .75; why.push(`Several independent sources point at ${a.site} at the same time — treat as real until checked`); }
+  const tier = city && SCORES[city] ? SCORES[city].overview.tier : 0; if (tier) ctx.push(`${city}: hazard level ${TIER[tier].label.toLowerCase()}`);
+  if (cc && typeof infCountry === "function"){ const c = infCountry(cc); if (c.io && c.io.ongoing) ctx.push(`Internet outage now in ${c.name} (${c.cause})`); if (c.pw.length) ctx.push(`${c.pw.length} power-outage report(s) in ${c.name}`); }
+  if (!why.length && a.pri === "P1"){ kind = a.suggested.includes("escalate") ? "escalate" : a.suggested[0]; conf = .7; why.push("P1 — the SOP expects escalation within 5 minutes"); }
+  if (!why.length && tier >= 2 && /hazard|weather|quake|flood|warning|typhoon|air/i.test(a.source + " " + a.title)){ kind = a.suggested.includes("escalate") ? "escalate" : kind; conf = .65; why.push(`Hazard already at ${TIER[tier].label.toLowerCase()} in ${city}`); }
+  if (!why.length){ why.push("No other signal changes the source's own suggestion"); }
+  if (s) ctx.unshift(`${s.code} · ${isOffice(s) ? "office" : s.cls || ""} · ${city}`);
+  return { id: a.id, kind, conf, why, ctx, at: now, sig: a.updatedAt || a.createdAt }; }
+/* ---------- correlation ---------- */
+function agCorrelate(){ const now = Date.now(), sig = [], add = (place, src, title, at, extra) => { if (place) sig.push(Object.assign({ place, src, title, at }, extra || {})); };
+  SHARED.actions.filter(a => now - a.createdAt < 6 * 36e5 && !/TRAINING|PRACTICE/.test(a.title)).forEach(a => { const p = agPlace(a); add(p.city || (p.cc && infName(p.cc)), a.source, a.title, a.createdAt, { site: a.site }); });
+  SHARED.cvalerts.filter(x => !x.test && !x.deleted && now - x.createdAt < 6 * 36e5 && x.site).forEach(x => { const s = SITES.find(y => y.code === x.site); add(s && metroOf(s), "Camera analytics", (CV_TYPES[x.type] || [x.type])[0] + " — " + x.camName, x.createdAt, { site: x.site }); });
+  if (typeof PM !== "undefined") PM.inc.filter(i => !i.training && now - i.start < 6 * 36e5).forEach(i => { const s = SITES.find(y => y.code === i.site); add(s && metroOf(s), "Perimeter", `${i.level} alarm zone ${i.zone}`, i.start, { site: i.site }); });
+  SHARED.protests.filter(p => !p.deleted && p.status !== "ended" && p.when && Math.abs(p.when - now) < 24 * 36e5).forEach(p => add(p.city, "Protest tracker", p.title, p.when));
+  if (typeof INF !== "undefined"){ Object.values(INF.ioda.by || {}).filter(x => x.ongoing && SITE_CC.has(x.cc)).forEach(x => add(infName(x.cc), "Internet (IODA)", "Internet outage now", (x.events[0] || {}).start || now)); INF.news.power.filter(x => now - x.t < 24 * 36e5).forEach(x => add(x.city || infName(x.cc), "Power news", x.title, x.t)); }
+  (DATA.quakes || []).filter(q => now - q.time < 6 * 36e5 && q.mag >= 5).forEach(q => { const c = CITIES.map(c => [c, km(q.lat, q.lon, c.lat, c.lon)]).sort((a, b) => a[1] - b[1])[0]; if (c && c[1] < 300) add(c[0].name, "Earthquakes", `M${q.mag.toFixed(1)} ${Math.round(c[1])} km away`, q.time); });
+  // a country-level signal also belongs to every city of that country
+  const byPlace = {}; sig.forEach(x => (byPlace[x.place] = byPlace[x.place] || []).push(x));
+  Object.keys(byPlace).forEach(pl => { const cc = CITY_CC[pl]; if (!cc) return; const nat = byPlace[infName(cc)]; if (nat) byPlace[pl] = byPlace[pl].concat(nat); });
+  const out = {}; Object.entries(byPlace).forEach(([pl, list]) => { const srcs = [...new Set(list.map(x => x.src))]; if (srcs.length < 2) return; const id = "c" + hashStr(pl + srcs.sort().join("|") + Math.floor(Math.min(...list.map(x => x.at)) / 864e5));
+    const sites = [...new Set(list.map(x => x.site).filter(Boolean))], hs = [];
+    if (srcs.includes("Internet (IODA)") && srcs.includes("Power news")) hs.push("the internet outage is most likely caused by the power cut");
+    if (srcs.includes("Earthquakes")) hs.push("check whether the other signals are earthquake effects");
+    if (srcs.includes("Protest tracker") && (srcs.includes("Camera analytics") || srcs.includes("Perimeter"))) hs.push("site alarms during a nearby protest — treat as possibly linked");
+    const siteSrc = [...new Set(list.filter(x => x.site).map(x => x.src))]; if (siteSrc.length >= 2) hs.push(`${siteSrc.length} different systems at ${sites.join(", ")} — check whether site alarms and the wider situation are linked (power, comms, people)`);
+    const hint = hs.length ? hs.join("; ") : "several sources about the same place";
+    out[id] = Object.assign({}, AGT.cases[id] || {}, { id, place: pl, sources: srcs, items: list.sort((a, b) => b.at - a.at).slice(0, 12), sites, hint, at: AGT.cases[id] ? AGT.cases[id].at : now }); });
+  Object.values(AGT.cases).filter(c => c.status && !out[c.id]).forEach(c => { out[c.id] = c; }); AGT.cases = out; }
+/* ---------- writer ---------- */
+function agWriter(){ const out = [];
+  if (typeof dsrCur === "function"){ const R = dsrCur(), have = new Set(Object.values(R.sec).flat().map(x => x.src)), miss = (typeof openEvents === "function" ? openEvents() : []).filter(e => !have.has("ev:" + e.id)).length + SHARED.actions.filter(a => a.status === "pending" && !have.has("act:" + a.id) && !/TRAINING|PRACTICE/.test(a.title)).length;
+    if (miss) out.push({ id: "dsr:" + R.date + ":" + miss, title: `Daily Shift Report — ${miss} item(s) not in it yet`, detail: "Open escalations and waiting actions that today's report doesn't mention.", go: "dsr" }); }
+  SHARED.protests.filter(p => !p.deleted && p.status !== "ended" && p.when && p.when - Date.now() < 48 * 36e5 && p.when - Date.now() > -6 * 36e5 && typeof SPOTS !== "undefined" && !SPOTS.some(s => s.pr === p.id)).forEach(p => { const n = protestSites(p)[0]; if (n && n.d < 2000) out.push({ id: "spot:" + p.id, title: `Spot report — ${p.title} (${p.city})`, detail: `Within ${kmTxt(n.d / 1000)} of ${n.s.code}; no spot report yet.`, go: "spot", pr: p.id }); });
+  return out; }
+/* ---------- watchdog ---------- */
+function agWatchdog(){ const now = Date.now(), out = [];
+  SHARED.actions.filter(a => a.status === "pending" && now - a.createdAt > ACT_SLA[a.pri] * 60e3).forEach(a => out.push({ lv: a.pri === "P1" || a.pri === "P2" ? "bad" : "warn", t: `Decision overdue: ${a.pri} ${trunc(a.title, 70)}`, s: `Waiting ${fmtAge(now - a.createdAt)} (target ${ACT_SLA[a.pri]} min)`, go: "actions" }));
+  (typeof openEvents === "function" ? openEvents() : []).forEach(e => { try{ if (evalEvent(e, now).worst === "overdue") out.push({ lv: "bad", t: `Escalation update overdue: ${trunc(e.desc, 70)}`, s: "The SOP update time has passed", go: "escalations" }); }catch(err){} });
+  { const down = Object.values(FEEDS).filter(f => f.ok === false); if (down.length) out.push({ lv: "info", t: `${down.length} feed${down.length === 1 ? "" : "s"} unavailable`, s: down.map(f => f.name).join(", ").slice(0, 220), go: "adm-src" }); }
+  if (typeof PM !== "undefined") Object.values(PM.sites).forEach(P => P.devices.filter(d => d.type !== "light" && pmOffline(d)).forEach(d => out.push({ lv: "warn", t: `Perimeter sensor offline: ${P.code} ${d.name}`, s: `Zones ${d.zones.join(", ")}`, go: "perimeter" })));
+  Object.values(CV.streams || {}).filter(S => S.state === "error" && !S.cam.test).forEach(S => out.push({ lv: "warn", t: `Camera problem: ${S.cam.name}`, s: S.err || "", go: "cv" }));
+  return out; }
+function agRun(){ const now = Date.now();
+  if (CFG.agents.triage !== "off") SHARED.actions.filter(a => a.status === "pending").forEach(a => { const old = AGT.sugg[a.id]; if (old && old.state && old.sig === (a.updatedAt || a.createdAt)) return; if (old && !old.state && now - old.at < 60e3) return; const s = agTriage(a); AGT.sugg[a.id] = Object.assign(s, { state: old && old.sig === s.sig ? old.state : null }); });
+  Object.keys(AGT.sugg).forEach(id => { if (!SHARED.actions.some(a => a.id === id && a.status === "pending")) delete AGT.sugg[id]; });
+  if (CFG.agents.correlate !== "off") agCorrelate();
+  AGT.writer = CFG.agents.writer !== "off" ? agWriter() : []; AGT.watch = CFG.agents.watchdog !== "off" ? agWatchdog() : []; AGT.at = now; agSave(); }
+setInterval(() => { if (ME && !isLimited()){ try{ agRun(); }catch(e){} if (UI.mode === "agents" && !$("#ov.show") && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#panel select"))) renderPanel(); } }, 60e3);
+setTimeout(() => { if (ME && !isLimited()) try{ agRun(); }catch(e){} }, 15000);
+/* ---------- capability scorecard ---------- */
+const AG_CAPS = [["Unified detection, investigation and response", "named", () => ["yes", "Action queue, escalations with SOP timers, incidents and reports in one console"]],
+  ["AI-powered workflows and automation", "named", () => ["part", "Agents here, writing with AI, camera analytics; no automated playbook execution yet"]],
+  ["Open data foundation and exposure visibility", "named", () => ["part", "40+ open feeds and site exposure on one map; data stays per browser until the PSOC server exists"]],
+  ["Human in the loop, with set autonomy", "", () => ["yes", "Every agent is Off / Suggest / Prepare drafts; people decide"]],
+  ["Explainable proposals and an audit trail", "", () => ["yes", "Each proposal lists its reasons and context; every accept and reject is logged"]],
+  ["Correlation of signals into cases", "", () => ["yes", "Correlation agent groups sources by place and time"]],
+  ["Playbooks / SOPs", "", () => ["part", "REN TTP timers and decision types are built in; steps are not yet run automatically"]],
+  ["Learning from analyst feedback", "", () => ["yes", "Test & tune for cameras and perimeter; agent acceptance rates below"]],
+  ["Operational metrics", "", () => ["part", "Overdue decisions, acceptance rates; no time-to-resolve trend yet"]],
+  ["Connected to enterprise systems", "", () => [typeof serverBase === "function" && serverBase() ? "part" : "no", "Lenel OnGuard, VMS, perimeter, ticketing and messaging need the PSOC server"]]];
+/* ---------- the panel ---------- */
+{ const g = G("respond"); if (g && !g.tabs.some(t => t[0] === "agents")){ const i = g.tabs.findIndex(t => t[0] === "actions"); g.tabs.splice(i >= 0 ? i + 1 : g.tabs.length, 0, ["agents", "AI agents"]); } }
+KEYS.agents = ["AI AGENTS", [], "Agents that gather the context and propose decisions, cases and drafts — a person accepts or rejects each one"]; NON_CITY_MODES.push("agents"); if (!FULLW.includes("agents")) FULLW.push("agents");
+function agentsPanel(){ if (!AGT.at) try{ agRun(); }catch(e){} const tab = UI.agTab || "work", pend = SHARED.actions.filter(a => a.status === "pending").sort((a, b) => a.pri.localeCompare(b.pri) || a.createdAt - b.createdAt);
+  const stats = Object.keys(AG_NAMES).map(k => { const L = AGT.log.filter(x => x.agent === k && (x.result === "accepted" || x.result === "rejected")), acc = L.filter(x => x.result === "accepted").length; return [k, L.length, acc]; });
+  const bar = `<div class="ptools"><span class="label">AI agents</span><span class="innav0">${[["work", "Proposals"], ["cases", `Cases (${Object.values(AGT.cases).filter(c => !c.status).length})`], ["setup", "Agents & guardrails"], ["log", "Log"], ["caps", "Agentic SOC scorecard"]].map(([k, l]) => `<button class="tab-mini" data-agtab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span><span class="s">${AGT.at ? "ran " + esc(ago(AGT.at)) : ""}</span><span class="sp"></span><button class="tab-mini" data-agrun>↻ Run agents now</button></div>`;
+  let body = "";
+  if (tab === "work"){ const tri = CFG.agents.triage === "off" ? `<div class="s">Triage agent is off.</div>` : pend.map(a => { const g = AGT.sugg[a.id]; if (!g) return ""; const done = g.state;
+      return `<div class="agp${done ? " done" : ""}" style="--c:${SEV_C[a.pri]}"><div class="hd"><span class="sev" style="--c:${SEV_C[a.pri]}">${a.pri}</span><b>${esc(trunc(a.title, 110))}</b><span class="s" style="margin-left:auto">${esc(a.source)} · ${esc(ago(a.createdAt))}</span></div>
+        <div class="agsug">Proposed: <b>${esc(DEC[g.kind] ? DEC[g.kind][1] : g.kind)}</b> <span class="agconf" title="How sure the agent is">${Math.round(g.conf * 100)}%</span></div>
+        <ul class="agwhy">${g.why.map(w => `<li>${esc(w)}</li>`).join("")}</ul>${g.ctx.length ? `<div class="s">Context: ${g.ctx.map(esc).join(" · ")}</div>` : ""}
+        ${done ? `<div class="s">${done === "accepted" ? "Accepted — decision form opened" : "Rejected"}</div>` : `<div class="acts"><button class="act" data-agacc="${a.id}">Accept — open decision</button><button class="act" data-agrej="${a.id}">Reject</button></div>`}</div>`; }).join("") || `<div class="s">No waiting actions.</div>`;
+    const wr = (AGT.writer || []).map(w => `<div class="agp" style="--c:var(--teal)"><b>${esc(w.title)}</b><div class="s">${esc(w.detail)}</div><div class="acts"><button class="act" data-agwr="${esc(w.id)}">${w.go === "dsr" ? "Bring them into the report" : "Draft the spot report"}</button><button class="act" data-agwrx="${esc(w.id)}">Not now</button></div></div>`).join("") || `<div class="s">Nothing due.</div>`;
+    const wd = (AGT.watch || []).slice(0, 15).map(w => `<div class="agw ${w.lv}"><b>${esc(w.t)}</b><span class="s">${esc(w.s)}</span><button class="tab-mini" data-aggo="${esc(w.go)}">Go</button></div>`).join("") || `<div class="s">All on time; feeds and sensors fine.</div>`;
+    body = `<div class="agcols"><div><div class="sec" style="margin-top:0">Triage agent — ${pend.length} waiting</div>${tri}</div><div><div class="sec" style="margin-top:0">Writer agent</div>${wr}<div class="sec">Watchdog agent</div>${wd}</div></div>`; }
+  if (tab === "cases"){ const cs = Object.values(AGT.cases).sort((a, b) => (a.status ? 1 : 0) - (b.status ? 1 : 0) || b.at - a.at);
+    body = cs.map(c => `<div class="agp${c.status ? " done" : ""}" style="--c:#E8873A"><div class="hd"><b>${esc(c.place)}</b>${c.sites.map(s => `<span class="tag">${esc(s)}</span>`).join("")}<span class="s" style="margin-left:auto">${c.sources.length} sources</span></div><div class="agsug">${esc(c.hint)}</div>
+      <ul class="agwhy">${c.items.map(x => `<li><span class="tag">${esc(x.src)}</span> ${esc(trunc(x.title, 110))} <span class="s">${esc(ago(x.at))}</span></li>`).join("")}</ul>
+      ${c.status ? `<div class="s">${esc(c.status)}</div>` : `<div class="acts"><button class="act" data-agcase="${c.id}">Open one escalation for these</button><button class="act" data-agcasex="${c.id}">Not related</button></div>`}</div>`).join("") || `<div class="empty">No cases — the correlation agent proposes one when two or more different sources report about the same place within 6 hours.</div>`; }
+  if (tab === "setup") body = `<div class="agset">${Object.entries(AG_NAMES).map(([k, [n, d]]) => { const st = stats.find(x => x[0] === k); return `<div class="agrow"><div><b>${esc(n)}</b><div class="s">${esc(d)}</div></div><select data-agmode="${k}">${[["off", "Off"], ["suggest", "Suggest"], ["prepare", "Prepare drafts"]].map(([v, l]) => `<option value="${v}"${CFG.agents[k] === v ? " selected" : ""}>${l}</option>`).join("")}</select><span class="s">${st[1] ? `${st[2]} of ${st[1]} accepted (${Math.round(st[2] / st[1] * 100)}%)` : "no answers yet"}</span></div>`; }).join("")}</div>
+      <div class="sec">Guardrails (fixed)</div><ul class="ttlist"><li>Agents never send messages, record decisions, open or close escalations or incidents — a person does, after accepting.</li><li>Every proposal shows its reasons and the context it used; every accept and reject is logged with the person's name.</li><li>Training, practice and test items are recognised and never proposed for escalation.</li><li>"Prepare drafts" lets the Writer agent fill the Daily Shift Report and draft spot reports on its own — nothing leaves the console until a person sends it.</li><li>The agents run in this browser on the console's own data; nothing is sent to an AI service unless "Writing with AI" is set up and used.</li></ul>
+      <p class="help">The acceptance rate shows where the agents can be trusted more. If one is often rejected, tell us why in the log — that is what to change in its rules.</p>`;
+  if (tab === "log") body = `<table class="tttab"><thead><tr><th>When</th><th>Agent</th><th>Proposal</th><th>Result</th><th>By</th></tr></thead><tbody>${AGT.log.slice(0, 120).map(l => `<tr><td>${esc(sgt(l.at).slice(0, 13))}</td><td>${esc((AG_NAMES[l.agent] || [l.agent])[0])}</td><td>${esc(l.what)}${l.note ? `<div class="s">${esc(l.note)}</div>` : ""}</td><td>${esc(l.result)}</td><td>${esc(l.by)}</td></tr>`).join("") || `<tr><td colspan="5" class="s">Nothing yet.</td></tr>`}</tbody></table>`;
+  if (tab === "caps") body = `<p class="help">What an agentic security operations centre needs, and where ITE stands. The first three are the capabilities named on Splunk's "10 Essential Capabilities of the Agentic SOC" page (the e-book itself is behind a sign-up form); the others are common agentic-SOC practice, not quoted from it.</p>
+      <table class="tttab"><thead><tr><th>Capability</th><th>ITE</th><th>Where / what is missing</th></tr></thead><tbody>${AG_CAPS.map(([n, src, f]) => { const [st, note] = f(); return `<tr><td><b>${esc(n)}</b>${src ? ` <span class="tag">Splunk</span>` : ""}</td><td class="${st === "yes" ? "ok" : st === "part" ? "warn" : "bad"}">${st === "yes" ? "In place" : st === "part" ? "Partly" : "Missing"}</td><td>${esc(note)}</td></tr>`; }).join("")}</tbody></table>`;
+  return bar + `<div class="pbody">${body}</div>`; }
+{ const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "agents") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = agentsPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "agents") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset;
+  if (d.agtab){ UI.agTab = d.agtab; saveUI(); renderPanel(); return; }
+  if (d.agrun !== undefined){ AGT.sugg = {}; agRun(); renderPanel(); toast("Agents ran", "Proposals refreshed", "var(--teal)"); return; }
+  if (d.agacc){ const g = AGT.sugg[d.agacc], a = SHARED.actions.find(x => x.id === d.agacc); if (!g || !a) return; g.state = "accepted"; agLog("triage", `${a.title} → ${DEC[g.kind][1]}`, "accepted", { note: g.why[0] }); openDecide(a.id, g.kind); const n = $("#dcNote"); if (n && !n.value) n.value = "Agent: " + g.why[0]; return; }
+  if (d.agrej){ const g = AGT.sugg[d.agrej], a = SHARED.actions.find(x => x.id === d.agrej); if (!g || !a) return; const why = prompt("Why is the proposal wrong? (helps tune the agent — optional)") || ""; g.state = "rejected"; agLog("triage", `${a.title} → ${DEC[g.kind][1]}`, "rejected", { note: why.slice(0, 200) }); renderPanel(); return; }
+  if (d.agwr){ const w = (AGT.writer || []).find(x => x.id === d.agwr); if (!w) return; agLog("writer", w.title, "accepted");
+    if (w.go === "dsr"){ dsrFill(); UI.repTab = "dsr"; saveUI(); setMode("reports"); return; }
+    if (w.go === "spot"){ UI.prSel = w.pr; saveUI(); setMode("protests"); setTimeout(() => spotNewFromSelected(), 600); return; } }
+  if (d.agwrx){ const w = (AGT.writer || []).find(x => x.id === d.agwrx); if (w) agLog("writer", w.title, "rejected"); AGT.writer = (AGT.writer || []).filter(x => x.id !== d.agwrx); renderPanel(); return; }
+  if (d.aggo){ setMode(d.aggo); return; }
+  if (d.agcase){ const c = AGT.cases[d.agcase]; if (!c) return; c.status = "Accepted — escalation form opened by " + (ME ? ME.name : ""); agLog("correlate", `${c.place}: ${c.sources.join(" + ")}`, "accepted"); agSave();
+    openEventModal(null, { cat: "operational_security", sev: "P2", desc: `${c.place} | Multiple sources | ${c.hint}`.slice(0, 200), sites: c.sites, country: CITY_CC[c.place] ? infName(CITY_CC[c.place]) : c.place, startNow: false }); return; }
+  if (d.agcasex){ const c = AGT.cases[d.agcasex]; if (!c) return; c.status = "Marked not related by " + (ME ? ME.name : ""); agLog("correlate", `${c.place}: ${c.sources.join(" + ")}`, "rejected"); agSave(); renderPanel(); return; } });
+document.getElementById("panel").addEventListener("change", e => { if (UI.mode !== "agents" || !e.target.dataset.agmode) return; CFG.agents[e.target.dataset.agmode] = e.target.value; saveCfg(); audit("Agent autonomy changed", e.target.dataset.agmode, e.target.value); agRun(); renderPanel(); });
+// "Prepare drafts": the writer agent fills the shift report on its own every hour (nothing is sent)
+setInterval(() => { if (ME && !isLimited() && CFG.agents.writer === "prepare" && typeof dsrFill === "function"){ const before = AGT.writer && AGT.writer.find(w => w.go === "dsr"); if (before){ const t = toast; toast = () => {}; try{ dsrFill(); }finally{ toast = t; } agLog("writer", before.title, "auto (prepared)"); } } }, 60 * 60e3);
+// the agent's proposal also shows on the Action queue card
+{ const _ap = actionsPanel; actionsPanel = function(){ let h = _ap(); Object.values(AGT.sugg).forEach(g => { if (g.state || !DEC[g.kind]) return; const tag = `data-decide="${g.id}" data-kind="${g.kind}"`; if (h.includes(tag)) h = h.replace(tag, tag + ` data-agpick="1" title="AI agent proposes this (${Math.round(g.conf * 100)}%): ${esc(g.why[0])}"`); }); return h; }; }
+{ const st = document.createElement("style"); st.textContent = `
+.agcols{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px}.agp{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:8px;padding:8px 10px;margin:0 0 8px;display:flex;flex-direction:column;gap:4px}.agp.done{opacity:.6}
+.agp .hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.agsug{font-size:13px}.agconf{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:0 6px;font-size:11.5px;color:var(--muted)}
+.agwhy{margin:0;padding-left:18px;font-size:12.5px}.agw{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-left:4px solid var(--line);padding:4px 8px;margin:4px 0;background:var(--panel);border-radius:4px;font-size:12.5px}.agw.bad{border-left-color:var(--red)}.agw.warn{border-left-color:#E8B04A}.agw.info{border-left-color:#5B9BD5}.agw button{margin-left:auto}
+.agset{display:flex;flex-direction:column;gap:8px}.agrow{display:grid;grid-template-columns:1fr 160px 200px;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}.agrow select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:13px var(--font)}
+[data-agpick]{box-shadow:0 0 0 2px var(--teal) inset}[data-agpick]::after{content:" ✦";color:var(--teal)}
+@media (max-width:1100px){.agcols{grid-template-columns:1fr}.agrow{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
 boot();
 
 </script>

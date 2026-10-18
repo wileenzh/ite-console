@@ -33,6 +33,22 @@ the Americas, a new frame every 10 minutes, infrared day and night or 1 km visib
 for fresh sharp pictures. Add them from Camera wall › 🛰 + Satellite feed, Camera sources, or a site's Site plan.
 No public satellite streams live video of a building; the live loop is the closest to a traffic camera.
 
+## Internet & power (Intelligence Monitoring)
+
+Internet outages by country from IODA (Georgia Tech, free), undersea cable faults (7 days) and power outages (72 h)
+from the news (GDELT), matched to site countries and cities, and a register for what the NOC, telcos and utilities
+report. Per country the signals are read together (an internet outage with power-cut news is most likely a power
+problem). Ongoing disruptions and major power cuts near sites go to the Action queue.
+
+## AI agents (Response › AI agents)
+
+A triage agent proposes a decision for every waiting action with its reasons and context (duplicates, open
+escalations, other alarms at the same site, hazards, internet and power); a correlation agent groups signals about the
+same place into proposed cases; a writer agent prepares the shift report and spot reports that are due; a watchdog
+lists overdue decisions and updates, feeds down and sensors offline. Each agent is Off, Suggest or Prepare drafts;
+none sends, decides, opens or closes anything — a person accepts or rejects every proposal, and every step is logged.
+An agentic-SOC scorecard shows where ITE stands.
+
 ## Weeks 2–5 outlook (Intelligence Monitoring)
 
 The odds that each week from day 8 to day 35 is unusually hot or cool, wet or dry, or low or high pressure, for every
