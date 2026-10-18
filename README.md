@@ -59,7 +59,20 @@ Threat Brief, Daily Shift Report, spot reports, the shift handover, anything sen
 products, incident reports, briefings), incident summaries, volcano briefs, the weekly alarm categories table and the
 executive weekly snapshot. Event notices keep their prescribed notice format.
 
-## Threat reports, dashboards and sending (Threat Intelligence › Briefs & templates)
+## Products by category, archived in the repositories
+
+Products are split by category. **Threat Intelligence › Intelligence products**: Threat Intelligence Summary, Weekly
+Threat Roll-up, Cyber Threat Brief, Ransomware & Supplier Risk, Exploited Vulnerabilities, Microsoft Defender
+Incidents, Indicators of Compromise, Natural Hazards, Civil Unrest Outlook, Travel Risk (plus spot reports and volcano
+briefs from their own tabs). **Response › Ops products**: Ops Intelligence Brief, Site Threat Assessment, Physical
+Security, Internet & Power (plus the Daily Shift Report, shift handover, executive weekly snapshot, weekly alarm
+categories and incident reports from their own tabs). Every product issued from any tab — emailed, posted to Teams,
+drafted, exported or filed, including playbook case reports — is archived automatically: intelligence products in the
+Intelligence repository, ops products in the Operations repository. Each archive entry keeps the searchable text and
+the issued copy exactly as sent ("Open the issued copy"; kept in the issuing browser's database until the PSOC server
+holds it), with every time it was issued and how. "Archive all now" files the current issue of every product.
+
+## Threat reports, dashboards and sending (Intelligence products / Ops products)
 
 Fourteen reports are written from the console's data: Threat Intelligence Summary, Weekly Threat Roll-up, Site
 Threat Assessment (any site), Ops Intelligence Brief, Cyber Threat Brief, Ransomware & Supplier Risk, Exploited

@@ -18019,9 +18019,9 @@ document.addEventListener("click", async e => { const t = e.target.closest("[dat
 document.getElementById("panel").addEventListener("change", e => { if (e.target.matches("[data-rptsite]")){ UI.rptSite = e.target.value; saveUI(); renderPanel(); } });
 document.getElementById("panel").addEventListener("click", e => { if (!["tihome", "briefs"].includes(UI.mode)) return; const t = e.target.closest("[data-tidl],[data-tidoc],[data-tirep],[data-tidsr],[data-timail]"); if (!t) return; const d = t.dataset;
   const k = d.tidoc || (d.tidsr && rptDef(d.tidsr) ? d.tidsr : null) || (TI_DOCS.find(x => x[0] === UI.tiDoc && x[3]) || TI_DOCS[0])[0]; if (!rptDef(k)) return; e.stopImmediatePropagation(); const pk = rptPack(k);
-  if (d.tidl !== undefined || d.tidoc){ downloadHtml(rFile(pk, "html"), pk.html); rptSnap(pk.o); RPTS.log.unshift({ at: Date.now(), k, title: pk.title, how: "HTML file exported", to: "" }); rptSave(); audit("Brief exported", pk.title, "HTML"); return; }
+  if (d.tidl !== undefined || d.tidoc){ downloadHtml(rFile(pk, "html"), pk.html); rptSnap(pk.o); rptLog(pk, "HTML file exported", ""); return; }
   if (d.timail !== undefined){ copyRich(bodyOf(pk.html), pk.text); toast(pk.o.title + " copied", "Paste it into the email — it keeps its layout", "var(--green)"); return; }
-  if (d.tirep !== undefined){ putShared("repo", { id: "tib-" + k + "-" + new Date().toISOString().slice(0, 13), createdAt: Date.now(), author: ME ? ME.name : "", type: pk.o.title, repo: "intel", title: pk.title, content: rptText(pk.o), summary: rCellTxt((pk.o.judgements || [])[0] || pk.o.levelText || "") }); audit("Brief filed", pk.title, ""); toast("Filed", "Intelligence repository", "var(--green)"); return; }
+  if (d.tirep !== undefined){ prodArchive(pk, "Filed").then(it => { rptSnap(pk.o); toast("Archived", it ? (it.repo === "ops" ? "Operations repository" : "Intelligence repository") : "", "var(--green)"); renderPanel(); }); return; }
   if (d.tidsr){ if (typeof dsrCur !== "function") return; const R = dsrCur(), day = new Date().toISOString().slice(0, 10); let n = 0;
     (pk.o.judgements || []).forEach((j, i) => { const src = `tij:${k}:${day}:${i}`; if (R.sec.intel.some(x => x.src === src)) return; R.sec.intel.push({ id: nid("i"), src, loc: /cyber|ransom|vuln|defender|ioc/.test(k) ? "Cyber" : k === "site" ? (UI.rptSite || "APAC") : "APAC", cat: "Threat Assessment", status: "Informational", title: i === 0 ? pk.o.title.toUpperCase() : pk.o.title, text: rCellTxt(j) }); n++; });
     dsrSave(); toast(n ? `${n} judgement(s) added to the shift report` : "Already in today's report", "Response › Reports, under Intelligence", "var(--green)"); } }, true);
@@ -18260,6 +18260,96 @@ if (!AG_CAPS.some(x => /Orchestration/.test(x[0]))) AG_CAPS.push(["Orchestration
 .pbacts{align-items:center}.pbacts .act.primary{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 22%,transparent);font-weight:600}.pbacts .s{font-size:12px}.pbctx summary{cursor:pointer;color:var(--muted);font-size:12.5px}.pbctx ul{margin:4px 0;padding-left:18px;font-size:12.5px}.pbctx .tttab{font-size:12px}.pbmsg pre{white-space:pre-wrap;font-size:12px;margin:4px 0}
 .pbm{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}.pbm b{color:var(--text)}.pblearn{margin:0;padding-left:18px;font-size:12px}.pbprac{border-color:#E8B04A;color:#E8B04A}.pbpilot{border-color:#E8B04A;color:#E8B04A}.act.pbq{border-color:var(--teal)}
 @media (max-width:1100px){.pbgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+
+/* =====================================================================
+   PRODUCTS BY CATEGORY + ARCHIVE (18 Oct)
+   - Briefs & templates is split: Threat Intelligence › Intelligence
+     products (leadership, cyber, operating-environment assessments, spot
+     reports, volcano briefs) and Response › Ops products (Ops Intelligence
+     Brief, Site Threat Assessment, Physical Security, Internet & Power,
+     Daily Shift Report, handover, executive snapshot, weekly alarm table,
+     incident reports).
+   - Every product issued from any tab — emailed, posted to Teams, drafted,
+     exported or filed, and the playbook case reports — is archived in its
+     repository: intelligence products in the Intelligence repository, ops
+     products in the Operations repository. The repository keeps the text
+     (searchable) and the issued copy exactly as sent (kept in this
+     browser's database), with each time it was issued and how.
+   ===================================================================== */
+const PROD_CAT = { summary: "intel", weekly: "intel", cyber: "intel", ransomware: "intel", vuln: "intel", defender: "intel", ioc: "intel", hazards: "intel", unrest: "intel", travel: "intel", spot: "intel",
+  ops: "ops", site: "ops", physical: "ops", infra: "ops", dsr: "ops" };
+const PROD_NAME = { intel: "Intelligence products", ops: "Ops products" }, PROD_REPO = { intel: "Intelligence repository", ops: "Operations repository" };
+const PROD_GROUPS = { intel: [["Leadership", ["summary", "weekly"]], ["Cyber", ["cyber", "ransomware", "vuln", "defender", "ioc"]], ["Operating environment", ["hazards", "unrest", "travel"]]],
+  ops: [["Operations briefs", ["ops", "site"]], ["Security and infrastructure", ["physical", "infra"]]] };
+const PROD_OPEN = { intel: [["spot", "Spot reports", "Civil Unrest and other spot reports — Response › Reports (archived here when sent)", () => { UI.repTab = "spot"; saveUI(); setMode("reports"); }], ["volc", "Volcano briefs", "Intelligence Monitoring › Volcano tracker", () => setMode("volcano")]],
+  ops: [["dsr", "Daily Shift Report", "Response › Reports (archived here when sent)", () => { UI.repTab = "dsr"; saveUI(); setMode("reports"); }], ["handover", "Shift handover", "Download or copy it in the template", () => openHandover()], ["exec", "Executive weekly snapshot", "Stakeholders; prints inside the template", () => setMode("sh-lead")],
+    ["ogw", "Key operational alarm categories (weekly)", "BAU › Access alarms", () => setMode("bau-access")], ["increp", "Incident reports", "BAU › Incidents — filed in the Operations repository", () => setMode("incidents")]] };
+const prodTitle = k => (rptDef(k) || {}).title || { dsr: "Daily Shift Report", spot: "Spot report" }[k] || k;
+PROD_GROUPS.intel.concat(PROD_GROUPS.ops).forEach(([, ks]) => ks.forEach(k => { const t = prodTitle(k); if (!REPO_TYPES.includes(t)) REPO_TYPES.push(t); })); if (!REPO_TYPES.includes("Spot report")) REPO_TYPES.push("Spot report");
+/* ---------- the archive ---------- */
+function prodCatOf(pk){ let k = String(pk.k || ""); if (/^pb:/.test(k)){ const D = typeof pbDef === "function" && pbDef(k.slice(3)); k = D ? (D.spot && /spot report/i.test(pk.title) ? "spot" : D.report) : ""; } return { key: k, cat: PROD_CAT[k] || "" }; }
+function rptMd(o){ const L = [`**${o.title}** — ${new Date().toDateString()}${o.subtitle ? " · " + o.subtitle : ""}`]; if (o.meta) L.push("", o.meta.map(([k, v]) => `${k}: ${v}`).join(" · "));
+  if (o.level) L.push("", `**${o.levelLabel || "Level"}: ${DOC_LV[o.level][0]}** — ${o.levelText || ""}`); if (o.tiles) L.push("", o.tiles.map(t => `${t[0]} ${t[1].toLowerCase()}`).join(" · "));
+  if ((o.judgements || []).length) L.push("", "## " + (o.judgementsTitle || "Key judgements"), ...o.judgements.map(j => "- " + rCellTxt(j)));
+  (o.sections || []).filter(Boolean).forEach(s => { L.push("", "## " + s.h); if (s.list) s.list.forEach(x => L.push("- " + rCellTxt(x))); if (s.para) s.para.forEach(x => L.push(rCellTxt(x)));
+    if (s.table){ if (!s.table.rows.length) L.push("Nil"); else if (s.table.head){ L.push("| " + s.table.head.join(" | ") + " |", "|" + s.table.head.map(() => "---").join("|") + "|"); s.table.rows.slice(0, 25).forEach(r => L.push("| " + r.map(c => rCellTxt(c).replace(/\|/g, "/").replace(/\n/g, " ")).join(" | ") + " |")); }
+      else s.table.rows.forEach(r => L.push("- " + r.map(rCellTxt).join(": "))); } });
+  if ((o.actions || []).length) L.push("", "## Recommended actions", ...o.actions.map((a, i) => `${i + 1}. [${a.pri}] ${a.action} — ${a.owner}${a.due ? " — by " + a.due : ""}`));
+  if (o.sources) L.push("", "## Sources", ...o.sources.map(s => "- " + s)); return L.join("\n"); }
+async function prodArchive(pk, how){ if (!pk || !pk.html) return null; const { key, cat } = prodCatOf(pk); if (!cat) return null; const now = Date.now(), o = pk.o, no = o && o.meta ? o.meta[0][1] : "";
+  const id = "ar" + hashStr(key + "|" + (no || pk.title)), ex = SHARED.repo.find(x => x.id === id), by = ME ? ME.name : "";
+  let content = o ? rptMd(o) : String(pk.text || ""); if (content.length > 6000) content = content.slice(0, 6000) + "\n\n… (the full issued copy is attached)";
+  const it = Object.assign(ex || { id, createdAt: now, author: by, classification: "Internal" }, { type: prodTitle(key), repo: cat === "ops" ? "ops" : "intel", title: pk.title, content, summary: trunc(rCellTxt(o ? ((o.judgements || [])[0] || o.levelText || "") : String(pk.text || "").split("\n").slice(1).join(" ")), 220),
+    tags: [...new Set(((ex || {}).tags || []).concat(["issued", PROD_NAME[cat].toLowerCase()]))], countries: (ex || {}).countries || [], sites: key === "site" && UI.rptSite ? [UI.rptSite] : ((ex || {}).sites || []),
+    issued: true, reportNo: no, level: o ? o.level || "" : "", htmlKey: "arch:" + id, issues: ((ex || {}).issues || []).concat([{ at: now, how: String(how || "issued").slice(0, 120), by }]).slice(-20), updatedAt: now });
+  putShared("repo", it); try{ await idbSet("arch:" + id, pk.html); }catch(e){} if (!ex) audit("Product archived", it.title, PROD_REPO[cat]); return it; }
+{ const _rl = rptLog; rptLog = function(pk, how, to){ _rl.apply(this, arguments); try{ prodArchive(pk, how + (to ? " → " + to : "")); }catch(e){} }; }
+async function prodView(id){ const it = SHARED.repo.find(x => x.id === id); if (!it) return; const html = it.htmlKey ? await idbGet(it.htmlKey) : null;
+  if (!html){ toast("The issued copy is kept in the browser that issued it", "The text version is shown in the repository", "var(--amber)"); return; }
+  openModal(head(it.title) + `<div class="bd"><div class="s" style="margin-bottom:6px">${esc(it.type)} · ${esc(it.reportNo || "")} · issued ${(it.issues || []).map(x => `${esc(rT(x.at))} (${esc(x.how)})`).join("; ")}</div><div class="rpdoc" style="max-height:66vh">${bodyOf(html)}</div></div>
+    <div class="ft"><button class="pill" data-ardl>⬇ HTML</button><button class="pill" data-arcopy>Copy for email</button><span style="flex:1"></span><button class="pill" data-x>Close</button></div>`, true);
+  $("#box [data-ardl]").onclick = () => downloadHtml(`PSOC_${it.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_").slice(0, 80)}.html`, html);
+  $("#box [data-arcopy]").onclick = async () => { const ok = await copyRich(bodyOf(html), it.content || it.title); toast(ok ? "Copied" : "Copy failed", "", "var(--teal)"); }; }
+// the repositories open the issued copy
+{ const _rpA = repoPanel; repoPanel = function(){ let h = _rpA(); const it = UI.rpOpen && SHARED.repo.find(x => x.id === UI.rpOpen); if (it && it.htmlKey) h = h.replace('<button class="act" data-rpclose>Close</button>', `<button class="act on" data-arview="${it.id}">Open the issued copy</button><button class="act" data-rpclose>Close</button>`);
+    return h.replace(/(<div class="item[^"]*"[^>]*data-rpopen="(ar[^"]+)"[^>]*>\s*<div class="hd">)/g, (m, a, id) => { const x = SHARED.repo.find(y => y.id === id); return x && x.issued ? a + `<span class="tag">issued${(x.issues || []).length > 1 ? " ×" + x.issues.length : ""}</span>` : a; }); }; }
+{ const _orA = opsRepoPanel; opsRepoPanel = function(){ let h = _orA(); const it = UI.orOpen && SHARED.repo.find(x => x.id === UI.orOpen); if (it && it.htmlKey) h = h.replace('<button class="act" data-oropen="">Close</button>', `<button class="act" data-oropen="">Close</button><button class="act on" data-arview="${it.id}">Open the issued copy</button>`); return h; }; }
+/* ---------- the two product pages ---------- */
+{ const ti = G("threat"); if (ti){ const b = ti.tabs.find(t => t[0] === "briefs"); if (b) b[1] = "Intelligence products"; } const rs = G("respond"); if (rs && !rs.tabs.some(t => t[0] === "opsprod")){ const i = rs.tabs.findIndex(t => t[0] === "reports"); rs.tabs.splice(i >= 0 ? i + 1 : rs.tabs.length, 0, ["opsprod", "Ops products"]); } }
+KEYS.briefs = ["INTELLIGENCE PRODUCTS", [], "Threat and intelligence products from live data — send by email or Teams in one click; every issue is archived in the Intelligence repository"];
+KEYS.opsprod = ["OPS PRODUCTS", [], "Operational briefs, shift products and reports — send by email or Teams in one click; every issue is archived in the Operations repository"];
+NON_CITY_MODES.push("opsprod"); if (!FULLW.includes("opsprod")) FULLW.push("opsprod");
+function prodPanel(cat){ const keys = PROD_GROUPS[cat].flatMap(g => g[1]), uk = cat === "ops" ? "opDoc" : "tiDoc"; if (!keys.includes(UI[uk])) UI[uk] = keys[0]; const k = UI[uk], o = rptBuild(k), html = iteDoc(o), d = rptDist(k), ch = rptChan(d.channel), last = RPTS.log.find(x => x.k === k);
+  const arch = SHARED.repo.filter(x => !x.deleted && x.issued && x.repo === (cat === "ops" ? "ops" : "intel")).sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)), sites = SITES.filter(isLive);
+  const grp = ([g, ks]) => `<div class="sec">${esc(g)}</div>` + ks.map(x => { const D = rptDef(x), lv = rptLevelOf(x); return `<button class="tidoc${x === k ? " on" : ""}" data-tisel="${x}"><b>${lv ? `<i class="rptdot" style="background:${DOC_LV[lv][1]}" title="${DOC_LV[lv][0]}"></i>` : ""}${esc(D.title)}</b><span class="s">${esc(D.desc)}</span></button>`; }).join("");
+  return `<div class="ptools"><span class="label">${PROD_NAME[cat]}</span><span class="s">${keys.length} from live data · archived in the ${PROD_REPO[cat]}</span><span class="sp"></span><button class="tab-mini primary" data-rptsend="${k}">📤 Send…</button><button class="tab-mini" data-rptmail="${k}" title="${esc(rptDistLine(k))}">✉ Email</button><button class="tab-mini" data-rptteams="${k}">💬 Teams</button><button class="tab-mini" data-tidl>⬇ HTML</button><button class="tab-mini" data-rpteml="${k}">⬇ .eml</button><button class="tab-mini" data-timail>Copy for email</button><button class="tab-mini" data-tirep>🗄 Archive now</button><button class="tab-mini" data-tidsr="${k}">Add to shift report</button><button class="tab-mini" data-rptdist="${k}">⚙ Distribution</button></div>
+    <div class="pbody"><div class="rpgrid rptgrid"><div class="tilist">${PROD_GROUPS[cat].map(grp).join("")}<div class="sec">Made in other tabs</div>${PROD_OPEN[cat].map(x => `<button class="tidoc" data-prodopen="${cat}:${x[0]}"><b>${esc(x[1])}</b><span class="s">${esc(x[2])}</span><span class="tag">opens its screen</span></button>`).join("")}
+      <div class="sec">Archived in the ${PROD_REPO[cat]} <button class="linkbtn" data-prodrepo="${cat}">open</button> · <button class="linkbtn" data-prodall="${cat}">archive all now</button></div>${arch.slice(0, 8).map(x => `<button class="rptlog prodar" data-argo="${x.id}"><b>${esc(trunc(x.title, 70))}</b><span class="s">${esc(rT(x.updatedAt || x.createdAt))} · ${esc(((x.issues || []).slice(-1)[0] || {}).how || "")}</span></button>`).join("") || `<div class="s">Nothing archived yet — every product sent, exported or filed from any tab lands there.</div>`}</div>
+      <div class="rpprev"><div class="rpprevh"><b>${esc(o.title)}</b><span class="s">as it will look in the file and in email; Teams gets the summary card</span>${k === "site" ? `<select data-rptsite aria-label="Site">${sites.map(s => `<option value="${esc(s.code)}"${s.code === UI.rptSite ? " selected" : ""}>${esc(s.code)} · ${esc(s.city)}</option>`).join("")}</select>` : ""}</div>
+        <div class="rptdist"><span>✉ ${d.to.length ? esc(d.to.slice(0, 3).join(", ")) + (d.to.length > 3 ? ` +${d.to.length - 3}` : "") + (d.cc.length ? ` · cc ${d.cc.length}` : "") + ` <span class="tag">${rMailGraph() ? "sends now" : "opens a draft"}</span>` : "<i>no email list</i>"}</span><span>💬 ${d.webhook ? "workflow card" : ch ? "#" + esc(ch.name) : d.chat.length ? "chat with " + esc(d.chat.slice(0, 2).join(", ")) : "<i>no Teams destination</i>"}</span><span class="s">🗄 ${PROD_REPO[cat]}${last ? " · last issued " + esc(rT(last.at)) + " · " + esc(last.how) : ""}</span></div>
+        <div class="rpdoc">${bodyOf(html)}</div></div></div></div>`; }
+briefsPanel = function(){ return prodPanel("intel"); };
+{ const _rpiP = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "opsprod") return _rpiP(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; } p.innerHTML = prodPanel("ops"); }; }
+{ const _thP = tiHomePanel; tiHomePanel = function(){ return _thP().replace(/(data-tigo="briefs">)Briefs &amp; templates/, "$1Intelligence products"); }; }
+// Ops products: the same buttons, its own selection
+document.getElementById("panel").addEventListener("click", async e => { const t = e.target.closest("[data-prodopen],[data-prodall],[data-prodrepo],[data-argo],[data-arview]"); if (t){ const d = t.dataset; e.stopImmediatePropagation();
+    if (d.arview){ prodView(d.arview); return; }
+    if (d.argo){ const it = SHARED.repo.find(x => x.id === d.argo); if (!it) return; if (it.repo === "ops"){ UI.orOpen = it.id; saveUI(); setMode("opsrepo"); } else { UI.rpOpen = it.id; saveUI(); setMode("repo"); } return; }
+    if (d.prodrepo){ setMode(d.prodrepo === "ops" ? "opsrepo" : "repo"); return; }
+    if (d.prodopen){ const [c, k] = d.prodopen.split(":"), x = PROD_OPEN[c].find(y => y[0] === k); if (x) x[3](); return; }
+    if (d.prodall){ const c = d.prodall, keys = PROD_GROUPS[c].flatMap(g => g[1]), keep = UI.rptSite; let n = 0; t.disabled = true;
+      for (const k of keys){ try{ const pk = rptPack(k); if (await prodArchive(pk, "Archived (all products)")){ n++; if (pk.o) rptSnap(pk.o); } }catch(err){} }
+      if (c === "ops" && typeof dsrCur === "function"){ try{ if (await prodArchive(rptPack("dsr"), "Archived (all products)")) n++; }catch(err){} }
+      UI.rptSite = keep; toast(`${n} product(s) archived`, PROD_REPO[c], "var(--green)"); renderPanel(); return; } }
+  if (UI.mode !== "opsprod") return; const b = e.target.closest("[data-tisel],[data-tidl],[data-timail],[data-tirep],[data-tidsr]"); if (!b) return; const d = b.dataset; e.stopImmediatePropagation();
+  if (d.tisel){ UI.opDoc = d.tisel; saveUI(); renderPanel(); return; } const k = UI.opDoc || "ops", pk = rptPack(k);
+  if (d.tidl !== undefined){ downloadHtml(rFile(pk, "html"), pk.html); rptLog(pk, "HTML file exported", ""); return; }
+  if (d.timail !== undefined){ copyRich(bodyOf(pk.html), pk.text); toast(pk.o.title + " copied", "Paste it into the email — it keeps its layout", "var(--green)"); return; }
+  if (d.tirep !== undefined){ const it = await prodArchive(pk, "Filed"); if (pk.o) rptSnap(pk.o); toast("Archived", it ? PROD_REPO.ops : "", "var(--green)"); renderPanel(); return; }
+  if (d.tidsr){ if (typeof dsrCur !== "function") return; const R = dsrCur(), day = new Date().toISOString().slice(0, 10); let n = 0;
+    (pk.o.judgements || []).forEach((j, i) => { const src = `tij:${k}:${day}:${i}`; if (R.sec.intel.some(x => x.src === src) || R.sec.obs.some(x => x.src === src)) return; R.sec.obs.push({ id: nid("i"), src, loc: k === "site" ? (UI.rptSite || "APAC") : "APAC", cat: pk.o.title, status: "Informational", title: i === 0 ? pk.o.title.toUpperCase() : pk.o.title, text: rCellTxt(j) }); n++; });
+    dsrSave(); toast(n ? `${n} line(s) added to the shift report` : "Already in today's report", "Response › Reports, under Observations", "var(--green)"); } }, true);
+{ const st = document.createElement("style"); st.textContent = `.prodar{text-align:left;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);cursor:pointer;font:inherit;width:100%}.prodar:hover b{text-decoration:underline}`; document.head.appendChild(st); }
 
 boot();
 
