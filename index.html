@@ -7643,8 +7643,8 @@ renderPanelInner = function(p){ const m = UI.mode;
   UI.lastTab = Object.assign({}, UI.lastTab, { [groupOf(m).id]: m }); };
 const _ra = renderAll; renderAll = function(){ applyMapVisibility(); _ra(); };
 const _sm = setMode; setMode = function(m){ const wasGlobal = UI.mode === "global"; _sm(m); applyMapVisibility();
-  if (map && m === "global" && !wasGlobal) setTimeout(() => map.flyTo([15, 110], 2, { duration: .6 }), 60);
-  if (map && wasGlobal && m !== "global") setTimeout(() => map.flyTo([12, 112], 4, { duration: .6 }), 60); };
+  if (map && m === "global" && !wasGlobal) setTimeout(() => mapFlySafe([15, 110], 2), 60);
+  if (map && wasGlobal && m !== "global") setTimeout(() => mapFlySafe([12, 112], 4), 60); };
 const _rm2 = renderModes;
 renderModes = function(){ _rm2();
   const add = (mode, n, t) => { const b = $(`.subtab[data-mode='${mode}']`); if (b && n && !b.querySelector(".b")) b.insertAdjacentHTML("beforeend", `<span class="b t${t}">${n}</span>`); };
@@ -15779,11 +15779,11 @@ function spotEditor(S){ return `<div class="rpgrid"><div class="rpedit"><div cla
 function reportsPanel(){ const tab = UI.repTab || "dsr";
   const bar = `<div class="ptools"><span class="label">Reports</span><span class="innav0">${[["dsr", "Daily Shift Report"], ["spot", `Spot reports${SPOTS.length ? " (" + SPOTS.length + ")" : ""}`]].map(([k, l]) => `<button class="tab-mini" data-reptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join("")}</span><span class="sp"></span>`;
   if (tab === "spot"){ const S = SPOTS.find(x => x.id === UI.spotSel) || SPOTS[0];
-    return bar + `<button class="tab-mini" data-spnew>+ From the Protest tracker</button><button class="tab-mini" data-spblank>+ Blank</button>${S ? `<button class="tab-mini" data-spdl>⬇ HTML file</button><button class="tab-mini" data-spcopy>Copy for email</button><button class="tab-mini" data-sprepo>File in repository</button><button class="tab-mini" data-spdel>Delete</button>` : ""}<button class="tab-mini" data-repset>⚙</button></div>
+    return bar + `<button class="tab-mini" data-spnew>+ From the Protest tracker</button><button class="tab-mini" data-spblank>+ Blank</button>${S ? `<button class="tab-mini" data-spdl>⬇ HTML file</button><button class="tab-mini" data-spcopy>Copy for email</button><button class="tab-mini" data-sprepo>File in repository</button><button class="tab-mini" data-spdel>Delete</button>` : ""}<button class="tab-mini" data-repset title="Team name, organisation and footer marking">⚙ Report settings</button></div>
       <div class="pbody"><div class="rpspots">${SPOTS.slice(0, 30).map(x => `<button class="tab-mini" data-spsel="${x.id}" aria-pressed="${S && x.id === S.id}">${esc(x.cat)} (${esc(x.stage)}) · ${esc(x.loc || "")} · ${esc(sgt(x.createdAt).slice(0, 13))}</button>`).join("")}</div>
       ${S ? spotEditor(S) : `<div class="empty">No spot reports yet. Open the Protest tracker, select a protest and press "Spot report" — or start a blank one.</div>`}</div>`; }
   const R = dsrCur();
-  return bar + `<button class="tab-mini primary" data-dsrfill>↻ Fill from the console</button><button class="tab-mini" data-dsrdl>⬇ HTML file</button><button class="tab-mini" data-dsrcopy>Copy for email</button><button class="tab-mini" data-dsrrepo>File in repository</button><button class="tab-mini" data-repset>⚙</button></div>
+  return bar + `<button class="tab-mini primary" data-dsrfill>↻ Fill from the console</button><button class="tab-mini" data-dsrdl>⬇ HTML file</button><button class="tab-mini" data-dsrcopy>Copy for email</button><button class="tab-mini" data-dsrrepo>File in repository</button><button class="tab-mini" data-repset title="Team name, organisation and footer marking">⚙ Report settings</button></div>
     <div class="pbody">${dsrEditor(R)}</div>`; }
 { const _rpi = renderPanelInner; renderPanelInner = function(p){ if (UI.mode !== "reports") return _rpi(p); if (isLimited()){ p.innerHTML = `<div class="pbody"><div class="empty">Not available for your role.</div></div>`; return; }
     const a = document.activeElement, keep = a && p.contains(a) && a.matches("input,textarea,select") ? { sel: rpSel(a), s: a.selectionStart, e: a.selectionEnd } : null, sc = (p.querySelector(".rpedit") || {}).scrollTop;
@@ -18028,7 +18028,7 @@ document.getElementById("panel").addEventListener("click", e => { if (!["tihome"
 // Threat overview: send the summary from there too
 { const _th = tiHomePanel; tiHomePanel = function(){ return _th().replace('<button class="tab-mini primary" data-tidoc="summary">', `<button class="tab-mini" data-rptmail="summary">✉ Email summary</button><button class="tab-mini" data-rptteams="summary">💬 Teams</button><button class="tab-mini primary" data-tidoc="summary">`); }; }
 // Daily Shift Report and spot reports: the same buttons
-{ const _rp = reportsPanel; reportsPanel = function(){ let h = _rp(); const add = k => `<button class="tab-mini primary" data-rptsend="${k}">📤 Send…</button><button class="tab-mini" data-rptmail="${k}">✉ Email</button><button class="tab-mini" data-rptteams="${k}">💬 Teams</button><button class="tab-mini" data-rpteml="${k}">⬇ .eml</button><button class="tab-mini" data-rptdist="${k}">⚙</button>`;
+{ const _rp = reportsPanel; reportsPanel = function(){ let h = _rp(); const add = k => `<button class="tab-mini primary" data-rptsend="${k}">📤 Send…</button><details class="mnu"><summary class="tab-mini">Send options ▾</summary><div class="mnupop"><button data-rptmail="${k}">✉ Email now (to the distribution list)</button><button data-rptteams="${k}">💬 Post to Teams now</button><button data-rpteml="${k}">⬇ Email draft (.eml)</button><button data-rptdist="${k}">⚙ Who gets it (distribution)</button></div></details>`;
     h = h.replace("<button class=\"tab-mini\" data-dsrcopy>Copy for email</button>", m => m + add("dsr")).replace("<button class=\"tab-mini\" data-spcopy>Copy for email</button>", m => m + add("spot")); return h; }; }
 // anything sent from the console (repository products, incident reports, briefings)
 { const _sr2 = openSendReport; openSendReport = function(title, md){ _sr2(title, md); RPT_CTX.send = { title, html: iteDocMd(title, md), text: String(md || "").replace(/\*\*/g, "") };
@@ -18322,8 +18322,8 @@ NON_CITY_MODES.push("opsprod"); if (!FULLW.includes("opsprod")) FULLW.push("opsp
 function prodPanel(cat){ const keys = PROD_GROUPS[cat].flatMap(g => g[1]), uk = cat === "ops" ? "opDoc" : "tiDoc"; if (!keys.includes(UI[uk])) UI[uk] = keys[0]; const k = UI[uk], o = rptBuild(k), html = iteDoc(o), d = rptDist(k), ch = rptChan(d.channel), last = RPTS.log.find(x => x.k === k);
   const arch = SHARED.repo.filter(x => !x.deleted && x.issued && x.repo === (cat === "ops" ? "ops" : "intel")).sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)), sites = SITES.filter(isLive);
   const grp = ([g, ks]) => `<div class="sec">${esc(g)}</div>` + ks.map(x => { const D = rptDef(x), lv = rptLevelOf(x); return `<button class="tidoc${x === k ? " on" : ""}" data-tisel="${x}"><b>${lv ? `<i class="rptdot" style="background:${DOC_LV[lv][1]}" title="${DOC_LV[lv][0]}"></i>` : ""}${esc(D.title)}</b><span class="s">${esc(D.desc)}</span></button>`; }).join("");
-  return `<div class="ptools"><span class="label">${PROD_NAME[cat]}</span><span class="s">${keys.length} from live data · archived in the ${PROD_REPO[cat]}</span><span class="sp"></span><button class="tab-mini primary" data-rptsend="${k}">📤 Send…</button><button class="tab-mini" data-rptmail="${k}" title="${esc(rptDistLine(k))}">✉ Email</button><button class="tab-mini" data-rptteams="${k}">💬 Teams</button><button class="tab-mini" data-tidl>⬇ HTML</button><button class="tab-mini" data-rpteml="${k}">⬇ .eml</button><button class="tab-mini" data-timail>Copy for email</button><button class="tab-mini" data-tirep>🗄 Archive now</button><button class="tab-mini" data-tidsr="${k}">Add to shift report</button><button class="tab-mini" data-rptdist="${k}">⚙ Distribution</button></div>
-    <div class="pbody"><div class="rpgrid rptgrid"><div class="tilist">${PROD_GROUPS[cat].map(grp).join("")}<div class="sec">Made in other tabs</div>${PROD_OPEN[cat].map(x => `<button class="tidoc" data-prodopen="${cat}:${x[0]}"><b>${esc(x[1])}</b><span class="s">${esc(x[2])}</span><span class="tag">opens its screen</span></button>`).join("")}
+  return `<div class="ptools"><span class="label">${PROD_NAME[cat]}</span><span class="s">${keys.length} from live data · archived in the ${PROD_REPO[cat]}</span><span class="sp"></span><button class="tab-mini primary" data-rptsend="${k}">📤 Send…</button><button class="tab-mini" data-rptmail="${k}" title="${esc(rptDistLine(k))}">✉ Email now</button><button class="tab-mini" data-rptteams="${k}">💬 Teams now</button><details class="mnu"><summary class="tab-mini">⬇ Download ▾</summary><div class="mnupop"><button data-tidl>⬇ HTML file</button><button data-rpteml="${k}">⬇ Email draft (.eml)</button><button data-timail>Copy for email (keeps the layout)</button></div></details><details class="mnu"><summary class="tab-mini">More ▾</summary><div class="mnupop"><button data-tirep>🗄 Archive now in the ${PROD_REPO[cat]}</button><button data-tidsr="${k}">Add the judgements to the shift report</button><button data-rptdist="${k}">⚙ Who gets it (distribution)</button></div></details></div>
+    <div class="pbody"><label class="prodpick">Product <select data-prodpick>${PROD_GROUPS[cat].map(([g, ks]) => `<optgroup label="${esc(g)}">${ks.map(x => `<option value="${x}"${x === k ? " selected" : ""}>${esc(rptDef(x).title)}</option>`).join("")}</optgroup>`).join("")}</select></label><div class="rpgrid rptgrid"><div class="tilist">${PROD_GROUPS[cat].map(grp).join("")}<div class="sec">Made in other tabs</div>${PROD_OPEN[cat].map(x => `<button class="tidoc" data-prodopen="${cat}:${x[0]}"><b>${esc(x[1])}</b><span class="s">${esc(x[2])}</span><span class="tag">opens its screen</span></button>`).join("")}
       <div class="sec">Archived in the ${PROD_REPO[cat]} <button class="linkbtn" data-prodrepo="${cat}">open</button> · <button class="linkbtn" data-prodall="${cat}">archive all now</button></div>${arch.slice(0, 8).map(x => `<button class="rptlog prodar" data-argo="${x.id}"><b>${esc(trunc(x.title, 70))}</b><span class="s">${esc(rT(x.updatedAt || x.createdAt))} · ${esc(((x.issues || []).slice(-1)[0] || {}).how || "")}</span></button>`).join("") || `<div class="s">Nothing archived yet — every product sent, exported or filed from any tab lands there.</div>`}</div>
       <div class="rpprev"><div class="rpprevh"><b>${esc(o.title)}</b><span class="s">as it will look in the file and in email; Teams gets the summary card</span>${k === "site" ? `<select data-rptsite aria-label="Site">${sites.map(s => `<option value="${esc(s.code)}"${s.code === UI.rptSite ? " selected" : ""}>${esc(s.code)} · ${esc(s.city)}</option>`).join("")}</select>` : ""}</div>
         <div class="rptdist"><span>✉ ${d.to.length ? esc(d.to.slice(0, 3).join(", ")) + (d.to.length > 3 ? ` +${d.to.length - 3}` : "") + (d.cc.length ? ` · cc ${d.cc.length}` : "") + ` <span class="tag">${rMailGraph() ? "sends now" : "opens a draft"}</span>` : "<i>no email list</i>"}</span><span>💬 ${d.webhook ? "workflow card" : ch ? "#" + esc(ch.name) : d.chat.length ? "chat with " + esc(d.chat.slice(0, 2).join(", ")) : "<i>no Teams destination</i>"}</span><span class="s">🗄 ${PROD_REPO[cat]}${last ? " · last issued " + esc(rT(last.at)) + " · " + esc(last.how) : ""}</span></div>
@@ -18503,6 +18503,102 @@ document.getElementById("panel").addEventListener("change", e => { if (UI.mode !
 #chwall{position:fixed;inset:0;z-index:6000;background:#0B1220;display:flex;flex-direction:column}#chwall .chwh{display:flex;gap:12px;align-items:center;padding:8px 16px;background:#0F1828;border-bottom:1px solid #22324A;color:#E8EDF3;font-size:18px}#chwall .chwh .s{color:#93A1B2;font-size:14px}#chwall .sp{flex:1}#chwall .chhost{flex:1;font-size:clamp(15px,1.15vw,26px)}
 .chdots{display:flex;gap:5px}.chdots i{width:9px;height:9px;border-radius:50%;background:#33445E}.chdots i.on{background:#4FC4BE}.chclk{font-variant-numeric:tabular-nums}
 @media (max-width:1100px){.chpanel{grid-template-columns:1fr}.chstage{aspect-ratio:auto;height:70vh}.chcols,.chcols.three,.chdet{grid-template-columns:1fr}.chtiles{flex-wrap:wrap}.chtile{min-width:120px}}`; document.head.appendChild(st); }
+
+/* =====================================================================
+   USABILITY PASS (19 Oct)
+   - "Go to…" (Ctrl+K / ⌘K, or the header button): find any screen,
+     product, site or action by typing; recent screens first.
+   - Top navigation never pushes the page sideways: it scrolls within
+     itself and keeps the current section in view.
+   - The screen name is shown once (no second copy in the toolbar).
+   - Menus for secondary actions (Download ▾, More ▾, Send options ▾)
+     so each toolbar shows the main action first.
+   - A burst of new actions shows as one notice, not a pile of toasts.
+   - Phone: product pages open with the preview first and a picker.
+   ===================================================================== */
+// recent screens
+{ const _smU = setMode; setMode = function(m){ const r = _smU.apply(this, arguments); try{ UI.recentModes = [m].concat((UI.recentModes || []).filter(x => x !== m)).slice(0, 8); }catch(e){} return r; }; }
+const goVis = m => (typeof canSee !== "function" || !ME || canSee(m)) && !(String(m).startsWith("adm-") && ME && ME.role !== "admin");
+function goItems(){ const out = [], lim = typeof isLimited === "function" && isLimited();
+  GROUPS.forEach(g => g.tabs.forEach(([m, l]) => { if (!goVis(m)) return; const k = KEYS[m] || []; out.push({ id: "m:" + m, kind: "Screen", t: l, sub: g.label, d: k[2] || "", go: () => setMode(m) }); }));
+  if (lim) return out;
+  const cmd = (t, d, go, kw) => out.push({ id: "c:" + t, kind: "Action", t, sub: "", d, go, kw: kw || "" });
+  cmd("New escalation", "Open the escalation form (event notice, SOP timers)", () => openEventModal(null, {}), "event escalate notice");
+  cmd("Settings", "Thresholds, sources, display", () => $("#setBtn").click(), "preferences options");
+  cmd("Integrations", "PSOC server, Microsoft, keys, chat and email workflows", () => $("#intBtn").click(), "server connect microsoft teams");
+  cmd("Sites list", "All sites with class and status", () => $("#sitesBtn").click(), "datacentre office");
+  cmd("Light / dark theme", "Switch the colour theme", () => $("#themeBtn").click(), "theme colour");
+  if (typeof RPT_DEFS !== "undefined") RPT_DEFS.forEach(D => { const cat = typeof PROD_CAT !== "undefined" ? PROD_CAT[D.key] : "intel";
+    out.push({ id: "p:" + D.key, kind: "Product", t: D.title, sub: cat === "ops" ? "Ops products" : "Intelligence products", d: D.desc, kw: "report brief send email teams",
+      go: () => { if (cat === "ops"){ UI.opDoc = D.key; setMode("opsprod"); } else { UI.tiDoc = D.key; setMode("briefs"); } } }); });
+  if (typeof CH_DEFS !== "undefined") CH_DEFS.forEach(([k, n, d]) => out.push({ id: "w:" + k, kind: "Wall channel", t: n, sub: "full screen", d, kw: "monitor channel video wall", go: () => chWall([k], 0, "Channel") }));
+  if (typeof PB_DEFS !== "undefined") out.push({ id: "pbk", kind: "Screen", t: "Playbooks", sub: "Response › AI agents", d: "Orchestrated playbooks — open cases, practice runs, metrics", kw: "playbook orchestration case", go: () => { UI.agTab = "pb"; setMode("agents"); } });
+  SITES.filter(s => isLive(s)).forEach(s => out.push({ id: "s:" + s.code, kind: "Site", t: s.code, sub: `${s.city}${s.country ? ", " + s.country : ""}`, d: `${s.cls || ""} — open its Site Threat Assessment`, kw: s.name || "", go: () => { UI.rptSite = s.code; UI.opDoc = "site"; setMode("opsprod"); } }));
+  return out; }
+function goFind(q){ const items = goItems(), w = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!w.length){ const rec = (UI.recentModes || []).filter(m => m !== UI.mode).map(m => items.find(i => i.id === "m:" + m)).filter(Boolean).slice(0, 6);
+    const sug = ["actions", "briefs", "opsprod", "reports", "escalations", "vcc", "todo"].map(m => items.find(i => i.id === "m:" + m)).filter(i => i && !rec.includes(i));
+    return rec.map(i => Object.assign({ hdr: "Recent" }, i)).concat(sug.map(i => Object.assign({ hdr: "Suggested" }, i))).slice(0, 12); }
+  return items.map(i => { const t = i.t.toLowerCase(), hay = `${t} ${i.sub} ${i.d} ${i.kind} ${i.kw || ""}`.toLowerCase(); if (!w.every(x => hay.includes(x))) return null;
+      let sc = 0; w.forEach(x => { if (t.startsWith(x)) sc += 100; else if (t.includes(x)) sc += 60; else if (i.sub.toLowerCase().includes(x)) sc += 25; else sc += 8; }); if (i.kind === "Screen") sc += 15; if (i.kind === "Site") sc -= 10; return Object.assign({ sc }, i); })
+    .filter(Boolean).sort((a, b) => b.sc - a.sc).slice(0, 14); }
+function goOpen(){ if (!ME) return; openModal(`<h2>Go to… <span class="s" style="font-weight:400;font-size:12px;margin-left:6px">screens, products, sites, actions · ↑ ↓ Enter · Esc</span><button data-x aria-label="Close">×</button></h2><div class="bd"><input id="goQ" class="goq" placeholder="Type to find — e.g. protest, cyber brief, XSG11, escalation, monitor" autocomplete="off" aria-label="Find"><div id="goList" class="golist" role="listbox"></div></div>`);
+  let sel = 0, res = []; const q = $("#goQ"), list = $("#goList");
+  const draw = () => { res = goFind(q.value); sel = Math.min(sel, Math.max(0, res.length - 1)); let last = "";
+    list.innerHTML = res.map((r, i) => { const h = r.hdr && r.hdr !== last ? `<div class="gohdr">${esc(r.hdr)}</div>` : ""; last = r.hdr || last; return h + `<button class="goit${i === sel ? " on" : ""}" data-goi="${i}" role="option" aria-selected="${i === sel}"><span class="gok">${esc(r.kind)}</span><b>${esc(r.t)}</b>${r.sub ? `<span class="s">${esc(r.sub)}</span>` : ""}<span class="god">${esc(trunc(r.d || "", 110))}</span></button>`; }).join("") || `<div class="s" style="padding:10px">Nothing matches “${esc(q.value)}”.</div>`;
+    const on = list.querySelector(".goit.on"); if (on) on.scrollIntoView({ block: "nearest" }); };
+  const pick = i => { const r = res[i]; if (!r) return; closeModal(); setTimeout(() => { try{ r.go(); }catch(e){ toast("Could not open it", e.message, "var(--amber)"); } }, 30); };
+  q.addEventListener("input", () => { sel = 0; draw(); });
+  q.addEventListener("keydown", e => { if (e.key === "ArrowDown"){ e.preventDefault(); sel = Math.min(res.length - 1, sel + 1); draw(); } else if (e.key === "ArrowUp"){ e.preventDefault(); sel = Math.max(0, sel - 1); draw(); } else if (e.key === "Enter"){ e.preventDefault(); pick(sel); } });
+  list.addEventListener("click", e => { const b = e.target.closest("[data-goi]"); if (b) pick(+b.dataset.goi); });
+  draw(); setTimeout(() => q.focus(), 30); }
+{ const hr = document.querySelector(".hdrright"), set = document.getElementById("setBtn"); if (hr && set && !document.getElementById("goBtn")){ const b = document.createElement("button"); b.className = "pill"; b.id = "goBtn"; b.title = "Find any screen, product, site or action (Ctrl+K)"; b.innerHTML = `🔍 Go to… <kbd>Ctrl K</kbd>`; b.onclick = goOpen; hr.insertBefore(b, hr.firstChild); } }
+document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")){ e.preventDefault(); if ($("#ov").classList.contains("show") && $("#goQ")){ closeModal(); return; } goOpen(); } });
+// the screen name once: hide the toolbar's copy of the header title
+{ const _rpU = renderPanelInner, norm = t => String(t || "").toLowerCase().replace(/&amp;/g, "&").replace(/[^a-z0-9&]+/g, " ").trim();
+  renderPanelInner = function(p){ const r = _rpU.apply(this, arguments); try{ const k = (KEYS[UI.mode] || [])[0], lab = p.querySelector(".ptools > .label"); if (k && lab && norm(lab.textContent) === norm(k)) lab.classList.add("dupl"); }catch(e){} return r; }; }
+// menus: close when clicking elsewhere or after choosing
+document.addEventListener("click", e => { const inMenu = e.target.closest("details.mnu"); document.querySelectorAll("details.mnu[open]").forEach(d => { if (d !== inMenu) d.removeAttribute("open"); }); if (inMenu && e.target.closest(".mnupop button")) setTimeout(() => inMenu.removeAttribute("open"), 0); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll("details.mnu[open]").forEach(d => d.removeAttribute("open")); });
+// phone: product picker
+document.getElementById("panel").addEventListener("change", e => { if (!e.target.matches("[data-prodpick]")) return; if (UI.mode === "opsprod") UI.opDoc = e.target.value; else UI.tiDoc = e.target.value; saveUI(); renderPanel(); });
+// keep the current section visible in the top bar
+{ const _rmU = renderModes; renderModes = function(){ const r = _rmU.apply(this, arguments); try{ const on = document.querySelector("#modes .mode.on, #modes .mode[aria-current='page'], #modes [aria-pressed='true']"); if (on && on.scrollIntoView) { const nav = document.getElementById("modes"); if (nav && nav.scrollWidth > nav.clientWidth + 2){ const l = on.offsetLeft - nav.offsetLeft, w = on.offsetWidth; if (l < nav.scrollLeft || l + w > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, l - 40); } } }catch(e){} return r; }; }
+// signed in: drop the "enter your name" reminder
+{ const _siU = signIn; signIn = async function(){ const r = await _siU.apply(this, arguments); try{ if (ME) document.querySelectorAll("#toasts .toast").forEach(t => { if (/Enter your name to sign in/.test(t.textContent)) t.remove(); }); }catch(e){} return r; }; }
+// one notice for a burst of new actions
+{ const _toU = toast; let grp = null; toast = function(title, body, color, onclick){ if (/^Action needed: /.test(title || "")){ const now = Date.now();
+      if (grp && grp.el && document.body.contains(grp.el) && now - grp.at < 5000){ grp.n++; grp.at = now; grp.el.innerHTML = `<b>${grp.n} new actions need a decision</b>Latest: ${esc(String(title).replace(/^Action needed: /, ""))} — open the Action queue`; grp.el.style.setProperty("--c", "var(--amber)"); return; }
+      const r = _toU.apply(this, arguments), box = $("#toasts"); grp = { el: box && box.lastElementChild, n: 1, at: now }; if (grp.el){ const el = grp.el; el.onclick = () => { if (grp && grp.n > 1) setMode("actions"); else if (onclick) onclick(); el.remove(); }; } return r; }
+    return _toU.apply(this, arguments); }; }
+{ const st = document.createElement("style"); st.textContent = `
+@media (min-width:1301px){#modes{overflow-x:auto;scrollbar-width:none;min-width:0;max-width:100%}#modes::-webkit-scrollbar{display:none}}
+@media (min-width:1301px) and (max-width:1700px){#modes>.mode{padding:5px 4px;font-size:11.5px}}
+.ptools>.label.dupl{display:none}
+#goBtn kbd{font:10px var(--font);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px;color:var(--muted)}
+.goq{width:100%;box-sizing:border-box;font-size:16px;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+.golist{display:flex;flex-direction:column;gap:2px;margin-top:8px;max-height:56vh;overflow:auto}.gohdr{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:8px 4px 2px}
+.goit{display:grid;grid-template-columns:96px auto 1fr;gap:2px 10px;align-items:baseline;text-align:left;background:none;border:1px solid transparent;border-radius:8px;padding:7px 10px;color:var(--text);cursor:pointer;font:13px var(--font)}.goit .god{grid-column:2 / 4;color:var(--muted);font-size:12px}.goit.on,.goit:hover{background:var(--panel);border-color:var(--teal)}
+.gok{grid-row:1 / 3;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--teal);align-self:center}
+details.mnu{position:relative;display:inline-block}details.mnu>summary{list-style:none;cursor:pointer;user-select:none}details.mnu>summary::-webkit-details-marker{display:none}details.mnu[open]>summary{border-color:var(--teal)}
+.mnupop{position:absolute;right:0;top:calc(100% + 4px);z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.35);padding:4px;display:flex;flex-direction:column;min-width:240px}
+.mnupop button{text-align:left;background:none;border:0;color:var(--text);padding:8px 10px;border-radius:6px;font:13px var(--font);cursor:pointer;white-space:nowrap}.mnupop button:hover,.mnupop button:focus-visible{background:color-mix(in srgb,var(--teal) 16%,transparent);outline:none}
+.prodpick{display:none;margin:0 0 10px;font-size:13px;gap:8px;align-items:center}.prodpick select{flex:1;padding:6px 8px;border-radius:6px;background:var(--bg);color:var(--text);border:1px solid var(--line);font-size:14px}
+@media (max-width:1100px){.prodpick{display:flex}.rptgrid .rpprev{order:-1}.rptgrid .tilist .tidoc .s{display:none}.chpanel .chstagewrap{order:-1}.mnupop{right:auto;left:0}}`; document.head.appendChild(st); }
+
+/* ---------- Guide: how the PSOC workflow runs in ITE, with a button to each place ---------- */
+const GUIDE = [["1", "Detect", "Feeds watch hazards, protests, cyber, outages, cameras and sensors and match them to sites.", [["todo", "Watch officer to-do"], ["alertstream", "Live alert stream"], ["vcc", "Command view"], ["tihome", "Threat overview"]]],
+  ["2", "Triage", "Anything that needs a decision lands in the Action queue with a deadline; the triage agent proposes a decision and its reasons.", [["actions", "Action queue"], ["agents", "AI agents"]]],
+  ["3", "Escalate", "Open an escalation with SOP update timers, or let a playbook carry the case from decision to report.", [["escalations", "Escalation timers"], ["agents:pb", "Playbooks"]]],
+  ["4", "Respond", "Incidents, welfare checks and mass notifications, messages to sites, dispatch of guards.", [["incidents", "Incidents"], ["welfare", "Welfare checks"], ["massnotify", "Mass notification"], ["comms", "Comms"]]],
+  ["5", "Report", "The shift report, spot reports and every product — sent by email or Teams in one click and archived in the repositories.", [["reports", "Reports"], ["opsprod", "Ops products"], ["briefs", "Intelligence products"], ["repo", "Repositories"]]],
+  ["▣", "Video wall", "Channels for the monitors: status board, alerts, aerial map, assets and more.", [["vcc-ch", "Channels"]]]];
+function guideOpen(){ openModal(head("How ITE works") + `<div class="bd"><div class="guide">${GUIDE.map(([n, t, d, go]) => `<div class="gstep"><span class="gnum">${n}</span><div><b>${esc(t)}</b><div class="s">${esc(d)}</div><div class="acts">${go.filter(([m]) => goVis(m.split(":")[0])).map(([m, l]) => `<button class="tab-mini" data-guidego="${m}">${esc(l)} →</button>`).join("")}</div></div></div>`).join("")}</div>
+    <p class="help">Tip: press <b>Ctrl+K</b> (⌘K on a Mac) anywhere to jump to any screen, product, site or action by typing.</p></div>`, true);
+  $("#box .guide").addEventListener("click", e => { const b = e.target.closest("[data-guidego]"); if (!b) return; const [m, sub] = b.dataset.guidego.split(":"); closeModal(); if (sub === "pb") UI.agTab = "pb"; setMode(m); }); }
+{ const hr = document.querySelector(".hdrright"), go = document.getElementById("goBtn"); if (hr && go && !document.getElementById("guideBtn")){ const b = document.createElement("button"); b.className = "pill"; b.id = "guideBtn"; b.title = "How the PSOC workflow runs in ITE"; b.textContent = "? Guide"; b.onclick = guideOpen; go.insertAdjacentElement("afterend", b); } }
+{ const _gi = goItems; goItems = function(){ const out = _gi.apply(this, arguments); out.unshift({ id: "c:guide", kind: "Help", t: "How ITE works", sub: "", d: "The five steps — detect, triage, escalate, respond, report — and where each happens", kw: "help guide start workflow", go: guideOpen }); return out; }; }
+{ const st = document.createElement("style"); st.textContent = `.guide{display:flex;flex-direction:column;gap:8px}.gstep{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px}.gnum{width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}.gstep .acts{margin-top:5px}`; document.head.appendChild(st); }
 
 boot();
 

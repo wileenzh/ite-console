@@ -13,6 +13,16 @@ This hosted copy runs entirely in your browser:
 Features that need a server (shared data, background monitoring, relaying news sources that browsers block) are
 described in the hosting guide that ships with the full package.
 
+## Finding your way
+
+- **Go to… (Ctrl+K, ⌘K on a Mac)**: type any part of a screen, product, site code or action — "protest", "cyber
+  brief", "XSG11", "new escalation", "status board" — and press Enter. Recent screens are listed first.
+- **? Guide**: how the PSOC workflow runs in ITE — detect, triage, escalate, respond, report, and the video wall — with
+  a button to each place.
+- Toolbars show the main action first; downloads and less-used actions sit under **Download ▾**, **More ▾** and
+  **Send options ▾**. A burst of new actions shows as one notice. The top navigation scrolls within itself instead of
+  pushing the page sideways; on a phone, product pages open on the preview with a product picker.
+
 ## Channels (Vision Command Centre › Channels)
 
 Monitor-ready views for the PSOC video wall, one facet each, in large type, refreshing by themselves: **Aerial Map**
