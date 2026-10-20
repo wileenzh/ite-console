@@ -85,7 +85,8 @@ executive weekly snapshot. Event notices keep their prescribed notice format.
 
 Products are split by category. **Threat Intelligence › Intelligence products**: Threat Intelligence Summary, Weekly
 Threat Roll-up, Cyber Threat Brief, Ransomware & Supplier Risk, Exploited Vulnerabilities, Microsoft Defender
-Incidents, Indicators of Compromise, Natural Hazards, Civil Unrest Outlook, Travel Risk (plus spot reports and volcano
+Incidents, Indicators of Compromise, Natural Hazards, Civil Unrest Outlook, Travel Risk, Daily Situation Report,
+Country Security Profile (plus spot reports and volcano
 briefs from their own tabs). **Response › Ops products**: Ops Intelligence Brief, Site Threat Assessment, Physical
 Security, Internet & Power (plus the Daily Shift Report, shift handover, executive weekly snapshot, weekly alarm
 categories and incident reports from their own tabs). Every product issued from any tab — emailed, posted to Teams,
@@ -93,6 +94,59 @@ drafted, exported or filed, including playbook case reports — is archived auto
 Intelligence repository, ops products in the Operations repository. Each archive entry keeps the searchable text and
 the issued copy exactly as sent ("Open the issued copy"; kept in the issuing browser's database until the PSOC server
 holds it), with every time it was issued and how. "Archive all now" files the current issue of every product.
+
+## Intelligence events (Intelligence Monitoring › Intelligence events)
+
+From PULSE's Intelligence dashboard. The Datasurfr events API (X-API-Key), the Max Security Reports API v3 (company +
+token, optional; daily, monthly, forecast and analysis summaries dropped) and a news feed (Straits Times Asia by
+default) are read together for the last 24 hours (48 h, 72 h or 7 days if chosen) every 10 minutes. One card per
+country (site countries by default) plus Other, so nothing is dropped. A priority strip (near a site · severe or
+elevated · new), type and source chips, relevance **Focus** (near our sites: within the radius or naming a site city),
+**Wide** (adds serious events anywhere) or **All**, a radius of 25–250 km, a one-site filter, mute a type or a source,
+mark seen and restore (14 days). Repeats are folded: same-template bulletins, a Max report that repeats a Datasurfr
+event (the higher-rated one is kept), a headline that repeats either; reports of one kind within 10 km and a day read
+as one situation. Each event maps to an escalation category and a severity (severe → P1, elevated → P2, otherwise P3)
+and goes to the escalation form, the Action queue, or an open escalation as an update. New events raise a pop-up
+(sound and a desktop notification optional); severe events near a site go to the Action queue by themselves (or
+severe and elevated, or never). "Inspect the last responses" shows what each source returned. **Keys stay in the
+browser that entered them** — never in Settings, backups, exports or the server sync; tokens are masked in the
+diagnostics. If a vendor blocks browser calls, the request goes through the PSOC server relay. Sample events (marked
+SAMPLE) can be loaded to try the page; the standards check refuses to send a report that contains them.
+
+## Daily Situation Report and Country Security Profile (Intelligence products › Country and situation)
+
+**Daily Situation Report** (from PULSE's draft brief): the events showing on Intelligence events, each with country,
+impacted area, category and priority, effective dates, time identified, description, the closest datacenters (code,
+class, distance, status), the closest corporate office and the data source strength as an Admiralty grade (a default per
+source, set in `CFG.sitrep.grades`), with the assigned officer, a summary table and dashboards.
+**Country Security Profile**, in the structure of the October 2026 country assessment: version history, BLUF,
+assessment of country risk (national and each city with sites), threat prioritization, operating environment (purpose
+and primary questions, methodology, country profile, operational geography), the national, environmental and
+critical-infrastructure threats (assessment, dated evidence with an Admiralty grade, watch indicators), outlook and
+current-quarter outlook, the Admiralty method and an annex per city with sites. Ratings run LOW · MODERATE · HIGH ·
+CRITICAL, impact is stated on CO+I (`CFG.csp.org`). The analyst writes the text in **Edit profile** (kept per country in
+the browser; export / import to share); the console adds a **Current reporting** box beside each threat and annex —
+escalations, intelligence events, hazard levels, earthquakes, cyclones, protests, internet and power, travel advice —
+kept apart from the assessment. "Save as new version" adds the version-history row.
+
+## Standards check (every product, before it is sent)
+
+Every product is checked against the same rules before it goes: no placeholder text, a handling marking, a
+distribution list, sources stated, every action with an owner, key judgements (no more than 8), feeds current. The
+Country Security Profile adds the house rules: BLUF present and short, every geography and threat rated, every threat
+assessed, impact above LOW explained, evidence dated ("October 10, 2026") and Admiralty-graded, at least three watch
+indicators, the version in the version history, the outlook written, annexes written, "requires site-specific
+confirmation" where impact is above LOW. The Daily Situation Report adds: an assigned officer, a grade for every
+event, no sample events. The result shows beside the preview (✔ / ⚠ / ✖); errors stop **Send…**, **Email now** and
+**Teams now** unless the officer overrides with a reason, which goes in the audit trail and the send log.
+
+## Help answers, storage and Excel export
+
+The Guide (and Ctrl+K) answers plain questions from a built-in help set — no network, no key — each answer with a
+button to the screen it is about. Administrator › System shows the browser storage the console uses, by area, and
+**Export everything (Excel)** writes one workbook with a sheet per record type (escalations, actions, queries,
+incidents, protests, welfare, reports, sends, intelligence events, camera alerts, alert log, audit, users, checklist,
+snapshots). Settings, vendor keys and issued copies are never in it.
 
 ## Threat reports, dashboards and sending (Intelligence products / Ops products)
 
