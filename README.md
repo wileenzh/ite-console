@@ -95,6 +95,28 @@ Intelligence repository, ops products in the Operations repository. Each archive
 the issued copy exactly as sent ("Open the issued copy"; kept in the issuing browser's database until the PSOC server
 holds it), with every time it was issued and how. "Archive all now" files the current issue of every product.
 
+## Operator console (Vision Command Centre › Operator console)
+
+Modelled on how Everbridge documents its Visual Command Center operator console (support articles and datasheet),
+built on ITE's own data with ITE's own names and look. A full map with a **Feeds** panel — Search; **Alerts**;
+**Risk events** (earthquakes, official warnings, global disasters, tropical cyclones, volcanoes, intelligence events,
+protests tracked, located news, access-control alarms, camera analytics, perimeter alarms, operator-entered risk
+events) with a severity filter; **Assets** (datacenters, offices, people, cameras, perimeters as areas); **Context**
+(acknowledged alerts, impact zones, day and night, lat/long grid, fires, live clouds, travel advice, KML layers);
+**Critical events** (escalations) and **Incidents**. An **alert** is a risk event near an asset: per source a minimum
+severity and an alert radius for datacenters, offices and people (Apps › Alert settings), areas by containment,
+site-bound sources at their own site, plus Always alert, Auto critical event and Action queue options. The alert
+toolbar: Acknowledge (disposition: relevant – no known / some / significant impact, duplicate, not relevant), Snooze
+(5 min … 12 h, until it expires), Note, Communication (mass notification to people in the zone), Incident, Critical
+event, Send (email / Teams with the standards check), Command view (locks the alert on the wall channel), Timeline,
+Area filter, Log, Reinstate — states shared between operators. **Items** panel (card / list, counts by type, find),
+**Timeline** (now line, Now, Go to now, Set range, month / week / day / hour, drag and wheel), panel buttons, and the
+⋯ menu: map style (Road, Aerial, Hybrid, Low light); Tools (Excel report of the items in view, map image, add a KML
+feed, saved views, annotations, map filter circle / rectangle / polygon, measure distance, restore default view); Apps
+(alert settings, channels, Mirror: open, send view, stream, download view); Preferences (audio alerts, scale bar,
+metric / English / nautical units, lat/long sensor with right-click copy, full screen). Channels gain **Command view**
+and **Mirror**.
+
 ## Intelligence events (Intelligence Monitoring › Intelligence events)
 
 From PULSE's Intelligence dashboard. The Datasurfr events API (X-API-Key), the Max Security Reports API v3 (company +
