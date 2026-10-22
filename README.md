@@ -114,8 +114,28 @@ Area filter, Log, Reinstate — states shared between operators. **Items** panel
 ⋯ menu: map style (Road, Aerial, Hybrid, Low light); Tools (Excel report of the items in view, map image, add a KML
 feed, saved views, annotations, map filter circle / rectangle / polygon, measure distance, restore default view); Apps
 (alert settings, channels, Mirror: open, send view, stream, download view); Preferences (audio alerts, scale bar,
-metric / English / nautical units, lat/long sensor with right-click copy, full screen). Channels gain **Command view**
-and **Mirror**.
+metric / English / nautical units, lat/long sensor, full screen). Channels gain **Command view**, **Mirror** and
+**Favourite views** (saved views ticked for the wall rotate, the way GSOC monitors cycle through regions).
+
+Second pass, after the operator guide: **search by type** (alerts, risk events, assets, people, incidents, context,
+places); alert details as the guide lists them — **event start and end with the time from now**, severity and
+category from the source, source, more-information link, **Show previous updates** (severity, headline and end-time
+changes are recorded; a snoozed alert comes back when its event is updated), operator log; alerts **expire an hour
+after their event ends**; **right-click** on the map (copy lat/long, add as area filter, communication to contacts in
+the area, critical event, new risk event, annotation) and on an alert or risk event (the alert actions);
+**operator-entered risk events** with the guide's categories and severities (Unknown … Extreme), **update** and
+**close** (end = now); **Launch communication** as a four-step wizard — choose a template, message (imminent threat to
+life, high priority, send confirmation, attach map / report; email, SMS, voice, Teams chat), recipients (contacts in
+the area or the event's polygon, incident subscribers, a team, extra addresses, untick to leave out), preview and
+send — with replies shown on the alert and people coloured on the map by their latest reply; a **critical event
+workspace** on every escalation — details (event type, owner, description), task list (not started / in progress /
+needs attention / done / N/A), incident communications, attached documents (links, or files kept in the browser),
+affected assets, notes and activity, Close Critical Event — and launching one from the console brings the operator
+back to it; **Alert report** (24 h / 7 d / 30 d, map view or world, with acknowledged) in the house template, ready
+to send; **saved views** with rename, search and a share link (#opview=…); the Items panel's **sort** (priority,
+newest, severity, nearest, name) and **asset-type toggles**; a **map-filter summary** (datacenters by class, offices,
+people, active alerts inside; communication or critical event for the area); a **risk history heat map** (90 days)
+and **category symbols** on risk events; assets **grouped by city** when zoomed out.
 
 ## Intelligence events (Intelligence Monitoring › Intelligence events)
 
