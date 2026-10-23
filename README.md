@@ -552,3 +552,52 @@ for the same week as the alarm table (Tuesday 0800 SGT to Tuesday 0800 SGT by de
 - Each page shows how many outlets are on and answering. **Manage outlets** lists them by country with their
   health (stories read or the error), lets you turn any off, and adds your own RSS or Atom feed. Most news sites do
   not let a web page read their feeds; with the PSOC server set under Integrations, all of them are read through it.
+
+## Live risk register, regional view, protests, flights, streamlined Intelligence (23 Oct)
+
+**Risk register (Intelligence › Risk & trends › Risk register) is live**
+- A pulsing "Live" line shows when it was computed. It refreshes every minute from the hazard, news, access-control
+  and incident feeds, and pauses while you type.
+- New columns:
+  - **Likelihood** (1–5, live, with "up from" the residual likelihood when a live signal raises it);
+  - **Impact** (1–5 per risk, editable in Edit baseline);
+  - **Priority** P1 Critical / P2 High / P3 Medium / P4 Low;
+  - **24 h** change.
+- Live risk = live likelihood × impact (max 25). Priority: P1 at 20+ or tier 3, P2 at 15+ or tier 2, P3 at 10+ or
+  tier 1, otherwise P4.
+- A **5×5 risk matrix** (likelihood × impact) and **Top priorities now** with their evidence. Click either to open
+  the risk.
+- Scope by **region** (North Asia, Southeast Asia, India, ANZ) as well as by city. Sort by priority.
+
+**Regional view (RSOM)** (Stakeholders › Regional view): for each region's security operations manager:
+- headline numbers (high-priority risks, SERV releases to clear, open incidents, Lenel availability, camera outages,
+  unacknowledged high alarms, open escalations);
+- **the most important risks** for the region's cities;
+- **SERV reports to clear**: releases to the region's sites until every site has responded, the SERV report is filed
+  and the release is closed, ordered overdue → waiting → ready to file → filed;
+- open incidents and escalations;
+- **datacenter statistics** by city for the last 30 days: sites, datacenters by class, Lenel availability and outages,
+  camera outages, access alarms, incidents.
+
+Every item opens where it is handled. **Copy regional brief** gives a plain-text brief.
+
+**Protest tracker**
+- GDELT allows one request every 5 seconds per network, and its refusals reach a browser only as "Failed to fetch".
+  Every GDELT call in the console now waits its turn and retries, and goes through the PSOC server when one is set.
+- Protest and unrest stories from the news outlets fill the live reports and the country view when GDELT is
+  unavailable, and can be tracked on the map or escalated.
+- One "Tracked protests" heading.
+
+**Flights**: **OpenSky Network** is a fourth free source (after adsb.lol, airplanes.live and adsb.fi). The console
+switches to it on its own when the others are blocked. Without an account it refreshes about every 4 minutes
+(400 requests a day).
+
+**Intelligence Monitoring, streamlined**
+- 23 tabs are now five sections: **Overview** (to-do, live alert stream, map), **Hazards**, **News** (live news,
+  Breaking (APAC), International), **Security** (protests, intelligence events, internet & power) and **Risk & trends**
+  (risk register, trends, statistics).
+- The second row shows only that section's pages.
+- **Hazards** breaks into each hazard with its own page and tools: all hazards, typhoons, earthquakes, weather,
+  next 48 h, weeks 2–5, air quality, rivers & floods, volcanoes, official warnings and global disasters. Each has a
+  status dot.
+- Each section remembers the last page you used.

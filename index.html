@@ -14910,7 +14910,7 @@ const SG_KNOWN = ["air-quality-api.open-meteo.com", "airquality.googleapis.com",
 const SG_EXTRA = ["*.basemaps.cartocdn.com", "*.tile.openstreetmap.org", "tilecache.rainviewer.com", "www.youtube-nocookie.com", "i.ytimg.com", "*.googlevideo.com", "*.usembassy.gov", "hk.usconsulate.gov",
   "china.usembassy-china.org.cn", "www.ait.org.tw", "*.open-meteo.com", "storage.googleapis.com", "tfhub.dev", "www.kaggle.com", "huggingface.co", "*.huggingface.co", "*.hf.co", "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com",
   "fonts.googleapis.com", "fonts.gstatic.com", "*.arcgisonline.com", "*.arcgis.com", "services.arcgisonline.com", "acleddata.com", "api.acleddata.com",
-  "api.adsb.lol", "api.airplanes.live", "opendata.adsb.fi", "fr24api.flightradar24.com", "gibs.earthdata.nasa.gov", "*.earthdata.nasa.gov", "s3-us-west-2.amazonaws.com", "wayback.maptiles.arcgis.com", "r.jina.ai"];
+  "api.adsb.lol", "api.airplanes.live", "opendata.adsb.fi", "opensky-network.org", "fr24api.flightradar24.com", "gibs.earthdata.nasa.gov", "*.earthdata.nasa.gov", "s3-us-west-2.amazonaws.com", "wayback.maptiles.arcgis.com", "r.jina.ai"];
 const SG_CATS = [[/arcgis|openstreetmap\.org$|^tile\.|tile\.openstreetmap|cartocdn|rainviewer|tile\.googleapis/, "Maps"],
   [/jsdelivr|unpkg|cdnjs|fonts\.g/, "Libraries"], [/usgs|seismicportal|gdacs|eonet|volcano|tsunami|jma\.go|cwa\.gov|kma\.go|weather\.go\.kr|data\.gov\.sg|weather\.gov\.sg|haze\.gov|bmkg|tmd\.go|met\.gov\.my|data\.gov\.my|water\.gov\.my|hko\.gov|weather\.gov\.hk|ndma|wmo\.int|metservice|open-meteo|waqi|airquality|weather\.googleapis|reliefweb/, "Hazards & weather"],
   [/gdelt|bbci|newsapi|gnews|newsdata|thenewsapi|algolia|reddit|ycombinator|straitstimes|scmp|japantimes|bangkokpost|aljazeera|abc\.net|theguardian|thehindu|rnz|yna\.co|channelnewsasia|acled/, "News & unrest"],
@@ -19987,7 +19987,7 @@ function airMerge(list, src){ const now = Date.now(); let n = 0; list.forEach(r 
 function airNav(a, now){ if (a.gnd || a.nacp == null || !/adsb/.test(a.kind || "adsb") || a.src === "fr24") return; const k = Math.floor(a.ll[0]) + ":" + Math.floor(a.ll[1]), c = AIR.nav[k] = AIR.nav[k] || { g: {}, b: {} }; const bad = a.nacp < 8 || a.gpsLost; (bad ? c.b : c.g)[a.hex] = now; delete (bad ? c.g : c.b)[a.hex]; }
 function airNavCells(){ const now = Date.now(), out = []; Object.entries(AIR.nav).forEach(([k, c]) => { ["g", "b"].forEach(s => Object.keys(c[s]).forEach(h => { if (now - c[s][h] > 2 * 36e5) delete c[s][h]; })); const g = Object.keys(c.g).length, b = Object.keys(c.b).length; if (!g && !b){ delete AIR.nav[k]; return; }
     const pct = Math.max(0, 100 * (b - 1) / (g + b)), [la, lo] = k.split(":").map(Number); out.push({ k, la, lo, g, b, pct, lvl: g + b >= 5 && pct > 10 ? 2 : g + b >= 3 && pct >= 2 ? 1 : 0 }); }); return out; }
-async function airPoll(force){ if (AIR.busy){ if (force) AIR.again = true; return; } const due = Date.now() - AIR.at > Math.max(15, CFG.air.every) * 1000; if (!force && !due) return; const want = opFeedOn("air") || opFeedOn("airem") || opFeedOn("airlow") || opFeedOn("gnss");
+async function airPoll(force){ if (AIR.busy){ if (force) AIR.again = true; return; } const due = Date.now() - AIR.at > Math.max(AIR.use === "opensky" ? 240 : 15, CFG.air.every) * 1000; if (!force && !due) return; const want = opFeedOn("air") || opFeedOn("airem") || opFeedOn("airlow") || opFeedOn("gnss");
   if (!want || (!force && !airLive() && !CFG.air.siteWatch)) return; AIR.busy = true; AIR.at = Date.now(); const src = CFG.air.src, notes = [];
   try{ const m = airMap(), wait = ms => new Promise(r => setTimeout(r, ms));
     if (src === "receiver"){ if (!CFG.air.url) throw new Error("set the receiver's aircraft.json address in Air traffic settings"); airMerge(airList(await airJson(CFG.air.url)), "receiver"); }
@@ -21114,10 +21114,11 @@ tcRender = (function(orig){ return function(group, M, o){ o = o || {}; const H =
     return H; }; })(tcRender);
 /* ---------- air traffic: automatic switch between the free feeds, on-map status, feed test ---------- */
 AIR_SRC.adsbfi = ["adsb.fi — open data, free (1 request a second)", "https://opendata.adsb.fi/api", "sqk"];
-const AIR_FREE = ["adsblol", "airplaneslive", "adsbfi"];
+AIR_SRC.opensky = ["OpenSky Network — free for research and non-commercial use, about one refresh every 4 minutes without an account", "https://opensky-network.org/api", ""];
+const AIR_FREE = ["adsblol", "airplaneslive", "adsbfi", "opensky"];
 AIR.fail = {}; AIR.use = null;
-const airFreeUrl = (src, q) => { const B = AIR_SRC[src][1]; if (src === "adsbfi") return q.pt ? `${B}/v3/lat/${q.pt[0]}/lon/${q.pt[1]}/dist/${q.pt[2]}` : `${B}/v2/sqk/${q.sq}`; return q.pt ? `${B}/point/${q.pt.join("/")}` : `${B}/${AIR_SRC[src][2]}/${q.sq}`; };
-function airParse(url){ for (const k of AIR_FREE){ const B = AIR_SRC[k][1]; if (!String(url).startsWith(B + "/")) continue; const r = url.slice(B.length);
+const airFreeUrl = (src, q) => { const B = AIR_SRC[src][1]; if (src === "opensky"){ if (!q.pt) return ""; const la = +q.pt[0], lo = +q.pt[1], d = Math.min(2.5, +q.pt[2] * 1.852 / 111); return `${B}/states/all?lamin=${(la - d).toFixed(3)}&lomin=${(lo - d).toFixed(3)}&lamax=${(la + d).toFixed(3)}&lomax=${(lo + d).toFixed(3)}&extended=1`; } if (src === "adsbfi") return q.pt ? `${B}/v3/lat/${q.pt[0]}/lon/${q.pt[1]}/dist/${q.pt[2]}` : `${B}/v2/sqk/${q.sq}`; return q.pt ? `${B}/point/${q.pt.join("/")}` : `${B}/${AIR_SRC[src][2]}/${q.sq}`; };
+function airParse(url){ for (const k of AIR_FREE){ const B = AIR_SRC[k][1]; if (!String(url).startsWith(B + "/")) continue; const r = url.slice(B.length); if (k === "opensky"){ const m = /^\/point\/([-\d.]+)\/([-\d.]+)\/(\d+)/.exec(r); if (m) return { src: k, pt: [m[1], m[2], m[3]] }; const s2 = /\/(?:sqk|squawk)?\/?(\d{4})$/.exec(r); return s2 ? { src: k, sq: s2[1] } : null; }
     let m = /^\/point\/([-\d.]+)\/([-\d.]+)\/(\d+)/.exec(r) || /^\/v3\/lat\/([-\d.]+)\/lon\/([-\d.]+)\/dist\/(\d+)/.exec(r); if (m) return { src: k, pt: [m[1], m[2], m[3]] };
     m = /\/(?:sqk|squawk)\/(\d{4})$/.exec(r); if (m) return { src: k, sq: m[1] }; } return null; }
 const airNm = k => AIR_SRC[k][0].split(" — ")[0];
@@ -21125,10 +21126,10 @@ function airFailText(){ const why = m => /blocked by (the )?browser/.test(m) ? "
   const f = AIR_FREE.filter(k => AIR.fail[k]), blocked = f.some(k => /blocked by (the )?browser/.test(AIR.fail[k].msg)), relay = CFG.relayUrl || CFG.serverUrl;
   return "no flight feed answered — " + f.map(k => `${airNm(k)}: ${why(AIR.fail[k].msg)}`).join(" · ") + (blocked && !relay ? ". Set the PSOC server (Integrations) to fetch for the console" : ""); }
 // every request to a free feed tries the feed that last worked first, then the others; a feed that failed is skipped for 5 minutes
-airJson = (function(orig){ return async function(url, opts){ const q = airParse(url); if (!q) return orig(url, opts); if (CFG.air.auto === false) return orig(airFreeUrl(q.src, q), opts);
+airJson = (function(orig){ return async function(url, opts){ const q = airParse(url); if (!q) return orig(url, opts); if (CFG.air.auto === false){ if (q.src === "opensky" && !q.pt) return { ac: [] }; const j = await orig(airFreeUrl(q.src, q), opts); return q.src === "opensky" ? airFromOpenSky(j) : j; }
   const first = AIR.use && AIR_FREE.includes(AIR.use) ? AIR.use : q.src, order = [first].concat([q.src], AIR_FREE).filter((k, i, a) => a.indexOf(k) === i);
   for (const k of order){ const f = AIR.fail[k]; if (k !== first && f && Date.now() - f.at < 5 * 60e3) continue;
-    try{ const j = await orig(airFreeUrl(k, q), opts); AIR.use = k; delete AIR.fail[k]; return j; }
+    if (k === "opensky" && !q.pt) continue; try{ let j = await orig(airFreeUrl(k, q), opts); if (k === "opensky") j = airFromOpenSky(j); AIR.use = k; delete AIR.fail[k]; return j; }
     catch(e){ AIR.fail[k] = { at: Date.now(), msg: e.message || String(e) }; } }
   throw new Error(airFailText()); }; })(airJson);
 const airShort = () => "— " + trunc(AIR.err.replace(/^no flight feed answered — /, ""), 170);
@@ -21153,7 +21154,7 @@ async function airTest(){ const m = airMap(), c = m && m.getZoom() >= 5 ? m.getC
     <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Close</button><button class="pill primary" id="airTU" hidden>Use</button></div>`, true); draw();
   await Promise.all(rows.map(async r => { const host = (() => { try{ return new URL(r.url).host; }catch(e){ return ""; } })(), t0 = performance.now();
     if (!cspOk(host)) r.st = "blocked by this console's security policy (Enforce mode) — reload the page";
-    else try{ const x = await fetchText(r.url, null, 15000); if (x.ok){ let n = 0; try{ n = airList(JSON.parse(x.text)).length; }catch(e){} r.ok = true; r.st = `OK · ${n} aircraft · ${Math.round(performance.now() - t0)} ms`; }
+    else try{ const x = await fetchText(r.url, null, 15000); if (x.ok){ let n = 0; try{ n = (J => airList(J).length || ((J && J.states) || []).length)(JSON.parse(x.text)); }catch(e){} r.ok = true; r.st = `OK · ${n} aircraft · ${Math.round(performance.now() - t0)} ms`; }
       else r.st = "HTTP " + x.status + (x.status === 429 ? " — too many requests, wait a minute" : x.status === 401 || x.status === 403 ? " — refused (the feed may now need a key)" : ""); }
     catch(e){ r.st = e.name === "AbortError" ? "no answer in 15 s" : "blocked by the browser — the feed does not let web pages call it (CORS), or the network blocks it"; }
     if (relay){ try{ const x = await fetchText(relay.replace(/\/$/, "") + "/?url=" + encodeURIComponent(r.url), null, 20000); r.viaOk = x.ok; r.via = x.ok ? `OK · ${(() => { try{ return airList(JSON.parse(x.text)).length; }catch(e){ return 0; } })()} aircraft` : "HTTP " + x.status; }catch(e){ r.via = "no answer"; } }
@@ -21576,6 +21577,215 @@ document.getElementById("panel").addEventListener("click", e => { const t = e.ta
 { const st = document.createElement("style"); st.textContent = `.nostrip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;margin:0 0 10px}.nostrip .sp{flex:1}
 .nomgr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:52vh;overflow:auto}.nog{border:1px solid var(--line);border-radius:6px;padding:8px}.nog>b{display:block;margin-bottom:4px}.nog .opmi{font-size:12.5px}
 @media (max-width:700px){.nomgr{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+/* ---------- protest tracker: GDELT calls spaced out and relayed, protest stories from the news outlets as a second source ---------- */
+// GDELT allows about one request every 5 seconds per network; its refusals carry no CORS header, so a browser only sees "Failed to fetch".
+// Every GDELT call in the console (news, protests, sentiment) now waits its turn.
+const GDELT_GATE = { next: 0, chain: Promise.resolve() };
+function gdeltGate(){ const p = GDELT_GATE.chain.then(async () => { const w = GDELT_GATE.next - Date.now(); if (w > 0) await new Promise(r => setTimeout(r, w)); GDELT_GATE.next = Date.now() + 5500; }); GDELT_GATE.chain = p.catch(() => {}); return p; }
+{ const _f = window.fetch; window.fetch = async function(input, init){ const u = typeof input === "string" ? input : (input && input.url) || ""; if (/gdeltproject\.org/.test(u)) await gdeltGate(); return _f.apply(this, arguments); }; }
+gprLoad = async function(force){ if (CFG.pulse.gdeltProtest === false || GPR.busy || (!force && Date.now() - GPR.at < 15 * 60e3) || (!force && Date.now() - (GPR.failAt || 0) < 2 * 60e3)) return; GPR.busy = true; GPR.err = "";
+  const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])); if (!cs.length){ GPR.busy = false; return; }
+  const q = '(protest OR demonstration OR rally OR "civil unrest" OR riot OR strike OR picket OR "tear gas") (' + cs.map(c => "sourcecountry:" + c[0]).join(" OR ") + ")",
+    url = "https://api.gdeltproject.org/api/v2/doc/doc?query=" + encodeURIComponent(q) + "&mode=artlist&maxrecords=250&timespan=24h&sort=datedesc&format=json", relay = CFG.relayUrl || CFG.serverUrl;
+  try{ let t = null, last = null; for (let k = 1; k <= 3 && t == null; k++){ try{ t = await fetchVia(url, null, 35000); }catch(e){ last = e; if (k < 3) await new Promise(r => setTimeout(r, 7000 * k)); } }
+    if (t == null){ const m = String(last && last.message || ""); throw new Error(/blocked by browser|Failed to fetch|HTTP 429/i.test(m) ? `GDELT refused the request (it allows one request every 5 seconds per network)${relay ? "" : "; with the PSOC server set it is fetched there"}` : m || "no answer"); }
+    let j; try{ j = JSON.parse(t); }catch(e){ throw new Error("GDELT answered: " + trunc(String(t).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(), 120)); }
+    const by = {}; cs.forEach(c => by[c[0]] = []);
+    (j.articles || []).forEach(a => { const sc = String(a.sourcecountry || "").toLowerCase().replace(/\s+/g, ""); if (!by[sc]) return; const cl = gprClass(a.title), k = sc + "::" + (a.url || a.title);
+      by[sc].push(Object.assign({ cls: cl, key: k, isNew: GPR.at > 0 && !GPR.seen.has(k), t: gdeltDate(a.seendate) }, a)); GPR.seen.add(k); });
+    GPR.gdBy = by; GPR.by = by; GPR.at = Date.now(); lsSet("psoc.uni.gprseen.v1", [...GPR.seen].slice(-3000));
+    Object.entries(by).forEach(([sc, arts]) => arts.filter(a => a.isNew && a.cls[0] === "severe").slice(0, 3).forEach(a => { const c = PROTEST_COUNTRIES.find(x => x[0] === sc);
+      enqueueAction({ srcKey: "gpr:" + a.key, source: "Protest monitor (GDELT)", pri: "P3", title: `${c[1]}: ${a.title}`.slice(0, 180), detail: `${a.domain || ""} · ${a.cls[1]} (automated, unverified) · ${a.url || ""}`, suggested: ["monitor", "escalate"],
+        payload: { cat: "protest", sev: "P3", desc: `${c[1]} | Civil Unrest | ${a.title}`.slice(0, 200), country: typeof COUNTRY_NAME !== "undefined" && COUNTRY_NAME[c[2]] || c[1], src: "gpr:" + a.key } }); })); }
+  catch(e){ GPR.err = e.message; GPR.failAt = Date.now(); }
+  FEEDS.gdeltpr.ok = !GPR.err; FEEDS.gdeltpr.err = GPR.err || null; FEEDS.gdeltpr.at = Date.now(); GPR.busy = false; if (UI.mode === "protests") renderPanel(); };
+// protest and unrest stories the news outlets carried, by country, so the tracker is useful when GDELT is down
+function gprFromNews(cs){ const by = {}, cut = Date.now() - 48 * 3600e3; cs.forEach(c => by[c[0]] = []);
+  (DATA.news || []).filter(a => a.t >= cut && (a.cat === "protest" || /unrest|protest|riot|strike/i.test((CATS[a.cat] || {}).label || ""))).forEach(a => {
+    const c = cs.find(c => (a.countries || []).includes(c[1]) || (a.cities || []).some(ct => { const C = CITIES.find(x => x.name === ct); return C && (C.country === c[1] || C.cc === c[2]); }));
+    if (!c) return; by[c[0]].push({ title: a.title, url: a.url, domain: a.source || nrHost(a.url), t: a.t, cls: gprClass(a.title + " " + (a.desc || "")), key: "news::" + (a.url || a.id), isNew: false, fromNews: true, newsId: a.id }); });
+  return by; }
+// GDELT's articles and the news outlets' protest stories live together in GPR.by, so Track on map and Escalate work for both
+function gprMerge(){ const cs = PROTEST_COUNTRIES.filter(c => (CFG.pulse.protestCountries || []).includes(c[0])), N = gprFromNews(cs), gd = GPR.gdBy || {}, by = {}; let n = 0;
+  cs.forEach(c => { const g = gd[c[0]] || [], seen = new Set(g.map(a => a.url)), add = (N[c[0]] || []).filter(a => !seen.has(a.url)); n += add.length; by[c[0]] = g.concat(add).sort((x, y) => (y.t || 0) - (x.t || 0)); });
+  GPR.by = by; GPR.newsN = n; return n; }
+const gprNote = () => GPR.newsN ? (GPR.err ? `<div class="banner warn">GDELT is unavailable: ${esc(GPR.err)}. Showing ${GPR.newsN} protest and unrest stor${GPR.newsN === 1 ? "y" : "ies"} from the news outlets.</div>` : "") : "";
+prLiveHtml = (function(orig){ return function(){ gprMerge(); if (!GPR.newsN || !GPR.err) return orig.apply(this, arguments).replace("GDELT news, last 24 h", GPR.newsN ? `GDELT news + ${GPR.newsN} from news outlets` : "GDELT news, last 24 h");
+  const e = GPR.err; GPR.err = ""; const at = GPR.at; GPR.at = GPR.at || Date.now(); let h; try{ h = orig.apply(this, arguments); } finally{ GPR.err = e; GPR.at = at; }
+  return h.replace(/(<\/div>)/, "$1" + gprNote()).replace("GDELT news, last 24 h", `news outlets (GDELT unavailable)`); }; })(prLiveHtml);
+gprHtml = (function(orig){ return function(){ gprMerge(); if (!GPR.newsN || !GPR.err) return orig.apply(this, arguments); const e = GPR.err; GPR.err = ""; let h; try{ h = orig.apply(this, arguments); } finally{ GPR.err = e; }
+  return h.replace(/(<button class="tab-mini" data-gprrefresh>[^<]*<\/button><\/div>)/, "$1" + gprNote()); }; })(gprHtml);
+// one "Tracked protests" heading, not two
+protestPanel = (function(orig){ return function(){ return orig.apply(this, arguments).replace(/(<div class="sec"[^>]*>Tracked protests<\/div>)(\s*<div class="sec"[^>]*>Tracked protests<\/div>)+/g, "$1"); }; })(protestPanel);
+/* ---------- OpenSky Network as the fourth free flight source (state vectors → the readsb shape) ---------- */
+function airFromOpenSky(j){ const now = (j && j.time) || Date.now() / 1000; return { ac: ((j && j.states) || []).filter(v => v && v[5] != null && v[6] != null).map(v => ({ hex: String(v[0] || "").toLowerCase(), flight: v[1] || "", lat: v[6], lon: v[5],
+  alt_baro: v[8] ? "ground" : v[7] != null ? Math.round(v[7] * 3.28084) : null, alt_geom: v[13] != null ? Math.round(v[13] * 3.28084) : null, gs: v[9] != null ? Math.round(v[9] * 1.94384) : null, track: v[10], baro_rate: v[11] != null ? Math.round(v[11] * 196.85) : null,
+  squawk: v[14] || null, seen: Math.max(0, now - (v[4] || now)), type: v[16] === 2 ? "mlat" : "adsb_icao", category: v[17] ? "OS" + v[17] : null, src: "opensky" })), msg: "No error" }; }
+/* ---------- live risk register: likelihood × impact, priority, regions, risk matrix, refreshed every minute with a 24 h trend ---------- */
+const RISK_IMPACT = { seismic: 5, met: 4, flood: 4, coastal: 4, heat: 3, air: 3, soil: 4, pandemic: 4, water: 4, wildfire: 4, power: 5, transport: 3, terror: 5, insider: 4, opsec: 4, crime: 3, war: 5, industrial: 4, unrest: 3, volcanic: 4, cold: 3 };
+const RR_IMPACT_W = ["", "Minimal", "Minor", "Moderate", "Major", "Severe"], RR_LIKE_W = l => l < 1.5 ? "Rare" : l < 2.5 ? "Unlikely" : l < 3.5 ? "Possible" : l < 4.5 ? "Likely" : "Almost certain";
+const RR_PRI = { P1: ["P1", "Critical", "#C4314B"], P2: ["P2", "High", "#E8873A"], P3: ["P3", "Medium", "#D4B106"], P4: ["P4", "Low", "#3E9C5A"] };
+const RR_REGION_LABEL = { "North Asia": "North Asia", "South Asia": "Southeast Asia", "India": "India", "ANZ": "ANZ" };
+const rrRegions = () => [...new Set(CITIES.map(c => c.region).filter(Boolean))];
+const rrImpact = r => Math.max(1, Math.min(5, +((RISK.impact || {})[r.id] || RISK_IMPACT[r.id] || 3)));
+const rrPri = (cur, tier) => cur >= 20 || tier >= 3 ? "P1" : cur >= 15 || tier >= 2 ? "P2" : cur >= 10 || tier >= 1 ? "P3" : "P4";
+// regions as a scope: "Region: North Asia" covers every city in that region
+riskCities = (function(orig){ return function(){ const s = UI.riskScope || "APAC"; if (s.startsWith("region:")){ const g = s.slice(7); return CITIES.filter(c => c.region === g); } return orig.apply(this, arguments); }; })(riskCities);
+// one live computation per risk per scope every few seconds, so the table, matrix and regional pages agree
+{ const _ls = liveSignal, memo = {}; liveSignal = function(rid){ const k = (UI.riskScope || "APAC") + "|" + rid, m = memo[k]; if (m && Date.now() - m.at < 4000) return m.v; const v = _ls.apply(this, arguments); memo[k] = { at: Date.now(), v }; return v; }; }
+function rrRows(scope){ const save = UI.riskScope; UI.riskScope = scope || save; try{ const wi = RISK.whatif || {}, anyWI = Object.keys(wi).length > 0, scores = Object.assign({}, RISK.mit, wi);
+    return RISK.base.map(r => { const live = liveSignal(r.id), res = anyWI ? residualWith(r, scores) : r.res, cur = Math.min(25, res * LIVE_MULT[live.tier]), I = rrImpact(r);
+      return { r, live, cur, I, Li: Math.max(.2, Math.min(5, r.inh / I)), Lr: Math.max(.2, Math.min(5, res / I)), L: Math.max(.2, Math.min(5, cur / I)), pri: rrPri(cur, live.tier) }; }); } finally{ UI.riskScope = save; } }
+// 24 h trend: the live score of every risk is kept every 15 minutes per scope (7 days)
+const RRH_KEY = "psoc.uni.riskhist.v1";
+function rrRecord(scope, rows){ const H = lsGet(RRH_KEY, {}), a = H[scope] = H[scope] || []; if (a.length && Date.now() - a[a.length - 1].t < 15 * 60e3) return; a.push({ t: Date.now(), v: Object.fromEntries(rows.map(x => [x.r.id, +x.cur.toFixed(2)])) });
+  Object.keys(H).forEach(k => { H[k] = H[k].filter(p => Date.now() - p.t < 7 * 864e5); if (!H[k].length) delete H[k]; }); lsSet(RRH_KEY, H); }
+function rrTrend(scope, id, cur){ const a = (lsGet(RRH_KEY, {})[scope] || []), old = a.filter(p => Date.now() - p.t >= 20 * 3600e3).pop() || a[0]; if (!old || old.v[id] == null || Date.now() - old.t < 30 * 60e3) return ""; const d = cur - old.v[id];
+  return Math.abs(d) < .05 ? `<span class="rrtr flat" title="Unchanged since ${esc(ago(old.t))}">→</span>` : `<span class="rrtr ${d > 0 ? "up" : "dn"}" title="${d > 0 ? "Up" : "Down"} ${Math.abs(d).toFixed(2)} since ${esc(ago(old.t))}">${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)}</span>`; }
+function rrMatrix(rows, sel){ const cell = (l, i) => rows.filter(x => Math.min(5, Math.max(1, Math.round(x.L))) === l && x.I === i), col = (l, i) => { const v = l * i; return v >= 20 ? "#C4314B" : v >= 15 ? "#E8873A" : v >= 10 ? "#E3C33B" : v >= 5 ? "#8CC665" : "#3E9C5A"; };
+  let h = `<div class="rrmx"><div class="rrmxy">Likelihood (live)</div><div class="rrmxg">`;
+  for (let l = 5; l >= 1; l--){ h += `<div class="rrmxl">${l}<small>${RR_LIKE_W(l)}</small></div>`; for (let i = 1; i <= 5; i++){ const xs = cell(l, i); h += `<div class="rrmxc" style="--c:${col(l, i)}">${xs.map(x => `<button class="rrdot${sel === x.r.id ? " on" : ""}" data-riskrow="${x.r.id}" title="${esc(x.r.name)} · live ${x.cur.toFixed(2)} · ${x.pri}">${esc(x.r.name.split(/[\s/]/)[0].slice(0, 9))}</button>`).join("")}</div>`; } }
+  h += `<div></div>${[1, 2, 3, 4, 5].map(i => `<div class="rrmxi">${i}<small>${RR_IMPACT_W[i]}</small></div>`).join("")}</div><div class="rrmxx">Impact</div></div>`; return h; }
+riskPanel = (function(orig){ return function(){ const scope = UI.riskScope || "APAC", rows = rrRows(scope), by = Object.fromEntries(rows.map(x => [x.r.id, x])), h0 = orig.apply(this, arguments); rrRecord(scope, rows);
+  const d = new DOMParser().parseFromString(`<div id="rrroot">${h0}</div>`, "text/html"), root = d.getElementById("rrroot");
+  // scope: regions first, then cities
+  const sel = root.querySelector("[data-riskscope]"); if (sel){ sel.innerHTML = `<option value="APAC"${scope === "APAC" ? " selected" : ""}>All regions</option><optgroup label="Regions">${rrRegions().map(g => `<option value="region:${esc(g)}"${scope === "region:" + g ? " selected" : ""}>${esc(RR_REGION_LABEL[g] || g)}</option>`).join("")}</optgroup><optgroup label="Cities">${CITIES.map(c => `<option value="${esc(c.name)}"${scope === c.name ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</optgroup>`; }
+  const sortSel = root.querySelector("[data-risksort]"); if (sortSel && !sortSel.querySelector('[value="pri"]')) sortSel.insertAdjacentHTML("afterbegin", `<option value="pri"${UI.riskSort === "pri" ? " selected" : ""}>Priority</option>`);
+  const tbl = root.querySelector("table.rt"); if (tbl){ const hr = tbl.querySelector("thead tr"); if (hr && hr.children.length >= 8){ hr.children[2].insertAdjacentHTML("afterend", `<th title="Live likelihood, 1–5 (residual likelihood × live signal)">Likelihood</th><th title="Impact on our sites, 1–5">Impact</th>`); hr.children[7].insertAdjacentHTML("afterend", `<th>Priority</th>`); hr.children[8].insertAdjacentHTML("afterend", `<th title="Change in live risk over the last 24 hours">24 h</th>`); }
+    tbl.querySelectorAll("tr.rrow").forEach(tr => { const x = by[tr.dataset.riskrow]; if (!x || tr.children.length < 8) return;
+      tr.children[2].insertAdjacentHTML("afterend", `<td class="rrli"><b>${x.L.toFixed(1)}</b><small>${RR_LIKE_W(x.L)}${x.L - x.Lr > .05 ? ` · up from ${x.Lr.toFixed(1)}` : ""}</small></td><td class="rrli"><b>${x.I}</b><small>${RR_IMPACT_W[x.I]}</small></td>`);
+      tr.children[7].insertAdjacentHTML("afterend", `<td><span class="rrpri" style="--c:${RR_PRI[x.pri][2]}">${x.pri}</span><small class="rrprw">${RR_PRI[x.pri][1]}</small></td>`);
+      tr.children[8].insertAdjacentHTML("afterend", `<td class="rrtd">${rrTrend(scope, x.r.id, x.cur) || '<span class="s">—</span>'}</td>`); });
+    tbl.querySelectorAll("tr.rdet > td[colspan]").forEach(td => td.setAttribute("colspan", "12"));
+    if (UI.riskSort === "pri"){ const tb = tbl.querySelector("tbody"), trs = [...tb.children], groups = []; trs.forEach(tr => { if (tr.classList.contains("rrow")) groups.push([tr]); else if (groups.length) groups[groups.length - 1].push(tr); });
+      groups.sort((a, b) => { const A = by[a[0].dataset.riskrow], B = by[b[0].dataset.riskrow]; return A.pri.localeCompare(B.pri) || B.cur - A.cur; }).forEach(g => g.forEach(tr => tb.appendChild(tr))); } }
+  // live header: when it was computed, how often it refreshes, the matrix and priority counts
+  const top = root.querySelector(".rtop"), cnt = k => rows.filter(x => x.pri === k).length;
+  if (top) top.insertAdjacentHTML("beforebegin", `<div class="rrlive"><span class="rrdotlive"></span><b>Live</b> · computed ${esc(fSgt ? fSgt.format(Date.now()) : new Date().toLocaleTimeString())} SGT from the hazard, news, access-control and incident feeds · refreshes every minute
+      <span class="sp"></span>${["P1", "P2", "P3", "P4"].map(k => `<span class="rrpri" style="--c:${RR_PRI[k][2]}">${k}</span><b class="rrpn">${cnt(k)}</b>`).join("")}</div>
+    <div class="rrhead">${rrMatrix(rows, UI.riskOpen)}<div class="rrnow"><div class="sec">Top priorities now <small>${esc(scope === "APAC" ? "all regions" : scope.startsWith("region:") ? RR_REGION_LABEL[scope.slice(7)] || scope.slice(7) : scope)}</small></div>${rows.slice().sort((a, b) => a.pri.localeCompare(b.pri) || b.cur - a.cur).slice(0, 5).map(x => `<div class="rrtop" data-riskrow="${x.r.id}"><span class="rrpri" style="--c:${RR_PRI[x.pri][2]}">${x.pri}</span><b>${esc(x.r.name)}</b><span class="s">L ${x.L.toFixed(1)} × I ${x.I} = ${x.cur.toFixed(1)}</span><div class="s">${x.live.ev.length ? esc(trunc(x.live.ev[0].text, 90)) + " · " + esc(x.live.ev[0].src) : "No live signal; residual baseline"}</div></div>`).join("")}</div></div>`);
+  const help = root.querySelector("p.help"); if (help) help.insertAdjacentHTML("afterbegin", `<b>Likelihood and impact.</b> Impact (1–5) is set per risk (Edit baseline). Inherent likelihood = inherent ÷ impact; residual likelihood = residual ÷ impact; live likelihood rises with the live signal (×1.25, ×1.6, ×2 for tiers 1–3), so live risk = live likelihood × impact (max 25). Priority: P1 at 20+ or tier 3, P2 at 15+ or tier 2, P3 at 10+ or tier 1, otherwise P4. `);
+  return root.innerHTML; }; })(riskPanel);
+// impact is editable with the rest of the baseline
+openBaselineEditor = (function(orig){ return function(){ orig.apply(this, arguments); const b = document.querySelector("#ov .bd"); if (!b) return;
+  b.insertAdjacentHTML("beforeend", `<div class="sec">Impact on our sites (1–5)</div><div class="fgrid">${RISK.base.map(r => `<label class="fld">${esc(r.name)}<select data-rbimp="${r.id}">${[1, 2, 3, 4, 5].map(i => `<option value="${i}"${rrImpact(r) === i ? " selected" : ""}>${i} — ${RR_IMPACT_W[i]}</option>`).join("")}</select></label>`).join("")}</div>`);
+  document.querySelectorAll("[data-rbimp]").forEach(s => s.addEventListener("change", () => { RISK.impact = RISK.impact || {}; RISK.impact[s.dataset.rbimp] = +s.value; saveRisk(); })); }; })(openBaselineEditor);
+// live: redraw every minute while the register (or a regional page) is open and nobody is typing in it
+setInterval(() => { if (!["risk", "sh-region"].includes(UI.mode) || document.querySelector("#ov.show")) return; const a = document.activeElement; if (a && a.closest && a.closest("#panel") && /INPUT|SELECT|TEXTAREA/.test(a.tagName)) return; const p = document.getElementById("panel"), y = p ? p.scrollTop : 0; renderPanel(); if (p) p.scrollTop = y; }, 60e3);
+document.getElementById("panel").addEventListener("click", e => { const t = e.target.closest(".rrdot,.rrtop"); if (!t || UI.mode !== "risk") return; e.stopPropagation(); UI.riskOpen = UI.riskOpen === t.dataset.riskrow ? null : t.dataset.riskrow; renderPanel(); const r = document.querySelector(`tr.rrow[data-riskrow="${t.dataset.riskrow}"]`); if (r) r.scrollIntoView({ block: "center" }); }, true);
+{ const st = document.createElement("style"); st.textContent = `.rrlive{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px}.rrlive .sp{flex:1}
+.rrdotlive{width:9px;height:9px;border-radius:50%;background:#2DB34A;box-shadow:0 0 0 0 rgba(45,179,74,.6);animation:rrpulse 1.8s infinite}@keyframes rrpulse{0%{box-shadow:0 0 0 0 rgba(45,179,74,.6)}70%{box-shadow:0 0 0 8px rgba(45,179,74,0)}100%{box-shadow:0 0 0 0 rgba(45,179,74,0)}}
+.rrpri{display:inline-flex;align-items:center;justify-content:center;min-width:26px;padding:1px 6px;border-radius:4px;background:var(--c);color:#fff;font:700 11.5px system-ui,sans-serif}.rrpn{margin:0 6px 0 3px}.rrprw{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.rrli b{display:block;font-size:15px}.rrli small{color:var(--muted);font-size:11px}.rrtr{font:700 12px system-ui,sans-serif}.rrtr.up{color:#E5484D}.rrtr.dn{color:#2DB34A}.rrtr.flat{color:var(--muted)}
+.rrhead{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;margin-bottom:12px}.rrmx{position:relative;padding:0 0 18px 18px}.rrmxy{position:absolute;left:-26px;top:45%;transform:rotate(-90deg);font-size:11px;color:var(--muted)}.rrmxx{text-align:center;font-size:11px;color:var(--muted);margin-top:4px}
+.rrmxg{display:grid;grid-template-columns:62px repeat(5,minmax(0,1fr));gap:3px}.rrmxl,.rrmxi{font:700 12px system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted)}.rrmxl small,.rrmxi small{font-weight:400;font-size:9.5px}
+.rrmxc{min-height:46px;border-radius:4px;background:color-mix(in srgb,var(--c) 30%,transparent);border:1px solid color-mix(in srgb,var(--c) 70%,transparent);display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start;padding:3px}
+.rrdot{border:0;border-radius:3px;background:rgba(0,0,0,.55);color:#fff;font:600 10px system-ui,sans-serif;padding:1px 4px;cursor:pointer}.rrdot.on,.rrdot:hover{background:#fff;color:#111}
+.rrtop{border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:5px;cursor:pointer;display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;align-items:center}.rrtop>.s:last-child{grid-column:1/-1}.rrtop:hover{border-color:var(--teal)}.rtop .rchip{display:none}
+@media (max-width:900px){.rrhead{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+/* ---------- regional view for the regional security operations manager (RSOM): top risks, SERV reports to clear, datacenter statistics ---------- */
+const rgCityRegion = city => (CITIES.find(c => c.name === city) || {}).region || "";
+const rgSiteRegion = s => rgCityRegion(metroOf(s));
+const rgSites = g => SITES.filter(s => isLive(s) && rgSiteRegion(s) === g);
+const rgName = g => RR_REGION_LABEL[g] || g;
+function rgData(g){ const now = Date.now(), D30 = 30 * 864e5, sites = rgSites(g), codes = new Set(sites.map(s => s.code)), dcs = sites.filter(s => !isOffice(s)), inR = c => codes.has(c);
+  const risks = rrRows("region:" + g).sort((a, b) => a.pri.localeCompare(b.pri) || b.cur - a.cur);
+  // SERV: releases to this region's sites, from release → site responses → SERV (situation) report
+  const rels = (SHARED.releases || []).filter(r => !r.deleted && r.status !== "closed" && (r.sites || []).some(inR)).map(r => { const rs = (SHARED.servresp || []).filter(x => x.relId === r.id), pend = (r.recipients || []).filter(n => !rs.some(x => x.user === n));
+    const stage = r.servId ? ["filed", "SERV report filed — close the release", "#3E9C5A", 3] : pend.length ? (now > r.dueAt ? ["overdue", `${pend.length} response${pend.length === 1 ? "" : "s"} overdue`, "#C4314B", 0] : ["waiting", `${rs.length}/${(r.recipients || []).length} responded`, "#E8873A", 1]) : ["ready", "All responded — file the SERV report", "#2D9CDB", 2];
+    return { r, rs, pend, stage }; }).sort((a, b) => a.stage[3] - b.stage[3] || a.r.dueAt - b.r.dueAt);
+  const inc = (SHARED.incidents || []).filter(x => !x.deleted && inR(x.site)), incOpen = inc.filter(x => x.status !== "resolved").sort((a, b) => sevNum(a.sev) - sevNum(b.sev) || a.createdAt - b.createdAt), inc30 = inc.filter(x => now - x.createdAt < D30);
+  const mttr = (() => { const r = inc30.filter(x => x.resolvedAt); return r.length ? r.reduce((s, x) => s + (x.resolvedAt - x.createdAt), 0) / r.length : null; })();
+  let recs = []; try{ recs = bauRecords().filter(r => inR(r.site) && (r.open || now - r.start < D30)); }catch(e){}
+  const len = recs.filter(r => r.sys === "Lenel"), cam = recs.filter(r => r.sys === "Cameras"), downH = len.reduce((s, r) => s + Math.min(r.dur, now - Math.max(r.start, now - D30)), 0) / 36e5;
+  const avail = dcs.length ? 100 * (1 - downH / (dcs.length * 720)) : 100;
+  const alarms = (BAU.events || []).filter(e => inR(e.site)), unack = alarms.filter(e => !BAU.acks[e.id] && e.pri >= 3);
+  const evs = (EVENTS || []).filter(e => e.status !== "closed" && (e.sites || []).some(inR));
+  const cities = [...new Set(sites.map(s => metroOf(s)).filter(Boolean))].map(city => { const cs = sites.filter(s => metroOf(s) === city), cc = new Set(cs.map(s => s.code)), cd = cs.filter(s => !isOffice(s));
+    const lr = len.filter(r => cc.has(r.site)), dh = lr.reduce((s, r) => s + Math.min(r.dur, now - Math.max(r.start, now - D30)), 0) / 36e5;
+    return { city, sites: cs.length, dcs: cd.length, classes: ["Class A", "Class B", "Class C"].map(k => cd.filter(s => VCC_CLS(s.cls)[0] === k).length), lenelNow: lr.filter(r => r.open).length, lenel30: lr.length, avail: cd.length ? 100 * (1 - dh / (cd.length * 720)) : 100,
+      cam: cam.filter(r => cc.has(r.site) && r.open).length, cam30: cam.filter(r => cc.has(r.site)).length, alarms: alarms.filter(e => cc.has(e.site)).length, unack: unack.filter(e => cc.has(e.site)).length, incOpen: incOpen.filter(x => cc.has(x.site)).length, inc30: inc30.filter(x => cc.has(x.site)).length }; }).sort((a, b) => b.sites - a.sites);
+  return { g, sites, dcs, risks, rels, incOpen, inc30, mttr, len, cam, avail, alarms, unack, evs, cities }; }
+function rgPanel(){ const regs = rrRegions(), g = regs.includes(UI.rgRegion) ? UI.rgRegion : regs[0], D = rgData(g), pct = v => v.toFixed(v >= 99.95 ? 0 : 2) + "%", P = k => D.risks.filter(x => x.pri === k).length;
+  const kpi = (v, l, s, c) => `<div class="rgk"${c ? ` style="--c:${c}"` : ""}><b>${v}</b><span>${l}</span>${s ? `<small>${s}</small>` : ""}</div>`;
+  const ops = (SHARED.users || []).filter(u => u.role === "ops" && !u.disabled && (!u.scope || D.cities.some(c => String(u.scope).toLowerCase().includes(c.city.toLowerCase())) || String(u.scope).toLowerCase().includes(rgName(g).toLowerCase())));
+  return `<div class="ptools"><span class="label">Regional view</span>${regs.map(x => `<button class="tab-mini" data-rgreg="${esc(x)}" aria-pressed="${x === g}">${esc(rgName(x))}</button>`).join("")}<span class="sp"></span>
+      <span class="s">Live · ${esc(fSgt.format(Date.now()))} SGT</span><button class="tab-mini" data-rgcopy>Copy regional brief</button><button class="tab-mini" data-rgrisk>Open in risk register</button></div>
+    <div class="pbody rgp"><div class="rgh"><div><div class="rgt">${esc(rgName(g))}</div><div class="s">For the regional security operations manager${ops.length ? " · " + esc(ops.map(u => u.name).join(", ")) : ""} · ${D.sites.length} sites (${D.dcs.length} datacenters) in ${D.cities.length} cities</div></div></div>
+      <div class="rgks">${kpi(P("P1") + P("P2"), "High-priority risks", `${P("P1")} P1 · ${P("P2")} P2`, P("P1") ? "#C4314B" : P("P2") ? "#E8873A" : "")}${kpi(D.rels.length, "SERV releases to clear", `${D.rels.filter(x => x.stage[0] === "overdue").length} overdue · ${D.rels.filter(x => x.stage[0] === "ready").length} ready to file`, D.rels.some(x => x.stage[0] === "overdue") ? "#C4314B" : D.rels.length ? "#E8873A" : "")}
+        ${kpi(D.incOpen.length, "Open incidents", `${D.inc30.length} in 30 days${D.mttr ? " · mean time to resolve " + esc(fmtDurInc(D.mttr)) : ""}`, D.incOpen.some(x => sevNum(x.sev) <= 2) ? "#C4314B" : "")}${kpi(pct(D.avail), "Lenel availability", `30 days · ${D.len.filter(r => r.open).length} down now`, D.avail < 99 ? "#E8873A" : "")}
+        ${kpi(D.cam.filter(r => r.open).length, "Camera outages open", `${D.cam.length} in 30 days`)}${kpi(D.unack.length, "Unacknowledged high alarms", `${D.alarms.length} access alarms in view`, D.unack.length ? "#E8873A" : "")}${kpi(D.evs.length, "Open escalations", `${D.evs.filter(e => e.ren === "issued").length} event notices issued`)}</div>
+      <div class="rgg"><section class="rgc"><div class="sec">Most important risks <small>live, ${esc(rgName(g))} cities</small></div>
+          ${D.risks.slice(0, 6).map(x => `<div class="rrtop rgrisk" data-rgopenrisk="${x.r.id}"><span class="rrpri" style="--c:${RR_PRI[x.pri][2]}">${x.pri}</span><b>${esc(x.r.name)}</b><span class="s">L ${x.L.toFixed(1)} × I ${x.I} = ${x.cur.toFixed(1)}</span><div class="s">${x.live.ev.length ? esc(trunc(x.live.ev[0].text, 100)) + " · " + esc(x.live.ev[0].src) : "No live signal; residual baseline " + x.r.res.toFixed(1)}</div></div>`).join("")}</section>
+        <section class="rgc"><div class="sec">SERV reports to clear <small>release → site responses → SERV report</small></div>
+          ${D.rels.length ? D.rels.map(x => `<div class="rgrel" data-rgrel="${x.r.id}" style="--c:${x.stage[2]}"><div><b>${esc(x.r.title)}</b> <span class="bdg">${esc(x.r.severity || "")}</span></div><div class="s">${esc(x.stage[1])} · ${esc((x.r.sites || []).filter(c => rgSites(g).some(s => s.code === c)).join(", "))} · due ${esc(sgt(x.r.dueAt))}${x.pend.length && x.stage[0] !== "filed" ? " · waiting on " + esc(x.pend.slice(0, 3).join(", ")) + (x.pend.length > 3 ? " +" + (x.pend.length - 3) : "") : ""}</div></div>`).join("") : `<div class="empty">Nothing to clear. Releases to this region's sites appear here until their SERV report is filed and the release is closed.</div>`}</section>
+        <section class="rgc"><div class="sec">Open incidents <small>${D.incOpen.length}</small></div>
+          ${D.incOpen.length ? D.incOpen.slice(0, 8).map(x => `<div class="rgrel" data-rginc="${x.id}" style="--c:${INC_SEV_C[x.sev] || "#888"}"><div><span class="sev" style="--c:${INC_SEV_C[x.sev]}">${esc(SEV_LABEL[x.sev] || x.sev)}</span> <b>${esc(x.title)}</b></div><div class="s">${esc(x.site)} · ${esc((INC_STATUS[x.status] || {}).label || x.status)} · open ${esc(fmtDurInc(Date.now() - x.createdAt))}</div></div>`).join("") : `<div class="empty">No open incidents.</div>`}
+          <div class="sec" style="margin-top:12px">Open escalations <small>${D.evs.length}</small></div>${D.evs.length ? D.evs.slice(0, 6).map(e => `<div class="minirow" data-openev="${e.id}" style="--c:${(CATS[e.cat] || {}).color || "#888"}"><b>${esc(e.sev)}</b> ${esc(e.desc)}<span>${esc((REN[e.ren] || {}).label || "")}</span></div>`).join("") : `<div class="empty">No open escalations.</div>`}</section></div>
+      <div class="sec" style="margin-top:14px">Datacenter statistics <small>last 30 days · by city</small></div>
+      <div class="tbl"><table class="acc rgtab"><thead><tr><th>City</th><th>Sites</th><th>Datacenters (A / B / C)</th><th>Lenel availability</th><th>Lenel down now</th><th>Lenel outages</th><th>Camera outages (open / 30 d)</th><th>Access alarms (unacked high)</th><th>Incidents (open / 30 d)</th></tr></thead><tbody>
+        ${D.cities.map(c => `<tr><td><b>${esc(c.city)}</b></td><td class="num">${c.sites}</td><td class="num">${c.dcs} <span class="s">(${c.classes.join(" / ")})</span></td><td class="num" style="color:${c.avail < 99 ? "#E8873A" : "inherit"}">${pct(c.avail)}</td><td class="num">${c.lenelNow || "—"}</td><td class="num">${c.lenel30 || "—"}</td><td class="num">${c.cam} / ${c.cam30}</td><td class="num">${c.alarms}${c.unack ? ` <b style="color:#E8873A">(${c.unack})</b>` : ""}</td><td class="num">${c.incOpen} / ${c.inc30}</td></tr>`).join("")}</tbody></table></div>
+      <p class="help" style="margin-top:10px">Risks use the live risk register for this region's cities. SERV reports come from Releases to operations: a release stays here until every site has responded, the SERV report is filed and the release is closed. Lenel availability is 100% minus Lenel outage hours across the region's datacenters over 30 days.</p></div>`; }
+function rgBrief(g){ const D = rgData(g), n = v => v.toLocaleString("en-US");
+  return [`REGIONAL SECURITY BRIEF — ${rgName(g).toUpperCase()} — ${fSgt.format(Date.now())} SGT`, `${D.sites.length} sites (${D.dcs.length} datacenters) in ${D.cities.length} cities.`, "",
+    "MOST IMPORTANT RISKS", ...D.risks.slice(0, 5).map(x => `- ${x.pri} ${x.r.name}: live ${x.cur.toFixed(1)} (likelihood ${x.L.toFixed(1)} × impact ${x.I})${x.live.ev.length ? " — " + x.live.ev[0].text : ""}`), "",
+    `SERV REPORTS TO CLEAR (${D.rels.length})`, ...(D.rels.length ? D.rels.map(x => `- ${x.r.title}: ${x.stage[1]}; due ${sgt(x.r.dueAt)}`) : ["- None."]), "",
+    `OPEN INCIDENTS (${D.incOpen.length})`, ...(D.incOpen.length ? D.incOpen.map(x => `- ${SEV_LABEL[x.sev] || x.sev} ${x.title} (${x.site}), open ${fmtDurInc(Date.now() - x.createdAt)}`) : ["- None."]), "",
+    "DATACENTER STATISTICS (30 DAYS)", `- Lenel availability ${D.avail.toFixed(2)}%; ${D.len.filter(r => r.open).length} down now; ${D.len.length} outages.`, `- Camera outages: ${D.cam.filter(r => r.open).length} open, ${D.cam.length} in 30 days.`,
+    `- Access alarms: ${n(D.alarms.length)} in view, ${D.unack.length} unacknowledged high or critical.`, `- Incidents: ${D.inc30.length} in 30 days${D.mttr ? `, mean time to resolve ${fmtDurInc(D.mttr)}` : ""}.`].join("\n"); }
+{ const g = GROUPS.find(x => x.id === "stake"); if (g && !g.tabs.some(t => t[0] === "sh-region")) g.tabs.splice(g.tabs.findIndex(t => t[0] === "sh-snap") + 1, 0, ["sh-region", "Regional view (RSOM)"]); }
+NON_CITY_MODES.push("sh-region"); KEYS["sh-region"] = ["REGIONAL VIEW", [], "For each region's security operations manager: the risks that matter most, SERV reports to clear and datacenter statistics"];
+renderPanelInner = (function(orig){ return function(p){ if (UI.mode === "sh-region"){ p.innerHTML = rgPanel(); return; } return orig.apply(this, arguments); }; })(renderPanelInner);
+document.getElementById("panel").addEventListener("click", async e => { if (UI.mode !== "sh-region") return; const t = e.target.closest("[data-rgreg],[data-rgcopy],[data-rgrisk],[data-rgopenrisk],[data-rgrel],[data-rginc]"); if (!t) return; const d = t.dataset; e.stopPropagation();
+  const g = rrRegions().includes(UI.rgRegion) ? UI.rgRegion : rrRegions()[0];
+  if (d.rgreg){ UI.rgRegion = d.rgreg; saveUI(); renderPanel(); return; }
+  if (d.rgcopy !== undefined){ try{ await navigator.clipboard.writeText(rgBrief(g)); toast("Regional brief copied", rgName(g), "var(--teal)"); }catch(err){ toast("Copy failed", "", "var(--amber)"); } return; }
+  if (d.rgrisk !== undefined || d.rgopenrisk){ UI.riskScope = "region:" + g; UI.riskOpen = d.rgopenrisk || null; saveUI(); setMode("risk"); return; }
+  if (d.rgrel){ UI.relOpen = d.rgrel; saveUI(); setMode("releases"); return; }
+  if (d.rginc){ UI.incOpen = d.rginc; saveUI(); setMode("incidents"); return; } }, true);
+{ const st = document.createElement("style"); st.textContent = `.rgh{display:flex;align-items:flex-end;gap:12px;margin-bottom:10px}.rgt{font:700 22px/1.2 system-ui,sans-serif}
+.rgks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:14px}.rgk{border:1px solid var(--line);border-top:3px solid var(--c,var(--line));border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px}.rgk b{font-size:24px;line-height:1.1}.rgk span{font-size:12px;font-weight:600}.rgk small{font-size:11px;color:var(--muted)}
+.rgg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.rgc{border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+.rgrel{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:6px;padding:7px 9px;margin-bottom:6px;cursor:pointer}.rgrel:hover{border-color:var(--teal)}.rgrisk{cursor:pointer}
+.rgtab td.num{text-align:right}
+@media (max-width:1100px){.rgks{grid-template-columns:repeat(4,minmax(0,1fr))}.rgg{grid-template-columns:1fr}}@media (max-width:600px){.rgks{grid-template-columns:repeat(2,minmax(0,1fr))}}`; document.head.appendChild(st); }
+/* ---------- Intelligence Monitoring: five sections instead of 23 tabs; each section's pages in a second row ---------- */
+const INTEL_SECTIONS = [
+  ["ov", "Overview", [["todo", "Watch officer to-do"], ["alertstream", "Live alert stream"], ["overview", "Map & cities"]]],
+  ["hz", "Hazards", [["hazards", "All hazards"], ["typhoon", "Typhoons"], ["quake", "Earthquakes"], ["weather", "Weather"], ["forecast", "Next 48 h"], ["outlook", "Weeks 2–5"], ["air", "Air quality"], ["river", "Rivers & floods"], ["volcano", "Volcanoes"], ["disasters", "Official warnings"], ["global", "Global disasters"]]],
+  ["nw", "News", [["livenews", "Live news"], ["news", "Breaking (APAC)"], ["newsintl", "International"]]],
+  ["sc", "Security", [["protests", "Protests"], ["intelev", "Intelligence events"], ["infra", "Internet & power"]]],
+  ["rk", "Risk & trends", [["risk", "Risk register"], ["trends", "Trends & climate"], ["stats", "Statistics"]]]];
+function intelSections(){ const have = new Set((G("intel").tabs || []).map(t => t[0])), known = new Set(INTEL_SECTIONS.flatMap(s => s[2].map(x => x[0])));
+  const extra = (G("intel").tabs || []).filter(t => !known.has(t[0])).map(t => [t[0], t[1]]);
+  return INTEL_SECTIONS.map(([id, label, pages], i) => [id, label, pages.filter(p => have.has(p[0])).concat(i === 0 ? extra : [])]).filter(s => s[2].length); }
+const intelSecOf = m => intelSections().find(s => s[2].some(p => p[0] === m));
+// a status dot for each hazard page: the worst tier across our cities right now
+function intelDot(m){ try{ if (["quake", "weather", "forecast", "air", "river"].includes(m)){ let t = 0; CITIES.forEach(c => { const h = SCORES[c.name] && SCORES[c.name][m]; if (h && h.tier > t) t = h.tier; }); return t; }
+    if (m === "typhoon") return (TCS.list || []).length ? ((TCS.list || []).some(e => e.level === "Red") ? 3 : 2) : 0;
+    if (m === "hazards") return Math.max(...["quake", "weather", "forecast", "air", "river", "typhoon"].map(intelDot));
+    if (m === "disasters") return (DATA.alerts || []).some(a => SEV_ORDER[a.severity] >= 3) ? 3 : (DATA.alerts || []).some(a => SEV_ORDER[a.severity] >= 2) ? 2 : (DATA.alerts || []).length ? 1 : 0; }catch(e){} return 0; }
+function intelNav(){ const sub = $("#subnav"); if (!sub) return; let s2 = $("#subnav2");
+  const showing = sub.querySelector('.subtab[data-mode="todo"]') && sub.querySelector('.subtab[data-mode="hazards"]');
+  if (!showing || CFG.intelNav === "flat"){ if (s2) s2.remove(); sub.classList.remove("intelsec"); return; }
+  const S = intelSections(), cur = intelSecOf(UI.mode) || S[0], badge = {}; UI.intelLast = UI.intelLast || {}; if (intelSecOf(UI.mode)) UI.intelLast[cur[0]] = UI.mode;
+  sub.querySelectorAll(".subtab:not(.isec)").forEach(b => { const x = b.querySelector(".b"); if (x) badge[b.dataset.mode] = x.outerHTML; if (S.some(s => s[2].some(p => p[0] === b.dataset.mode))) b.style.display = "none"; });
+  sub.querySelectorAll(".subgrp, .isec").forEach(x => x.remove()); sub.classList.add("intelsec");
+  const sum = pages => { let n = 0, t = 0; pages.forEach(([m]) => { const h = badge[m]; if (!h) return; const v = +(h.match(/>(\d+)</) || [])[1] || 0, k = +(h.match(/\bt(\d)\b/) || [])[1] || 0; n += v; t = Math.max(t, k); }); return n ? `<span class="b t${t}">${n}</span>` : ""; };
+  sub.insertAdjacentHTML("afterbegin", S.map(s => { const rep = s[0] === cur[0] && intelSecOf(UI.mode) ? UI.mode : UI.intelLast[s[0]] && s[2].some(p => p[0] === UI.intelLast[s[0]]) ? UI.intelLast[s[0]] : s[2][0][0];
+    return `<button class="subtab isec" data-mode="${rep}" data-isec="${s[0]}" aria-pressed="${s[0] === cur[0]}">${esc(s[1])}${sum(s[2])}</button>`; }).join(""));
+  sub.querySelectorAll(".isec").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  if (!s2){ sub.insertAdjacentHTML("afterend", `<nav class="subnav2" id="subnav2" aria-label="Pages in this section"></nav>`); s2 = $("#subnav2"); }
+  s2.innerHTML = cur[2].length > 1 ? `<span class="s2lbl">${esc(cur[1])}</span>` + cur[2].map(([m, l]) => { const d = cur[0] === "hz" ? intelDot(m) : 0; return `<button class="s2tab" data-mode="${m}" aria-pressed="${m === UI.mode}">${d ? `<i class="s2dot t${d}"></i>` : ""}${esc(l)}${badge[m] || ""}</button>`; }).join("") : "";
+  s2.style.display = cur[2].length > 1 ? "" : "none"; s2.querySelectorAll(".s2tab").forEach(b => b.onclick = () => setMode(b.dataset.mode)); }
+{ const _rmS = renderModes; renderModes = function(){ const r = _rmS.apply(this, arguments); try{ intelNav(); }catch(e){ console.warn("intel nav", e); } return r; }; }
+{ const st = document.createElement("style"); st.textContent = `#subnav.intelsec{gap:2px}#subnav.intelsec .isec{font-size:14px;font-weight:600;padding:9px 16px}
+.subnav2{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto;padding:5px 14px 7px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--panel) 70%,transparent);scrollbar-width:thin}
+.subnav2 .s2lbl{font:700 10.5px system-ui,sans-serif;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-right:6px;white-space:nowrap}
+.s2tab{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1px solid transparent;background:transparent;color:var(--text);border-radius:999px;padding:4px 12px;font:500 12.5px system-ui,sans-serif;cursor:pointer}
+.s2tab:hover{background:rgba(127,127,127,.12)}.s2tab[aria-pressed="true"]{background:var(--teal);color:#fff}.s2tab .b{margin-left:2px}
+.s2dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#8B948F}.s2dot.t1{background:#E8C547}.s2dot.t2{background:#E8873A}.s2dot.t3{background:#E5484D}
+@media (max-width:700px){.subnav2{padding:5px 8px}#subnav.intelsec .isec{padding:8px 10px;font-size:13px}}`; document.head.appendChild(st); }
 boot();
 
 </script>
