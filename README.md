@@ -137,6 +137,19 @@ newest, severity, nearest, name) and **asset-type toggles**; a **map-filter summ
 people, active alerts inside; communication or critical event for the area); a **risk history heat map** (90 days)
 and **category symbols** on risk events; assets **grouped by city** when zoomed out.
 
+Third pass, the operator-console look: the map fills the window below the header (⛶ for full screen) on **Low light**
+— satellite imagery in greyscale, darkened, with white place names (the older dark canvas stays as *Dark canvas*) —
+with faint **continent and ocean names** at world zoom and **blue pin** assets (a count in the pin when zoomed out;
+people stay as dots coloured by their reply). The chrome is one slim toolbar (Feeds, Items, **Alerts** with the
+active count, Timeline, full screen, ⋯); the panels start closed. A **vertical zoom slider** and a **Location…**
+search box (results pop upward; Enter takes the first) sit at the lower left, and a small **control bar** is centred
+above the timeline (‹ Month Week Day Hour ›, Live, Now, Range…, item count). The **timeline** is a dark band with
+grid lines, time and date labels and the now marker, events drawn as **stacked icon columns** per time slot — the
+category symbol, red for active alerts and severe or extreme events, orange for moderate, white for minor or
+unknown; “+n” zooms into a crowded slot — and an **overview bar** (30 days around now, density ticks) whose light-blue
+window shows the period in view: click to jump, drag to move. Phone: zoom buttons at the top right, the control bar
+scrolls, the timeline is shorter.
+
 ## Intelligence events (Intelligence Monitoring › Intelligence events)
 
 From PULSE's Intelligence dashboard. The Datasurfr events API (X-API-Key), the Max Security Reports API v3 (company +
