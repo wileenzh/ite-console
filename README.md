@@ -448,3 +448,17 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
   Class B amber, Class C teal, C-PE grey, Edge green); **campuses are drawn as boxes** (buildings with height). The
   legend shows the same symbols; the radius zone uses the class colour.
 
+
+## Decluttered map and spinning storm (23 Oct)
+
+- **Cleaner operator map**: datacenters and offices that sit close together on screen merge into one round cluster
+  marker. Its ring is split by site class (the same class colours as the legend), with the site count in the middle;
+  click it to zoom in. Active-alert rings that fall inside a cluster are folded into a red count badge on the
+  cluster. Risk events that overlap are stacked into one marker with a count. Single sites stay as transparent
+  class-colour circles, campuses as boxes, and a site with an active alert gets a red halo. The **Pins**
+  visualization still shows every site individually.
+- **Typhoon, weather-console style**: the storm is a cloud swirl that turns a full 360° continuously, clockwise
+  in the southern hemisphere, inside a ring in the class colour. The likely-track area is a soft blue probability
+  plume, darker towards the track, with its outer line at JMA's 70 % circle. During playback a smaller swirl moves
+  along the track with the time beside it. When two storms sit close together, only the selected storm's name is
+  shown.
