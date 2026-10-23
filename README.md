@@ -721,3 +721,55 @@ about it, so stakeholders can decide:
 - **Close event** moves it to "Closed in the last 7 days".
 
 Operational decisions are shared with the team like other PSOC records (store `opdec`).
+
+## Risk and value (APAC director), business impact (RSOM), threat modeling (PASTA) (23 Oct)
+
+**APAC director › Risk and value** is a second view of the director dashboard (Overview | Risk and value). It is
+quantitative risk in the CISSP sense:
+- **Asset valuation and BIA** by site class: asset value, revenue per hour down, MTD, RTO, RPO.
+- **Risk decisions**: one row per risk scenario, sorted by annualized loss:
+  - SLE = asset value × exposure factor, plus hours down × revenue per hour;
+  - ARO per site, raised by live signals in the risk register;
+  - ALE = SLE × ARO across the sites in scope;
+  - the safeguard, its yearly cost and the ALE with it;
+  - ROSI = (ALE − ALE with safeguard − cost) ÷ cost;
+  - a recommendation: Accept (within appetite), Mitigate, Transfer, Accept and monitor (doesn't pay back), or Avoid
+    or redesign;
+  - **Approve / Defer / Reject**, recorded with a note.
+- Headline numbers: asset value protected, annualized loss exposure, ALE after approved safeguards, safeguards
+  proposed, return on security investment, and business impact at risk now (sites in impact zones).
+- A chart of annualized loss today against with the safeguard, plus a cost and return summary.
+- **Business impact by region**: opens the Regional view.
+- **Supply chain exposure**: single source, time to replace, and regions under disruption.
+- **Threat models**: one line per site model (see below).
+- **Assumptions**: asset values, scenarios, suppliers and appetite. These are shared with the team and recorded in the
+  audit log.
+- **Copy board brief**.
+- Recommended safeguards not yet decided also appear in the Overview's "Decisions and support needed".
+
+The figures shipped are illustrative defaults, and the page says so until Finance's values are entered. Use generic
+supplier categories, not vendor names.
+
+**Regional (RSOM) › Business impact** shows the same model for one region, in operational wording:
+- data centres, revenue at risk per hour, sites in impact zones now, expected impact now;
+- **Protect first**: the sites where an outage costs most, with sites in impact zones on top, each with MTD, RTO and
+  its status now;
+- **What could cost this region most in a year**, with the director's decision where one exists.
+
+PSOC leadership and Country (DSOM) stay operational: both show operational decisions.
+
+**Threat Intelligence › Threat modeling (PASTA)**: a model per data centre site, in seven stages.
+1. **Objectives**: business goals, compliance, impact tolerance from the BIA, target probability of interruption,
+   guard response time.
+2. **Technical scope**: assets in scope, security systems at the site now, critical dependencies.
+3. **Decomposition**: the security layers from the fence to the racks and the generator yard, with controls,
+   detection probability and delay for each; entry points and flows.
+4. **Threat analysis**: threat actors with motive and capability. Likelihood comes from the live risk register for
+   the city, protests in the city and drone sightings near the site, and can be changed.
+5. **Weaknesses**: what the console sees at the site today (Lenel offline, camera outages, door forced/held alarms,
+   perimeter alarms or no perimeter connected, construction, patrol flags, hazards slowing response), plus known
+   weaknesses to tick or add.
+6. **Attack modeling**: five adversary paths. Each is simulated 2,000 times against detection, delay and guard
+   response, giving the probability of interruption, the critical detection point and an adversary sequence chart.
+7. **Risk and decisions**: ARO × chance of success × impact = ALE per attack; countermeasures with cost and effect,
+   compared live; return on investment; recommendation and decision.
