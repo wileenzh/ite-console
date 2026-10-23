@@ -150,6 +150,20 @@ unknown; “+n” zooms into a crowded slot — and an **overview bar** (30 days
 window shows the period in view: click to jump, drag to move. Phone: zoom buttons at the top right, the control bar
 scrolls, the timeline is shorter.
 
+**Air traffic** (Feeds › Air traffic): live aircraft from ADS-B on the operator console — yellow aircraft turned to their
+track (red in an emergency, green military, grey on the ground, orange when selected), callsign labels when zoomed in,
+the selected flight's trail, From → To from the callsign route database with a dashed line to the destination, and a
+flight card (callsign, registration, type, operator, category, altitude, ground speed, vertical rate, track, squawk,
+GPS accuracy, source, flags, nearest site; Follow, trail, Track as risk event, Copy, public tracker and photo links).
+The search box finds aircraft in view and any callsign or registration worldwide. Three new risk feeds raise alerts
+like the others: **Aviation emergencies** (squawk 7500 / 7600 / 7700 and emergency status, checked worldwide every two
+minutes), **Aircraft near sites** (below 1,500 ft within 2 km of a site, helicopters and drones, or circling within
+5 km — site-bound) and **GNSS (GPS) interference** (1° areas where more than 10% of aircraft report poor position
+accuracy over two hours, the GPSJam method), plus a GPS interference map. Sources (Air traffic settings): adsb.lol
+(open data, ODbL), airplanes.live (non-commercial), our own receiver's aircraft.json, or the Flightradar24 API through
+the PSOC server (paid; key on the server, `/api/fr24/live/flight-positions/full?bounds=N,S,W,E`). Whole-view traffic
+loads from country zoom (250 nm around the centre); optional site watch checks the air around each site city in turn.
+
 ## Intelligence events (Intelligence Monitoring › Intelligence events)
 
 From PULSE's Intelligence dashboard. The Datasurfr events API (X-API-Key), the Max Security Reports API v3 (company +
