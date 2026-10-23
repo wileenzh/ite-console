@@ -384,3 +384,18 @@ The app page is rebuilt from the console with `python3 tools/build_app.py`.
 The desktop app runs the console with its own built-in server on your computer only, so the video wall,
 channel look-ups and blocked news sources all work without any hosting. The app isn't code-signed, so Windows
 may show "Windows protected your PC": click **More info → Run anyway**.
+
+## Typhoon tracker — warning-centre style (Intelligence Monitoring › Typhoon tracker)
+
+One storm model from JMA (RSMC Tokyo) where JMA has the storm, otherwise GDACS (JTWC / NOAA advisories). The map shows
+the **forecast cone** joined from JMA's 70 % probability circles (GDACS cone polygon otherwise), **storm-force (≥50 kt)
+and gale (≥30 kt) wind swaths** along the forecast plus the current wind circles, the **past track** coloured by
+intensity with 6-hourly points, the **forecast track** dashed with class-coded forecast points (JMA classes TD, TS, STS,
+TY, VSTY, VTY for 10-minute winds; Saffir–Simpson for GDACS-only storms) and time / wind / pressure labels every 24 h,
+an animated storm symbol (mirrored in the southern hemisphere) with a name card (class, wind, pressure, movement), and
+our sites coloured by exposure with dotted lines to the closest approach. Layer buttons, a legend and a **forecast
+playback** slider; a storm header (max wind, gusts, pressure, movement, wind radii, peak forecast, sites exposed); the
+**forecast advisory table** and **site exposure** (storm-force, inside the cone, within 500 km; when winds arrive).
+**Figure for reports** draws a 1600 × 1000 chart with header, land, cone, swaths, tracks, labels, sites, side panel and
+legend. The Operator console gets the same drawing as the **Typhoon tracks** context layer.
+
