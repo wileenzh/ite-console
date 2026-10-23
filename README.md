@@ -438,4 +438,13 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
   Export to Excel), Active Cameras, Conflict, Air traffic, Local Conditions and Distribution, each with a
   group check box; a **DETAILS** panel in the dock with a red close button; shaded building icons when zoomed in;
   pill-shaped zoom slider and Location box; lat/long readout at the bottom centre.
+- **Typhoon tracker, warning-chart style**: a cyclone symbol in the class colour at every forecast point (open for
+  tropical / severe tropical storms, filled for typhoons, a ring for depressions); time labels every 12 hours in small
+  boxes with a leader line, placed beside the track so they never overlap each other, the track or the warning box;
+  every forecast time in the tooltip and table. An on-map **warning box**: class, analysis time, position, movement,
+  maximum wind (kt, km/h, averaging period), gusts, pressure, storm-force and gale radii, and the full forecast table.
+  Satellite infrared in grey by default (colour-enhanced as an option) so the track reads clearly.
+- **Buildings on the operator console**: transparent circles in the class colour (offices blue, Class A orange,
+  Class B amber, Class C teal, C-PE grey, Edge green); **campuses are drawn as boxes** (buildings with height). The
+  legend shows the same symbols; the radius zone uses the class colour.
 
