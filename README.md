@@ -505,3 +505,22 @@ page in a new tab). It opens **the story with all its sources**, not just one ar
   through it. Otherwise choose **Use the reader service** (r.jina.ai; it receives only the article's address; tick
   "always" to use it for every blocked source), or paste the article text. Until then that source contributes its
   feed summary, marked as such.
+
+## Weekly Operational Metrics (23 Oct)
+
+BAU Operations › Access alarms (OnGuard) › **Weekly categories** is now the **Weekly Operational Metrics** page,
+for the same week as the alarm table (Tuesday 0800 SGT to Tuesday 0800 SGT by default):
+
+- **Five headline numbers against last week**: Total alarms (acknowledged entries in the OnGuard export), IcM tickets
+  opened (the new IcM ticket log plus tickets recorded on Lenel and camera outages), Unique risk events
+  (escalations opened, the same description counted once), SENs issued (site incidents opened) and RENs issued
+  (event notices issued). Each shows last week and the change (▲ / ▼ / No change); hover a number for what it counts.
+- **Key Operational Alarm Categories** as before, ending with **Overall acknowledgement workload** (all
+  acknowledged entries, always compared with last week).
+- **Metric notes** written automatically: what each SEN and REN was (site or country, category, date), what the IcM
+  tickets were for, the workload against last week with the percentage change, and the share that was key operational
+  alarms. **What is counted** lists every item behind the numbers; untick anything that should not count.
+  **＋ Log IcM ticket** records a ticket (number, site, what it is for, opened time).
+- **Copy for email** pastes the whole section (numbers, table and notes) with its formatting; **Copy summary**
+  includes the notes. The **Executive snapshot** shows the same five numbers in a strip at the top, labelled with
+  the week they cover.

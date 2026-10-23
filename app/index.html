@@ -14480,7 +14480,7 @@ function ogwHtml(T, forCopy){ const n = v => v.toLocaleString("en-US"), hr = Str
     <tr><td ${S.tot} colspan="2">Total key operational alarms (${T.rows.length} categories)</td><td ${S.totn}>${n(T.keyTw)}</td><td ${S.totn}>${T.hasB ? n(T.keyLw) : "—"}</td><td ${S.totn}>${ogwChg(T.keyTw - T.keyLw, T.hasB && !T.anyNew)}</td></tr>
     ${T.anyNew ? `<tr><td ${S.tot} colspan="2">Like-for-like total (${T.lfl.length} categories tracked both weeks)</td><td ${S.totn}>${n(T.lflTw)}</td><td ${S.totn}>${n(T.lflLw)}</td><td ${S.totn}>${ogwChg(T.lflTw - T.lflLw, true)}</td></tr>` : ""}
     <tr><td ${S.d}>Other alarm definitions and system events</td><td ${S.d}>${esc(T.otherPri)}</td><td ${S.dn}>${n(T.other[0])}</td><td ${S.dn}>${T.hasB ? n(T.other[1]) : "—"}</td><td ${S.dn}>${ogwChg(T.other[0] - T.other[1], T.hasB && !T.anyNew)}</td></tr>
-    <tr><td ${S.d}>Category total used for classification</td><td ${S.d}></td><td ${S.dn}>${n(T.total[0])}</td><td ${S.dn}>${T.hasB ? n(T.total[1]) : "—"}</td><td ${S.dn}>${ogwChg(T.total[0] - T.total[1], T.hasB && !T.anyNew)}</td></tr></tbody></table>`; }
+    <tr class="ogwall"><td ${S.tot} colspan="2">Overall acknowledgement workload</td><td ${S.totn}>${n(T.total[0])}</td><td ${S.totn}>${T.hasB ? n(T.total[1]) : "—"}</td><td ${S.totn}>${ogwChg(T.total[0] - T.total[1], T.hasB)}</td></tr></tbody></table>`; }
 function ogwSummary(T){ const n = v => v.toLocaleString("en-US"), up = T.rows.filter(r => !r.isNew && r.lw && r.diff > 0).sort((a, b) => b.diff - a.diff), dn = T.rows.filter(r => !r.isNew && r.lw && r.diff < 0).sort((a, b) => a.diff - b.diff), nw = T.rows.filter(r => r.isNew);
   return [`PSOC operators acknowledged ${n(T.keyTw)} key operational alarms in Lenel OnGuard in the week ending ${ogwFmtD(T.wThis + 7 * 864e5)} ${ogwFmtY(T.wThis + 7 * 864e5)}.`,
     T.anyNew ? `On a like-for-like basis (${T.lfl.length} categories tracked both weeks), alarms ${T.lflTw <= T.lflLw ? "fell" : "rose"} by ${n(Math.abs(T.lflTw - T.lflLw))} to ${n(T.lflTw)}.` : T.hasB ? `This is ${T.keyTw <= T.keyLw ? "a decrease" : "an increase"} of ${n(Math.abs(T.keyTw - T.keyLw))} on the previous week.` : "",
@@ -21420,6 +21420,82 @@ mark.nrnum{background:rgba(242,201,76,.22);color:inherit;border-bottom:1px solid
 .nrfail{padding:10px;border:1px dashed var(--line);border-radius:8px}.nrfail textarea{width:100%;box-sizing:border-box}.nrwait{padding:30px;text-align:center;color:var(--muted)}
 .act.nrsum{border-color:var(--teal);color:var(--teal)}
 @media (max-width:820px){.nrgrid{grid-template-columns:1fr}#nrBody{max-height:none}#nrFacts{max-height:none}}`; document.head.appendChild(st); }
+/* ---------- weekly operational metrics: headline counts against last week, above the alarm categories, with metric notes ---------- */
+SH_KEYS.icm = "psoc.uni.icm.v1"; SHARED.icm = lsGet(SH_KEYS.icm, []); RETAIN_DAYS.icm = 3650; LOCAL_CAP.icm = 2000; SYNC_TYPES.push("icm");
+let OGWM = lsGet("psoc.uni.ogwm.v1", { ex: {} });
+const wkD = t => `${ogwFmtD(t)}, ${ogwFmtY(t)}`;
+const wkN = v => v == null ? "—" : Number(v).toLocaleString("en-US");
+const wkTail = s => String(s || "").split("|").map(x => x.trim()).filter(Boolean);
+// everything counted in a week window [a, b): Tuesday 0800 SGT to Tuesday 0800 SGT, the same window as the alarm table
+function wkLists(a, b){ const inW = t => t >= a && t < b, ex = OGWM.ex || {};
+  const icm = new Map(); (SHARED.icm || []).filter(x => !x.deleted && inW(x.openedAt || x.createdAt)).forEach(x => icm.set(String(x.no || x.id), { id: "icm:" + x.id, no: x.no, site: x.site, what: x.summary, t: x.openedAt || x.createdAt, src: "IcM log" }));
+  try{ bauRecords().filter(r => r.ticket && inW(r.start)).forEach(r => { if (!icm.has(String(r.ticket))) icm.set(String(r.ticket), { id: "bau:" + r.ticket, no: r.ticket, site: r.site, what: `${r.sys === "Lenel" ? "Lenel" : "camera"} outage — ${r.cause}`, t: r.start, src: r.sys + " outage log" }); }); }catch(e){}
+  const evs = [], seen = new Set(); EVENTS.filter(e => inW(+e.created)).sort((x, y) => x.created - y.created).forEach(e => { const k = e.desc.toLowerCase().replace(/\s+/g, " ").trim(); if (seen.has(k)) return; seen.add(k); evs.push({ id: "ev:" + e.id, e, t: +e.created, what: e.desc }); });
+  const sens = (SHARED.incidents || []).filter(x => !x.deleted && !x.training && inW(x.createdAt)).sort((x, y) => x.createdAt - y.createdAt).map(x => ({ id: "inc:" + x.id, x, t: x.createdAt, what: x.title }));
+  const rens = EVENTS.filter(e => e.ren === "issued" && e.issuedAt && inW(e.issuedAt)).sort((x, y) => x.issuedAt - y.issuedAt).map(e => ({ id: "ren:" + e.id, e, t: e.issuedAt, what: e.desc }));
+  const keep = L => L.map(x => Object.assign(x, { off: !!ex[x.id] }));
+  return { icm: keep([...icm.values()].sort((x, y) => x.t - y.t)), evs: keep(evs), sens: keep(sens), rens: keep(rens) }; }
+function wkMetrics(wThis){ const W = 7 * 864e5, A = wkLists(wThis, wThis + W), B = wkLists(wThis - W, wThis), on = L => L.filter(x => !x.off), has = OGW.weeks[wThis] || OGW.weeks[wThis - W], T = has ? ogwTable(wThis) : null;
+  return { wThis, A, B, T, tiles: [
+    { k: "alarms", label: "Total alarms", v: T ? T.total[0] : null, lw: T && T.hasB ? T.total[1] : null, src: "Acknowledged entries in the OnGuard export" },
+    { k: "icm", label: "IcM tickets opened", v: on(A.icm).length, lw: on(B.icm).length, src: "IcM ticket log, and tickets on Lenel and camera outages" },
+    { k: "evs", label: "Unique risk events", v: on(A.evs).length, lw: on(B.evs).length, src: "Escalations opened (same description counted once)" },
+    { k: "sens", label: "SENs issued", v: on(A.sens).length, lw: on(B.sens).length, src: "Site incidents opened" },
+    { k: "rens", label: "RENs issued", v: on(A.rens).length, lw: on(B.rens).length, src: "Event notices issued" }] }; }
+const wkChg = (v, lw) => v == null || lw == null ? "" : v === lw ? "No change" : (v < lw ? "▼ " : "▲ ") + Math.abs(v - lw).toLocaleString("en-US");
+function wkTiles(M, forCopy){ const t = M.tiles;
+  if (forCopy) return `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:17px;font-weight:700;color:#12284B;margin:0 0 8px;border-left:4px solid #C4314B;padding-left:8px">Weekly Operational Metrics</p>
+    <table style="border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif;margin:0 0 14px;background:#F4F6FA;border:1px solid #DDE3EC"><tr>${t.map(x => `<td style="text-align:center;padding:10px 16px;border-right:1px solid #DDE3EC;min-width:110px"><div style="font-size:24px;font-weight:700;color:#12284B">${wkN(x.v)}</div><div style="font-size:12px;color:#444">${esc(x.label)}</div><div style="font-size:11.5px;color:#555">Last wk: ${wkN(x.lw)}</div><div style="font-size:11.5px;font-weight:700;color:#222">${wkChg(x.v, x.lw)}</div></td>`).join("")}</tr></table>`;
+  return `<div class="wkm"><div class="wkmd0">${esc(wkD(M.wThis))} – ${esc(wkD(M.wThis + 7 * 864e5))} · ${String(CFG.ogw.startHour).padStart(2, "0")}00 hrs SGT · hover a number for what it counts</div>
+    <div class="wkmt">${t.map(x => `<div class="wkmc" title="${esc(x.src)}"><b>${wkN(x.v)}</b><span>${esc(x.label)}</span><i>Last wk: ${wkN(x.lw)}</i><em>${wkChg(x.v, x.lw) || "&nbsp;"}</em></div>`).join("")}</div></div>`; }
+// metric notes in the house style: what the SENs, RENs and tickets were, and the workload in context
+function wkNotesText(M){ const on = L => L.filter(x => !x.off), A = M.A, R = CFG.ogw.region, n = wkN, list = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1], semi = a => a.join("; ");
+  const sens = on(A.sens).map(s => { const p = wkTail(s.x.title); return `${p[0] || s.x.title}${p.length > 1 ? ` (${p.slice(1).join(" – ")}` : " ("}${s.x.sev ? `${p.length > 1 ? ", " : ""}SEV ${s.x.sev}` : ""}${p.length > 1 || s.x.sev ? ", " : ""}${wkD(s.t)})`; });
+  const rens = on(A.rens).map(r => { const p = wkTail(r.e.desc), cat = (CATS[r.e.cat] || {}).label || p[1] || ""; return `${r.e.country || p[0] || ""}${cat ? " | " + cat : ""} (${wkD(r.t)})`; });
+  const icm = on(A.icm).map(x => `${x.site ? x.site + " " : ""}${String(x.what || "").replace(/\.$/, "")}${x.no ? ` (ticket ${x.no})` : ""}`);
+  const out = ["Metric notes:"], T = M.T, tl = M.tiles.find(x => x.k === "alarms");
+  out.push(sens.length ? `The ${sens.length} SEN${sens.length === 1 ? " was" : "s were"} ${list(sens)}.` : "No SENs were issued.");
+  out.push(rens.length ? `The ${rens.length} REN${rens.length === 1 ? " was" : "s were"} ${semi(rens)}.` : "No RENs were issued.");
+  out.push(icm.length ? `The ${icm.length} IcM ticket${icm.length === 1 ? "" : "s"} opened by ${R} PSOC ${icm.length === 1 ? "was" : "were"} for ${list(icm)}.` : `${R} PSOC opened no IcM tickets.`);
+  if (T){ const pct = T.total[0] ? (100 * T.keyTw / T.total[0]).toFixed(1) : "0"; out.push(`${R} PSOC handled ${n(T.total[0])} visible acknowledged entries this week${tl.lw != null ? ` (last week ${n(tl.lw)}), ${tl.v === tl.lw ? "unchanged" : `${tl.v < tl.lw ? "a decrease" : "an increase"} of ${n(Math.abs(tl.v - tl.lw))} (${(100 * Math.abs(tl.v - tl.lw) / Math.max(1, tl.lw)).toFixed(1)}%)`}` : ""}; key operational alarms accounted for ${n(T.keyTw)} (${pct}% of the workload).`); }
+  const ev = on(A.evs).length; out.push(`${ev} unique risk event${ev === 1 ? " was" : "s were"} tracked.`);
+  return out.join(" "); }
+function wkNotes(M, forCopy){ const txt = wkNotesText(M);
+  if (forCopy) return `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12.5px;font-style:italic;color:#555;margin:10px 0 0;max-width:760px">${esc(txt)}</p>`;
+  const A = M.A, grp = (title, L, fmt) => `<div class="wkmg"><b>${title} <small>${L.filter(x => !x.off).length} counted</small></b>${L.length ? L.map(x => `<label class="opmi"><input type="checkbox" data-wkmx="${esc(x.id)}"${x.off ? "" : " checked"}> ${fmt(x)}</label>`).join("") : '<div class="s">None this week.</div>'}</div>`;
+  return `<p class="wkmn">${esc(txt)}</p><details class="wkmd"><summary>What is counted — untick anything that should not count</summary><div class="wkmgs">
+    ${grp("SENs (site incidents)", A.sens, x => `${esc(x.x.title)} <span class="s">${x.x.sev ? "SEV " + esc(x.x.sev) + " · " : ""}${esc(wkD(x.t))}</span>`)}
+    ${grp("RENs (event notices issued)", A.rens, x => `${esc(x.e.desc)} <span class="s">${esc(wkD(x.t))}</span>`)}
+    ${grp("IcM tickets", A.icm, x => `${x.no ? "<b>" + esc(x.no) + "</b> · " : ""}${esc(x.site || "")} ${esc(x.what || "")} <span class="s">${esc(x.src)} · ${esc(wkD(x.t))}</span>`)}
+    ${grp("Unique risk events (escalations)", A.evs, x => `${esc(x.what)} <span class="s">${esc(wkD(x.t))}</span>`)}</div>
+    <div class="nrbtns"><button class="tab-mini" data-wkmicm>＋ Log IcM ticket</button></div></details>`; }
+function wkIcmForm(){ const now = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16), codes = SITES.filter(s => isLive(s)).map(s => s.code).slice(0, 400);
+  openModal(head("Log IcM ticket") + `<div class="bd"><div class="fgrid"><label class="fld">Ticket number<input id="icN" placeholder="e.g. 512345678"></label><label class="fld">Site<input id="icS" list="icSL" placeholder="Site code"><datalist id="icSL">${codes.map(c => `<option value="${esc(c)}">`).join("")}</datalist></label></div>
+    <label class="fld">What it is for<input id="icW" placeholder="e.g. data ports with no connection"></label><label class="fld">Opened (SGT)<input id="icT" type="datetime-local" value="${now}"></label>
+    <p class="help">Counts in Weekly Operational Metrics for the week it was opened. Shared with the team like other PSOC records.</p></div>
+    <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="icGo">Save</button></div>`);
+  $("#icGo").onclick = () => { const no = $("#icN").value.trim(), w = $("#icW").value.trim(); if (!no && !w){ toast("Add the ticket number or what it is for", "", "var(--amber)"); return; }
+    const t = Date.parse($("#icT").value + ":00Z") - 8 * 3600e3; putShared("icm", { id: nid(), no, site: $("#icS").value.trim().toUpperCase(), summary: w, openedAt: isFinite(t) ? t : Date.now(), createdAt: Date.now(), by: ME ? ME.name : "" });
+    audit("IcM ticket logged", no, w); closeModal(); renderPanel(); }; }
+// the weekly page and every copy of it carry the metrics
+ogwHtml = (function(orig){ return function(T, forCopy){ const M = wkMetrics(T.wThis); return wkTiles(M, forCopy) + (forCopy ? "" : '<div class="wkms">Key Operational Alarm Categories</div>') + orig.call(this, T, forCopy) + wkNotes(M, forCopy); }; })(ogwHtml);
+ogwSummary = (function(orig){ return function(T){ return orig.call(this, T) + " " + wkNotesText(wkMetrics(T.wThis)); }; })(ogwSummary);
+ogwPanel = (function(orig){ return function(){ let h = orig.apply(this, arguments).replace("<b>Key Operational Alarm Categories</b>", '<b class="wkmtitle">Weekly Operational Metrics</b>').replace(">Copy table for email<", ">Copy for email<").replace(/(<div class="ogwsum">[\s\S]*?<p>[\s\S]*?) Metric notes:[\s\S]*?(<\/p>)/, "$1$2");
+  if (Object.keys(OGW.weeks).length) return h; const M = wkMetrics(ogwWeekStart(Date.now()) - 7 * 864e5), k = h.indexOf('<div class="empty">');
+  return k < 0 ? h : h.slice(0, k) + wkTiles(M, false) + wkNotes(M, false) + '<div class="wkms">Key Operational Alarm Categories</div>' + h.slice(k); }; })(ogwPanel);
+// the executive snapshot shows the same five numbers for the last full week ending in it
+snapPage = (function(orig){ return function(s, opts){ const h = orig.call(this, s, opts); let M; try{ M = wkMetrics(ogwWeekStart(s.to) - 7 * 864e5); }catch(e){ return h; }
+  const strip = `<div class="snapwkc">Weekly operational metrics · ${esc(wkD(M.wThis))} – ${esc(wkD(M.wThis + 7 * 864e5))}, ${String(CFG.ogw.startHour).padStart(2, "0")}00 hrs SGT</div><div class="snapwk">${M.tiles.map(x => `<div><b>${wkN(x.v)}</b><span>${esc(x.label)}</span><i>${x.lw == null ? "" : "Last wk " + wkN(x.lw) + " · " + wkChg(x.v, x.lw)}</i></div>`).join("")}</div>`;
+  return h.replace('<div class="snapg">', strip + '<div class="snapg">'); }; })(snapPage);
+document.getElementById("panel").addEventListener("change", e => { const t = e.target.closest("[data-wkmx]"); if (!t) return; OGWM.ex = OGWM.ex || {}; if (t.checked) delete OGWM.ex[t.dataset.wkmx]; else OGWM.ex[t.dataset.wkmx] = 1; lsSet("psoc.uni.ogwm.v1", OGWM);
+  const d = t.closest("details"), open = d && d.open; renderPanel(); if (open){ const d2 = document.querySelector(".wkmd"); if (d2) d2.open = true; } });
+document.getElementById("panel").addEventListener("click", e => { if (e.target.closest("[data-wkmicm]")){ e.stopPropagation(); wkIcmForm(); } });
+{ const st = document.createElement("style"); st.textContent = `.wkm{margin:4px 0 16px}.wkmtitle{font-size:17px;border-left:4px solid #C4314B;padding-left:10px}.wkmd0{font-size:12px;color:var(--muted);margin:0 0 8px}.wkms{font:700 15px/1.2 system-ui,sans-serif;margin:6px 0 4px}
+.wkmt{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel2,rgba(255,255,255,.03))}
+.wkmc{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border-right:1px solid var(--line);text-align:center}.wkmc:last-child{border-right:0}.wkmc b{font-size:26px;line-height:1.1}.wkmc span{font-size:12px;color:var(--muted)}.wkmc i{font-style:normal;font-size:11.5px;color:var(--muted)}.wkmc em{font-style:normal;font-size:12px;font-weight:700}
+.wkmn{font-style:italic;color:var(--muted);font-size:12.5px;line-height:1.6;margin:10px 0 6px}.wkmd summary{cursor:pointer;font-size:12.5px;color:var(--teal)}.wkmgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}.wkmg{border:1px solid var(--line);border-radius:6px;padding:8px}.wkmg>b{display:block;margin-bottom:4px}.wkmg small{font-weight:400;color:var(--muted)}
+.snapwkc{font-size:10.5px;color:#555;margin-top:6px}.snapwk{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid #DDE3EC;border-radius:6px;margin:2px 0 10px;background:#F4F6FA;color:#12284B}.snapwk>div{display:flex;flex-direction:column;align-items:center;padding:6px 4px;border-right:1px solid #DDE3EC}.snapwk>div:last-child{border-right:0}.snapwk b{font-size:18px}.snapwk span{font-size:10.5px}.snapwk i{font-style:normal;font-size:10px;color:#555}
+@media (max-width:700px){.wkmt{grid-template-columns:repeat(2,minmax(0,1fr))}.wkmc{border-bottom:1px solid var(--line)}.wkmgs{grid-template-columns:1fr}.snapwk{grid-template-columns:repeat(3,1fr)}}`; document.head.appendChild(st); }
 boot();
 
 </script>
