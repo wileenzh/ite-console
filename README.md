@@ -477,22 +477,31 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
   before the page's Content Security Policy is built, so they also work with the connection gateway in Enforce mode.
   Before this fix they were blocked in that mode.
 
-## News: read the article, facts and figures, summarise from the source (23 Oct)
+## News: every source on a story, facts and figures by source, a summary that cites where each point is from (23 Oct)
 
 Every news story has **Read & summarise** (the headline opens it too; **Original ↗** still opens the publisher's
-page in a new tab).
+page in a new tab). It opens **the story with all its sources**, not just one article:
 
-- **Source text**: the article itself, pulled from the publisher's page (author and published time from the
-  page's article data). Navigation, adverts and "read more" links are removed, paragraphs are numbered P1, P2…, and
-  every figure is highlighted. Copy the citation or the whole text.
-- **Facts and figures**: every sentence with a number, sorted by kind: People (killed, injured, evacuated…), Money,
-  Percent, Measure (km, km/h, magnitude…), Count (flights, homes…), When, and Quote (with who said it). Filter by
-  kind, click one to jump to its paragraph, **＋** adds it to the summary with its paragraph reference.
-- **Summary**: **Draft from source** picks the article's own key sentences (no AI needed); **Draft with AI** (when
-  the PSOC server or an AI key is set) writes Bottom line / Key facts / Figures / Who said what using only the
-  article, citing paragraphs. Edit it freely; **Add selection to summary** quotes highlighted text.
-  **Check against source** flags any number that isn't in the article and any paragraph reference that doesn't
-  exist. **Save** keeps it with the story (this browser); **Track as escalation** carries it into the escalation log.
+- **Sources S1, S2, S3…**: the outlets that carried the same headline (kept when duplicates are merged), plus other
+  stories about the same event and place in the last 72 hours. Each source is read in full: publisher, author,
+  published time, numbered paragraphs, figures highlighted, **Open original ↗**. Wrongly matched stories can be
+  removed; possible matches are listed to add; any other article can be added by its link.
+- **Facts and figures from all sources**, each labelled with its source and paragraph (S2 P4), sorted by kind
+  (People, Money, Percent, Measure, Count, When, Quote) and marked **in 2+ sources** when other outlets report the
+  same figure.
+- **Go to the exact place**: clicking any citation (in a fact or in the summary) opens that source and highlights the
+  sentence. The **↗** next to it opens the publisher's original page scrolled to that sentence and highlighted
+  (a text-fragment link, supported by Chrome, Edge, Safari and recent Firefox).
+- **Summary**: **Draft from sources** builds it from the sources' own sentences. A point that several outlets report
+  cites them all, and when outlets give different figures it adds "Sources differ: 240 flights [S1 P1] vs
+  230 flights [S2 P1]". **Draft with AI** (PSOC server or AI key) writes Bottom line / Key facts / Figures / Who said
+  what / Sources disagree from the sources only, citing [S# P#]. Every draft ends with the source list (outlet, author,
+  time, headline, link). Switch between **Edit** and the linked view where every citation can be clicked.
+- **Check against sources** flags numbers that are not in the paragraph they cite (and says where they are), numbers
+  in no source, citations that point nowhere, and points with no source. **Copy with links** pastes the summary
+  into email or chat with each citation as a link to the original at the cited place. **Save** keeps it with the
+  story, and **Track as escalation** carries it into the escalation log.
 - **When a site blocks the browser** (most do): set the PSOC server under Integrations and articles are read
-  through it. Otherwise choose **Use the reader service** (r.jina.ai; it receives only the article's address, and
-  you can tick always), or paste the article text. Until then, facts come from the feed's own summary.
+  through it. Otherwise choose **Use the reader service** (r.jina.ai; it receives only the article's address; tick
+  "always" to use it for every blocked source), or paste the article text. Until then that source contributes its
+  feed summary, marked as such.

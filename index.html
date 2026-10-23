@@ -1143,7 +1143,7 @@ async function loadAllNews(){
   }));
   const cutoff = Date.now() - Math.max(CFG.news.hours, 72) * 3600e3, byKey = new Map();
   Object.values(NEWS_BUF).flat().forEach(n => { if (!n.t || n.t < cutoff) return; const k = n.key || n.url; const ex = byKey.get(k);
-    if (ex){ if (!ex.also.includes(n.provider) && ex.provider !== n.provider) ex.also.push(n.provider); return; } byKey.set(k, Object.assign(n, { also: [] })); });
+    if (ex){ if (!ex.also.includes(n.provider) && ex.provider !== n.provider) ex.also.push(n.provider); if (n.url && n.url !== ex.url && !(ex.alts || []).some(x => x.url === n.url)) (ex.alts = ex.alts || []).push({ url: n.url, title: n.title, source: n.source, provider: n.provider, t: n.t, desc: n.desc }); return; } byKey.set(k, Object.assign(n, { also: [] })); });
   DATA.news = Array.from(byKey.values()).sort((a, b) => b.t - a.t).slice(0, 500);
 }
 function newsFor(city){ const cut = Date.now() - CFG.news.hours * 3600e3; return DATA.news.filter(n => n.cities.includes(city) && n.t >= cut); }
@@ -21162,9 +21162,9 @@ airSettings = (function(orig){ return function(){ orig.apply(this, arguments); c
 .airchip .ic{color:#E8873A;font-size:15px}.airchip .t{flex:1;min-width:0}.airchip b{color:#F2A65A;margin-right:4px}.airchip button{flex:none;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:#fff;border-radius:999px;padding:4px 10px;font:600 12px system-ui,sans-serif;cursor:pointer}.airchip button:hover{background:rgba(255,255,255,.14)}
 @media (max-width:700px){.airchip{top:auto;bottom:64px;flex-wrap:wrap}.airchip .t{flex-basis:100%}}
 .airtt td{vertical-align:top;padding:6px 8px}.airtt .s{font-size:11px;color:var(--muted);word-break:break-all}`; document.head.appendChild(st); }
-/* ---------- news: read the article, facts and figures, a summary written from the source ---------- */
+/* ---------- news: read every source on a story, facts and figures with their source, a summary that cites source and paragraph ---------- */
 CFG.nr = Object.assign({ reader: false }, CFG.nr || {});
-const NRD = { cache: {}, cur: null, kind: "all", saved: lsGet("psoc.newsread.v1", {}) };
+const NRD = { cache: {}, cur: null, kind: "all", facts: [], saved: lsGet("psoc.newsread.v1", {}) };
 const nrKey = a => a.url || a.id;
 const nrSaved = a => a && NRD.saved[nrKey(a)];
 // pull the article out of a page: structured data first (headline, author, date, body), then the block with the most paragraph text
@@ -21219,105 +21219,198 @@ async function nrLoad(a, how){ const key = nrKey(a); if (!how && NRD.cache[key] 
     if (!A && a.url && (how === "reader" || CFG.nr.reader)){ try{ const r = await fetchText("https://r.jina.ai/" + a.url, { headers: { "X-Return-Format": "markdown" } }, 30000); if (!r.ok) throw new Error("reader service HTTP " + r.status); A = nrFromMarkdown(r.text, a.url); A.via = "reader service (r.jina.ai)"; if (A.paras.length < 2){ err = "the reader service returned no article text"; A = null; } }catch(e){ err = e.message || String(e); } } }
   if (A){ A.title = (A.title || a.title).trim(); NRD.cache[key] = A; return A; }
   return { err: err || (a.url ? "could not open the article" : "this story has no article address"), paras: [] }; }
-function nrOpen(id){ const a = DATA.news.find(x => x.id === id); if (!a) return; NRD.cur = a; NRD.kind = "all"; nrRender(a, null); nrLoad(a).then(A => { if (NRD.cur === a) nrRender(a, A); }); }
-function nrRender(a, A){ const S = nrSaved(a), cat = CATS[a.cat] || { label: "", color: "#888" }, ok = A && A.paras && A.paras.length, src = ok ? A : { title: a.title, site: a.source, by: "", published: "", paras: nrClean([a.desc || ""]).length ? nrClean([a.desc]) : [] };
-  const facts = nrFacts(src.paras), F = NRD.kind === "all" ? facts : facts.filter(f => f.kinds.includes(NRD.kind)), counts = {}; facts.forEach(f => f.kinds.forEach(k => counts[k] = (counts[k] || 0) + 1));
-  const hitsBy = {}; facts.forEach(f => { (hitsBy[f.pi] = hitsBy[f.pi] || []).push(...f.hits); }); const words = src.paras.join(" ").split(/\s+/).filter(Boolean).length;
-  const body = !A ? `<div class="nrwait">Opening the article…</div>` : ok ? src.paras.map((p, i) => /^## /.test(p) ? `<h4 data-nrp="${i}">${esc(p.slice(3))}</h4>` : `<p data-nrp="${i}"><span class="pn">P${i + 1}</span>${nrMark(p, hitsBy[i] || [])}</p>`).join("")
-    : `<div class="nrfail"><b>Could not open the article here</b><div class="s">${esc(A.err.replace(/\s*\(set the PSOC server under Integrations\)/, ""))}</div>
+// ---- every source on the story: duplicate links of the same headline, then other stories about the same event and place
+const NR_STOP = new Set("that this with from have said says will would could after before over into about their there they them were been more than amid while when where which what also other some most many such only just very told year years week month days time people government officials official report reports news update updates live latest says amid ahead says".split(" "));
+const nrTok = s => new Set((String(s).toLowerCase().match(/[a-z][a-z'-]{3,}/g) || []).filter(w => !NR_STOP.has(w)));
+const nrCaps = s => new Set((String(s).match(/\b[A-Z][a-zA-Z-]{2,}\b/g) || []).map(w => w.toLowerCase()).filter(w => !NR_STOP.has(w) && !["the", "and", "for", "new", "why", "how", "who", "his", "her", "its", "says"].includes(w)));
+function nrSim(a, b){ const A = nrTok(a.title + " " + (a.desc || "")), B = nrTok(b.title + " " + (b.desc || "")); let i = 0; A.forEach(w => { if (B.has(w)) i++; }); const j = i / Math.max(1, A.size + B.size - i);
+  const ca = nrCaps(a.title), cb = nrCaps(b.title); let c = 0; ca.forEach(w => { if (cb.has(w)) c++; });
+  const place = (a.cities || []).some(x => (b.cities || []).includes(x)) || (a.countries || []).some(x => (b.countries || []).includes(x));
+  return { j, c, place, v: j + c * .12 + (place ? .08 : 0) + (a.cat === b.cat ? .05 : 0) }; }
+const nrSrcItem = (main, x) => Object.assign({ id: main.id + ":" + hashStr(x.url), cities: main.cities, countries: main.countries, cat: main.cat, desc: "", t: Date.now(), source: nrHost(x.url) }, x);
+function nrCluster(a){ const out = [{ a, main: true }], seen = new Set([a.url]);
+  (a.alts || []).forEach(x => { if (x.url && !seen.has(x.url)){ seen.add(x.url); out.push({ a: nrSrcItem(a, x), dup: true }); } });
+  const cand = []; DATA.news.forEach(b => { if (b === a || !b.url || seen.has(b.url) || Math.abs(b.t - a.t) > 72 * 36e5) return; const s = nrSim(a, b);
+    if (s.place && (s.j >= .18 || (s.c >= 1 && s.j >= .07) || s.c >= 2)) cand.push({ a: b, v: s.v }); else if (s.j >= .1 || (s.c >= 1 && s.place)) cand.push({ a: b, v: s.v, weak: true }); });
+  cand.sort((x, y) => y.v - x.v); cand.filter(x => !x.weak).slice(0, 9).forEach(x => { seen.add(x.a.url); out.push({ a: x.a }); (x.a.alts || []).forEach(y => { if (y.url && !seen.has(y.url) && out.length < 14){ seen.add(y.url); out.push({ a: nrSrcItem(x.a, y), dup: true }); } }); });
+  return { srcs: out, more: cand.filter(x => !seen.has(x.a.url)).slice(0, 8).map(x => x.a) }; }
+// ---- places in a source: sentence splitting, the best sentence for a summary line, a link that opens the original at that sentence
+const nrSents = p => String(p).split(/(?<=[.!?]["”’)]?)\s+(?=["“‘(]?[A-Z0-9])/).map(s => s.trim()).filter(Boolean);
+function nrBest(sents, text){ const T = nrTok(text); let best = sents[0] || "", bv = -1; sents.forEach(s => { let v = 0; nrTok(s).forEach(w => { if (T.has(w)) v++; }); (String(text).match(/\d[\d,.]*/g) || []).forEach(n => { if (s.includes(n)) v += 2; }); if (v > bv){ bv = v; best = s; } }); return best; }
+function nrFrag(url, sent){ if (!url) return ""; if (!sent) return url; const w = String(sent).replace(/^["“‘(]+|["”’)]+$/g, "").split(/\s+/).filter(Boolean), enc = s => encodeURIComponent(s).replace(/-/g, "%2D").replace(/,/g, "%2C").replace(/&/g, "%26");
+  return url.split("#")[0] + "#:~:text=" + (w.length > 10 ? enc(w.slice(0, 5).join(" ")) + "," + enc(w.slice(-4).join(" ")) : enc(w.join(" "))); }
+const nrS = () => NRD.cur;   // { a, srcs: [{ a, A, st: loading|ok|fail|removed, err, main, dup, user }], more, sel }
+const nrLive = () => nrS().srcs.map((s, i) => Object.assign(s, { i })).filter(s => s.st !== "removed");
+const nrParas = s => s.st === "ok" ? s.A.paras : s.st === "fail" ? nrClean([s.a.desc || ""]) : [];
+const nrSite = s => (s.A && s.st === "ok" && s.A.site) || s.a.source || nrHost(s.a.url) || "source";
+const nrNorm = t => String(t).toLowerCase().replace(/,(?=\d{3})/g, "").replace(/\s+/g, " ");
+function nrAllFacts(){ const out = [], texts = nrLive().map(s => ({ i: s.i, t: nrNorm(nrParas(s).join(" ")) }));
+  nrLive().forEach(s => nrFacts(nrParas(s)).forEach(f => { f.si = s.i; f.feed = s.st !== "ok"; f.n = 1 + texts.filter(x => x.i !== s.i && f.hits.some(h => /\d/.test(h) && x.t.includes(nrNorm(h)))).length; out.push(f); }));
+  out.sort((x, y) => x.pr - y.pr || y.n - x.n || x.si - y.si || x.pi - y.pi); out.forEach((f, i) => f.i = i); return out; }
+function nrOpen(id){ const a = DATA.news.find(x => x.id === id); if (!a) return; const C = nrCluster(a), S = nrSaved(a);
+  (S && S.extra || []).forEach(u => { if (!C.srcs.some(s => s.a.url === u)) C.srcs.push({ a: nrSrcItem(a, { url: u, title: nrHost(u) }), user: true }); });
+  NRD.cur = { a, srcs: C.srcs.map(s => Object.assign(s, { st: "loading" })), more: C.more, sel: 0 }; NRD.kind = "all"; nrShell(); nrLoadAll(); }
+function nrLoadAll(){ const cur = NRD.cur; cur.srcs.forEach((s, i) => { if (s.st !== "loading") return; nrLoad(s.a).then(A => { if (NRD.cur !== cur) return; if (A.paras && A.paras.length){ s.A = A; s.st = "ok"; } else { s.st = "fail"; s.err = A.err; } nrPaint(); }); }); }
+// ---- the window: sources on the left, facts and figures and the summary on the right
+function nrShell(){ const { a } = nrS(), S = nrSaved(a), cat = CATS[a.cat] || { label: "", color: "#888" };
+  openModal(`<h2>Story — all sources<button data-x aria-label="Close">×</button></h2><div class="bd nr">
+    <div class="nrhead"><div class="nrsrc"><span class="bdg" style="border-color:${cat.color};color:${cat.color}">${esc(cat.label)}</span><span id="nrMeta"></span></div><h3>${esc(a.title)}</h3>
+      <div class="nrbtns"><button class="pill" data-nrcite>Copy source list</button><button class="pill" data-nrcopytext>Copy all source text</button></div></div>
+    <div class="nrgrid"><section class="nrtext"><div class="nrtl">Sources <small>click a source to read it · S1, S2… are used in citations</small></div><div id="nrTabs" class="nrtabs"></div><div id="nrSrcHead"></div><div id="nrBody"></div><div id="nrMore"></div></section>
+    <section class="nrside"><div class="nrtl">Facts and figures <small id="nrFN"></small></div><div class="nrkinds" id="nrKinds"></div><div id="nrFacts"></div>
+      <div class="nrtl">Summary <small>${S ? "saved " + esc(ago(S.at)) + (S.by ? " by " + esc(S.by) : "") : "cite each point as [S1 P3] — source and paragraph"}</small></div>
+      <div class="nrbtns"><button class="pill" data-nrdraft>Draft from sources</button><button class="pill" data-nrai>Draft with AI</button><span style="flex:1"></span><button class="tab-mini" data-nrview aria-pressed="false">Edit</button></div>
+      <textarea id="nrSum" rows="9" placeholder="Write the summary here, or draft it from the sources and edit. Cite each point as [S1 P3].">${esc(S ? S.sum : "")}</textarea><div id="nrPrev" class="nrprev" hidden></div><div id="nrChk"></div>
+      <div class="nrbtns"><button class="pill" data-nrcheck>Check against sources</button><button class="pill" data-nrcopy>Copy with links</button><span style="flex:1"></span><button class="pill" data-nrtrack>Track as escalation</button><button class="pill primary" data-nrsave>Save</button></div></section></div></div>`, true);
+  document.getElementById("box").classList.add("nrw"); document.getElementById("nrSum").addEventListener("input", () => { nrPreview(); });
+  nrSetView(!!(S && S.sum)); nrPaint(); }
+function nrPaint(){ const C = nrS(); if (!C || !document.getElementById("nrTabs")) return; const live = nrLive(), ts = live.map(s => s.a.t).filter(Boolean), ok = live.filter(s => s.st === "ok").length, loading = live.filter(s => s.st === "loading").length;
+  document.getElementById("nrMeta").innerHTML = `<b>${live.length} source${live.length === 1 ? "" : "s"}</b> · ${ok} read${loading ? `, ${loading} opening…` : ""}${live.length - ok - loading ? `, ${live.length - ok - loading} feed summary only` : ""}${ts.length ? ` · first reported ${esc(ago(Math.min(...ts)))}, latest ${esc(ago(Math.max(...ts)))}` : ""}`;
+  document.getElementById("nrTabs").innerHTML = live.map(s => `<button class="nrtab${s.i === C.sel ? " on" : ""} ${s.st}" data-nrtab="${s.i}" title="${esc(s.a.title)}"><b>S${s.i + 1}</b> ${esc(trunc(nrSite(s), 22))}<i>${s.st === "ok" ? "✓" : s.st === "loading" ? "…" : "!"}</i></button>`).join("");
+  nrPaintFacts(); nrPaintSrc(); nrPreview(); }
+function nrParaHtml(s, pi, hl){ const p = nrParas(s)[pi]; if (p == null) return ""; if (/^## /.test(p)) return `<h4 id="nrS${s.i}P${pi}" data-nrp="${pi}">${esc(p.slice(3))}</h4>`;
+  const hits = NRD.facts.filter(f => f.si === s.i && f.pi === pi).flatMap(f => f.hits), sents = nrSents(p), h = hl ? nrBest(sents, hl) : null;
+  const body = h ? sents.map(x => x === h ? `<mark class="nrhl">${nrMark(x, hits)}</mark>` : nrMark(x, hits)).join(" ") : nrMark(p, hits);
+  return `<p id="nrS${s.i}P${pi}" data-nrp="${pi}"${h ? ' class="hl"' : ""}><span class="pn">P${pi + 1}</span>${body} <a class="nrgo" href="${esc(safeUrl(nrFrag(s.a.url, h || sents[0])))}" target="_blank" rel="noopener" title="Open the original article at this place">↗</a></p>`; }
+function nrPaintSrc(hl){ const C = nrS(), s = C.srcs[C.sel] && C.srcs[C.sel].st !== "removed" ? C.srcs[C.sel] : nrLive()[0]; if (!s) return; C.sel = s.i; const A = s.A || {}, head = document.getElementById("nrSrcHead"), body = document.getElementById("nrBody");
+  head.innerHTML = `<div class="nrsh"><div class="nrsrc"><b>S${s.i + 1} · ${esc(nrSite(s))}</b>${A.by ? " · " + esc(A.by) : ""}${A.published ? " · published " + esc(nrWhen(A.published)) : s.a.t ? " · " + esc(ago(s.a.t)) : ""}${s.st === "ok" && A.via ? ` · <span class="via">read ${esc(A.via === "pasted text" ? "from pasted text" : "via " + A.via)}</span>` : ""}${s.dup ? ' · <span class="s">same headline, another outlet</span>' : ""}${s.user ? ' · <span class="s">added by you</span>' : ""}</div>
+    <div class="nrst">${esc((s.st === "ok" && A.title) || s.a.title)}</div>
+    <div class="nrbtns">${s.a.url ? `<a class="pill" href="${esc(safeUrl(s.a.url))}" target="_blank" rel="noopener">Open original ↗</a>` : ""}${s.st === "ok" ? `<button class="tab-mini" data-nraddsel>Add selection to summary</button>` : ""}${s.main ? "" : `<button class="tab-mini" data-nrrm="${s.i}" title="Not about this story">Remove from story</button>`}</div></div>`;
+  const paras = nrParas(s), list = paras.map((p, i) => nrParaHtml(s, i, hl && hl.pi === i ? hl.text : null)).join("");
+  body.innerHTML = s.st === "loading" ? `<div class="nrwait">Opening the article…</div>` : s.st === "ok" ? list
+    : `<div class="nrfail"><b>Could not open this article here</b><div class="s">${esc(String(s.err || "").replace(/\s*\(set the PSOC server under Integrations\)/, ""))}</div>
       <p>${CFG.relayUrl || CFG.serverUrl ? "" : "Most news sites do not let a web page read them directly. Set the <b>PSOC server</b> under Integrations and the console reads articles through it. "}You can also:</p>
-      <div class="nrbtns">${a.url ? `<a class="pill" href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">Open original ↗</a><button class="pill" data-nrreader>Use the reader service</button>` : ""}</div>
-      ${a.url ? `<label class="opmi"><input type="checkbox" id="nrRemember"${CFG.nr.reader ? " checked" : ""}> Always use the reader service when a site blocks the browser (r.jina.ai — it receives only the article address)</label>` : ""}
-      <label class="fld">Or paste the article text<textarea id="nrPaste" rows="6" placeholder="Copy the article from the original page and paste it here"></textarea></label><div class="nrbtns"><button class="pill primary" data-nrpaste>Use pasted text</button></div>
-      ${src.paras.length ? `<div class="s" style="margin-top:10px">Meanwhile, facts below come from the feed's summary only.</div>` : ""}</div>`;
-  const factHtml = F.length ? F.map(f => `<div class="nrf" data-nrgo="${f.pi}"><div class="k">${f.kinds.map(k => `<span style="--c:${NR_KINDS[k][1]}">${NR_KINDS[k][0]}</span>`).join("")}<b class="pr">P${f.pi + 1}</b>${f.who ? `<i>${esc(f.who)}</i>` : ""}<button class="nradd" data-nradd="${f.i}" title="Add to summary">＋</button></div><div class="t">${nrMark(f.s, f.hits)}</div></div>`).join("") : `<div class="s">${A ? "No figures found in the text." : "…"}</div>`;
-  openModal(`<h2>Article<button data-x aria-label="Close">×</button></h2><div class="bd nr">
-    <div class="nrhead"><div class="nrsrc"><span class="bdg" style="border-color:${cat.color};color:${cat.color}">${esc(cat.label)}</span><b>${esc(src.site || a.source || "")}</b>${src.by ? " · " + esc(src.by) : ""}${src.published ? " · published " + esc(nrWhen(src.published)) : " · " + esc(ago(a.t))}${ok && A.via ? ` · <span class="via">read ${esc(A.via === "pasted text" ? "from pasted text" : "via " + A.via)}</span>` : ""}</div>
-      <h3>${esc(src.title || a.title)}</h3>${a.title && src.title && src.title !== a.title ? `<div class="s">Feed headline: ${esc(a.title)}</div>` : ""}
-      <div class="nrbtns">${a.url ? `<a class="pill" href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">Open original ↗</a>` : ""}<button class="pill" data-nrcite>Copy citation</button>${ok ? `<button class="pill" data-nrcopytext>Copy text</button>` : ""}</div></div>
-    <div class="nrgrid"><section class="nrtext"><div class="nrtl">Source text${ok ? ` <small>${src.paras.length} paragraphs · ${words.toLocaleString()} words · figures highlighted</small><button class="tab-mini" data-nraddsel>Add selection to summary</button>` : ""}</div><div id="nrBody">${body}</div></section>
-    <section class="nrside"><div class="nrtl">Facts and figures <small>${facts.length}</small></div>
-      <div class="nrkinds"><button class="tab-mini" data-nrkind="all" aria-pressed="${NRD.kind === "all"}">All</button>${Object.keys(NR_KINDS).filter(k => counts[k]).map(k => `<button class="tab-mini" data-nrkind="${k}" aria-pressed="${NRD.kind === k}">${NR_KINDS[k][0]} ${counts[k]}</button>`).join("")}</div>
-      <div id="nrFacts">${factHtml}</div>
-      <div class="nrtl">Summary <small>${S ? "saved " + esc(ago(S.at)) + (S.by ? " by " + esc(S.by) : "") : "written from this source — cite paragraphs as [P3]"}</small></div>
-      <div class="nrbtns"><button class="pill" data-nrdraft>Draft from source</button><button class="pill" data-nrai>Draft with AI</button></div>
-      <textarea id="nrSum" rows="9" placeholder="Write the summary here, or draft it from the source and edit">${esc(S ? S.sum : "")}</textarea><div id="nrChk"></div>
-      <div class="nrbtns"><button class="pill" data-nrcheck>Check against source</button><button class="pill" data-nrcopy>Copy</button><span style="flex:1"></span><button class="pill" data-nrtrack>Track as escalation</button><button class="pill primary" data-nrsave>Save</button></div></section></div></div>`, true);
-  document.getElementById("box").classList.add("nrw"); NRD.facts = facts; NRD.src = src; NRD.ok = !!ok; }
-// a first draft made only of the article's own sentences: the lead, then the sentences with the most facts and headline words
-function nrDraft(a, src, facts){ const S = nrSplit(src.paras); if (!S.length) return "";
-  const tw = new Set(String(src.title || a.title).toLowerCase().match(/[a-z]{4,}/g) || []), fx = new Set(facts.map(f => f.s));
-  const sc = S.map((x, i) => { const w = x.s.split(/\s+/).length, ov = (x.s.toLowerCase().match(/[a-z]{4,}/g) || []).filter(t => tw.has(t)).length; return Object.assign({}, x, { i, v: (i === 0 ? 4 : x.pi < 3 ? 1.5 : 0) + (fx.has(x.s) ? 1.6 : 0) + ov * .6 - (w > 45 ? 2 : 0) - (/[“"]/.test(x.s) && i > 0 ? .4 : 0) }); });
-  const pick = sc.slice().sort((p, q) => q.v - p.v).slice(0, 4).sort((p, q) => p.i - q.i);
-  return `${src.title || a.title} (${src.site || a.source || nrHost(a.url)}, ${nrWhen(src.published) || ago(a.t)})\n` + pick.map(x => `• ${x.s} [P${x.pi + 1}]`).join("\n"); }
-// numbers in the summary that the article does not contain are flagged, so nothing invented slips through
-function nrCheck(sum, src){ const raw = sum; sum = sum.split("\n").filter(l => !/^Source:/i.test(l.trim())).join("\n").replace(/\[P\d+\]/g, "").replace(/\([^)]*SGT\)/g, "").replace(/https?:\/\/\S+/g, "").replace(/\b\d{1,2}:\d{2}\b/g, ""); const txt = src.paras.join(" ").toLowerCase().replace(/,(?=\d{3})/g, ""), out = [];
-  (sum.match(/\d[\d,.]*\s?(?:%|km|kt|mm|m\b|million|billion)?/g) || []).forEach(n => { const v = n.toLowerCase().replace(/,(?=\d{3})/g, "").replace(/\s+/g, " ").trim(), num = v.match(/\d[\d.]*/)[0].replace(/\.$/, ""); if (!txt.includes(num)) out.push(n.trim()); });
-  const cites = (raw.match(/\[P(\d+)\]/g) || []).map(x => +x.slice(2, -1)).filter(n => n < 1 || n > src.paras.length);
-  return { missing: [...new Set(out)].filter(x => !/^\d$/.test(x)), badCites: [...new Set(cites)] }; }
-function nrShowCheck(){ const sum = document.getElementById("nrSum").value, r = nrCheck(sum, NRD.src), el = document.getElementById("nrChk");
-  el.innerHTML = !sum.trim() ? "" : r.missing.length || r.badCites.length ? `<div class="nrwarn">Not found in the article: ${r.missing.map(x => `<b>${esc(x)}</b>`).join(", ")}${r.badCites.length ? `${r.missing.length ? "; " : ""}paragraph references that do not exist: ${r.badCites.map(n => "P" + n).join(", ")}` : ""}. Check these against the source before sharing.</div>` : `<div class="nrok">Every number in the summary appears in the article.</div>`; return r; }
-const NR_SYS = `You are an analyst in a corporate security operations centre (PSOC). Summarise the news article you are given using ONLY what the article states. Do not add outside knowledge, background, assumptions or predictions. Every point must cite the paragraph it comes from as [P#]. Keep numbers exactly as written in the article.
+      <div class="nrbtns">${s.a.url ? `<a class="pill" href="${esc(safeUrl(s.a.url))}" target="_blank" rel="noopener">Open original ↗</a><button class="pill" data-nrreader="${s.i}">Use the reader service</button>` : ""}</div>
+      ${s.a.url ? `<label class="opmi"><input type="checkbox" id="nrRemember"${CFG.nr.reader ? " checked" : ""}> Always use the reader service when a site blocks the browser (r.jina.ai — it receives only the article address)</label>` : ""}
+      <label class="fld">Or paste the article text<textarea id="nrPaste" rows="5" placeholder="Copy the article from the original page and paste it here"></textarea></label><div class="nrbtns"><button class="pill primary" data-nrpaste="${s.i}">Use pasted text</button></div></div>
+      ${paras.length ? `<div class="nrtl">From the feed's summary <small>used until the article is read</small></div>${list}` : ""}`;
+  const more = C.more.filter(m => !C.srcs.some(s => s.a.url === m.url));
+  document.getElementById("nrMore").innerHTML = `${more.length ? `<div class="nrtl">May be the same story <small>add a source if it reports this event</small></div>${more.map(m => `<div class="nrmore"><button class="tab-mini" data-nraddm="${esc(m.id)}">＋ Add</button><span><b>${esc(m.source || nrHost(m.url))}</b> · ${esc(trunc(m.title, 90))} <span class="s">${esc(ago(m.t))}</span></span></div>`).join("")}` : ""}
+    <div class="nrtl">Add a source by link</div><div class="nrbtns"><input id="nrAddU" type="url" placeholder="https://… another article on this story" style="flex:1;min-width:0"><button class="pill" data-nraddurl>Add source</button></div>`;
+  if (hl){ const el = document.getElementById(`nrS${s.i}P${hl.pi}`); if (el){ el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); } } }
+function nrPaintFacts(){ const all = nrAllFacts(); NRD.facts = all; const F = NRD.kind === "all" ? all : NRD.kind === "multi" ? all.filter(f => f.n > 1) : all.filter(f => f.kinds.includes(NRD.kind)), counts = {}; all.forEach(f => f.kinds.forEach(k => counts[k] = (counts[k] || 0) + 1));
+  const multi = all.filter(f => f.n > 1).length; document.getElementById("nrFN").textContent = `${all.length} from ${new Set(all.map(f => f.si)).size} source${new Set(all.map(f => f.si)).size === 1 ? "" : "s"}`;
+  document.getElementById("nrKinds").innerHTML = `<button class="tab-mini" data-nrkind="all" aria-pressed="${NRD.kind === "all"}">All</button>${multi ? `<button class="tab-mini" data-nrkind="multi" aria-pressed="${NRD.kind === "multi"}">In 2+ sources ${multi}</button>` : ""}${Object.keys(NR_KINDS).filter(k => counts[k]).map(k => `<button class="tab-mini" data-nrkind="${k}" aria-pressed="${NRD.kind === k}">${NR_KINDS[k][0]} ${counts[k]}</button>`).join("")}`;
+  const C = nrS(); document.getElementById("nrFacts").innerHTML = F.length ? F.slice(0, 120).map(f => { const s = C.srcs[f.si]; return `<div class="nrf" data-nrjump="${f.si},${f.pi}" data-nrtext="${esc(f.s)}"><div class="k">${f.kinds.map(k => `<span style="--c:${NR_KINDS[k][1]}">${NR_KINDS[k][0]}</span>`).join("")}<button class="nrc" data-nrjump="${f.si},${f.pi}" data-nrtext="${esc(f.s)}" title="${esc(nrSite(s))} — go to paragraph ${f.pi + 1}">S${f.si + 1} P${f.pi + 1}</button><b class="pr">${esc(trunc(nrSite(s), 18))}</b>${f.n > 1 ? `<em title="the same figure appears in other sources">in ${f.n} sources</em>` : ""}${f.feed ? '<em class="fd">feed summary</em>' : ""}${f.who ? `<i>${esc(f.who)}</i>` : ""}<a class="nrgo" href="${esc(safeUrl(nrFrag(s.a.url, f.s)))}" target="_blank" rel="noopener" title="Open the original at this sentence">↗</a><button class="nradd" data-nradd="${f.i}" title="Add to summary">＋</button></div><div class="t">${nrMark(f.s, f.hits)}</div></div>`; }).join("") : `<div class="s">${nrLive().some(s => s.st === "loading") ? "Reading the sources…" : "No figures found."}</div>`; }
+// ---- citations: [S1 P3], [S1 P3; S2 P1]; a plain [P3] means S1
+const NR_CITE = /\[((?:\s*S\d+\s*[·:,]?\s*P\d+\s*[;,]?)+|P\d+)\]/g;
+const nrCites = g => g.startsWith("P") ? [[0, +g.slice(1) - 1]] : [...g.matchAll(/S(\d+)\s*[·:,]?\s*P(\d+)/g)].map(m => [+m[1] - 1, +m[2] - 1]);
+const nrBody = sum => { const L = String(sum).split("\n"), k = L.findIndex(l => /^\s*Sources?:\s*$/i.test(l) || /^\s*Source:\s/i.test(l)); return (k < 0 ? L : L.slice(0, k)); };
+const nrLinkify = (t, links) => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/^\[S(\d+)\]/, (m, n) => links ? m : `<button class="nrc" data-nrtab="${+n - 1}" title="Read this source">S${n}</button>`);
+function nrLineHtml(line, links){ const C = nrS(); let out = "", last = 0; for (const m of line.matchAll(NR_CITE)){ out += nrLinkify(line.slice(last, m.index), links); const text = line.slice(0, m.index);
+    out += nrCites(m[1]).map(([si, pi]) => { const s = C.srcs[si], p = s && nrParas(s)[pi]; if (!s || s.st === "removed" || p == null) return `<span class="nrc bad" title="no such source or paragraph">S${si + 1} P${pi + 1}</span>`;
+      const sent = nrBest(nrSents(p), text), href = safeUrl(nrFrag(s.a.url, sent)); return links ? `<a href="${esc(href)}">[${esc(nrSite(s))}]</a>` : `<button class="nrc" data-nrjump="${si},${pi}" data-nrtext="${esc(text.slice(-300))}" title="${esc(nrSite(s))} — paragraph ${pi + 1}">S${si + 1} P${pi + 1}</button><a class="nrgo" href="${esc(href)}" target="_blank" rel="noopener" title="Open ${esc(nrSite(s))} at this place">↗</a>`; }).join(links ? " " : "");
+    last = m.index + m[0].length; } return out + nrLinkify(line.slice(last), links); }
+function nrSourcesList(used){ const L = nrLive().filter(s => !used || used.has(s.i)); return L.map(s => `[S${s.i + 1}] ${nrSite(s)}${s.A && s.A.by ? ", " + s.A.by : ""} (${(s.A && nrWhen(s.A.published)) || ago(s.a.t)}). "${(s.st === "ok" && s.A.title) || s.a.title}". ${s.a.url}`).join("\n"); }
+function nrPreview(){ const el = document.getElementById("nrPrev"), ta = document.getElementById("nrSum"); if (!el || !ta) return; const v = ta.value; if (!v.trim()){ el.innerHTML = ""; if (!el.hidden) nrSetView(false); return; }
+  el.innerHTML = String(v).split("\n").map(l => /^\s*$/.test(l) ? "<br>" : `<div>${nrLineHtml(l)}</div>`).join(""); }
+function nrSetView(read){ const ta = document.getElementById("nrSum"), pv = document.getElementById("nrPrev"), b = document.querySelector("[data-nrview]"); if (!ta) return; if (read && !ta.value.trim()) read = false;
+  ta.hidden = read; pv.hidden = !read; if (b){ b.textContent = read ? "Edit" : "Show links"; b.setAttribute("aria-pressed", String(!read)); } if (read) nrPreview(); }
+// ---- a first draft from the sources' own sentences: the best lead, then the sentences with the most facts, merged when two sources say the same
+function nrDraft(){ const C = nrS(), live = nrLive().filter(s => s.st === "ok"), use = live.length ? live : nrLive(); if (!use.length) return "";
+  const tw = nrTok(C.a.title), fx = new Map(NRD.facts.map(f => [f.si + "|" + f.s, f])), all = [];
+  use.forEach(s => nrSplit(nrParas(s)).forEach((x, k) => { const f = fx.get(s.i + "|" + x.s), w = x.s.split(/\s+/).length; let ov = 0; nrTok(x.s).forEach(t => { if (tw.has(t)) ov++; });
+    all.push({ s: x.s, si: s.i, pi: x.pi, k, T: nrTok(x.s), v: (k === 0 ? 3 : x.pi < 3 ? 1.2 : 0) + (f ? 1.4 + (f.n - 1) * .8 : 0) + ov * .5 - (w > 45 ? 2 : 0) - (/[“"]/.test(x.s) && k > 0 ? .3 : 0) - (s.main ? 0 : .2) }); }));
+  const sim = (A, B) => { let i = 0; A.forEach(w => { if (B.has(w)) i++; }); return i / Math.max(1, Math.min(A.size, B.size)); }, pick = [];
+  const figs = x => { const f = fx.get(x.si + "|" + x.s); return (f ? f.hits : []).filter(h => /\d/.test(h)).map(h => ({ h, n: nrNorm(h).match(/\d[\d.]*/)[0], u: nrNorm(h).replace(/[\d.,]+/g, "#").replace(/\s+/g, " ").trim() })); }, diffs = [];
+  // two sources telling the same thing: cite both when their figures agree; when the same kind of figure differs (240 flights vs 230 flights), say so
+  all.sort((p, q) => q.v - p.v).forEach(x => { const dup = pick.find(p => sim(p.T, x.T) >= .6); if (dup){ if (dup.cites.some(c => c[0] === x.si)) return; const A = figs(dup), B = figs(x), clash = B.map(b => ({ b, a: A.find(a => a.u === b.u && a.n !== b.n) })).find(z => z.a);
+      if (clash){ if (diffs.length < 3) diffs.push({ si: x.si, line: `• Sources differ: ${clash.a.h} [S${dup.si + 1} P${dup.pi + 1}] vs ${clash.b.h} [S${x.si + 1} P${x.pi + 1}]` }); return; }
+      if (B.every(b => A.some(a => a.n === b.n))) dup.cites.push([x.si, x.pi]); return; } if (pick.length < 6) pick.push(Object.assign(x, { cites: [[x.si, x.pi]] })); });
+  const used = new Set(pick.flatMap(p => p.cites.map(c => c[0])).concat(diffs.map(d => d.si)));
+  return `${C.a.title} — ${use.length} source${use.length === 1 ? "" : "s"}, latest ${ago(Math.max(...use.map(s => s.a.t || 0)))}\n` + pick.map(p => `• ${p.s} [${p.cites.map(c => `S${c[0] + 1} P${c[1] + 1}`).join("; ")}]`).concat(diffs.map(d => d.line)).join("\n") + `\n\nSources:\n${nrSourcesList(used)}`; }
+// ---- checking a summary: each number must be in the paragraph it cites (or, uncited, somewhere in the sources)
+function nrCheck(sum){ const C = nrS(), out = { missing: [], wrongCite: [], badCites: [], uncited: 0 }, allT = nrLive().map(s => ({ s, t: nrParas(s).map(nrNorm) }));
+  nrBody(sum).filter(l => !/ — \d+ sources?, latest /.test(l)).forEach(line => { const cites = [...line.matchAll(NR_CITE)].flatMap(m => nrCites(m[1])), plain = line.replace(NR_CITE, "").replace(/\([^)]*SGT\)/g, "").replace(/https?:\/\/\S+/g, "").replace(/\b\d{1,2}:\d{2}\b/g, "").replace(/\b(19|20)\d{2}\b/g, "");
+    cites.forEach(([si, pi]) => { const s = C.srcs[si]; if (!s || s.st === "removed" || nrParas(s)[pi] == null) out.badCites.push(`S${si + 1} P${pi + 1}`); });
+    if (!cites.length && plain.replace(/[•\-\s]/g, "").length > 40 && !/^[A-Z ]{4,}:\s*$/.test(line.trim())) out.uncited++;
+    (plain.match(/\d[\d,.]*/g) || []).map(n => n.replace(/[.,]$/, "")).filter(n => n.length > 1 || cites.length).forEach(n => { const v = nrNorm(n);
+      const inCited = cites.some(([si, pi]) => { const s = C.srcs[si], p = s && nrParas(s)[pi]; return p && nrNorm(p).includes(v); }), where = allT.find(x => x.t.some(p => p.includes(v)));
+      if (cites.length && !inCited){ if (where){ const pi = where.t.findIndex(p => p.includes(v)); out.wrongCite.push(`${n} is in S${where.s.i + 1} P${pi + 1}, not the paragraph cited`); } else out.missing.push(n); }
+      else if (!cites.length && !where) out.missing.push(n); }); });
+  out.missing = [...new Set(out.missing)].filter(x => x.length > 1); out.wrongCite = [...new Set(out.wrongCite)]; out.badCites = [...new Set(out.badCites)]; return out; }
+function nrShowCheck(){ const sum = document.getElementById("nrSum").value, r = nrCheck(sum), el = document.getElementById("nrChk"), bad = r.missing.length || r.wrongCite.length || r.badCites.length || r.uncited;
+  el.innerHTML = !sum.trim() ? "" : bad ? `<div class="nrwarn">${r.missing.length ? `Not found in any source: ${r.missing.map(x => `<b>${esc(x)}</b>`).join(", ")}.<br>` : ""}${r.wrongCite.length ? r.wrongCite.map(esc).join("; ") + ".<br>" : ""}${r.badCites.length ? `Citations that point nowhere: ${r.badCites.join(", ")}.<br>` : ""}${r.uncited ? `${r.uncited} point${r.uncited === 1 ? " has" : "s have"} no source citation.<br>` : ""}Check these against the sources before sharing.</div>` : `<div class="nrok">Every number is in the paragraph it cites, and every point names its source.</div>`; return r; }
+const NR_SYS = `You are an analyst in a corporate security operations centre (PSOC). You are given several news articles about the same event, labelled S1, S2… with numbered paragraphs. Summarise the event using ONLY what these articles state. Do not add outside knowledge, background, assumptions or predictions.
+Every point must cite its source and paragraph as [S# P#]; when two or more sources report the same fact, cite all of them, e.g. [S1 P2; S3 P1]. Keep numbers exactly as written. If sources disagree on a figure or detail, give each version with its citation. Mark casualty or damage figures reported by only one source "(one source)".
 Write plain text in this format:
 BOTTOM LINE: one sentence.
 KEY FACTS:
-- ... [P#]
+- ... [S# P#]
 FIGURES:
-- figure — what it measures [P#]
+- figure — what it measures [S# P#]
 WHO SAID WHAT:
-- name or role: short paraphrase or quote [P#]
-NOT STATED: one line on gaps that matter to a security team (location detail, casualties, duration), only if relevant.
-Under 200 words. No speculation, no contractions, no exclamation marks. Leave out a section that has nothing in it.`;
-async function nrAI(a){ const src = NRD.src, el = document.getElementById("nrSum"), b = document.querySelector("[data-nrai]");
-  if (!NRD.ok){ toast("Open the article first", "AI drafts are written from the article text, not the headline", "var(--amber)"); return; }
-  if (!(await llmReady())){ toast("AI is not set up", "Set the PSOC server or an AI key under Integrations › AI writing. Draft from source works without it.", "var(--amber)"); return; }
-  const body = src.paras.map((p, i) => `[P${i + 1}] ${p}`).join("\n").slice(0, 14000);
+- name or role: short paraphrase or quote [S# P#]
+SOURCES DISAGREE:
+- ... [S# P#] vs [S# P#]
+NOT STATED: one line on gaps that matter to a security team, only if relevant.
+Under 250 words. No speculation, no contractions, no exclamation marks. Leave out a section that has nothing in it. Do not write a source list.`;
+async function nrAI(){ const C = nrS(), el = document.getElementById("nrSum"), b = document.querySelector("[data-nrai]"), live = nrLive().filter(s => s.st === "ok");
+  if (!live.length){ toast("No article text yet", "AI drafts are written from the articles, not the headlines", "var(--amber)"); return; }
+  if (!(await llmReady())){ toast("AI is not set up", "Set the PSOC server or an AI key under Integrations › AI writing. Draft from sources works without it.", "var(--amber)"); return; }
+  const per = Math.max(2500, Math.floor(24000 / live.length)), body = live.map(s => `=== S${s.i + 1}: ${nrSite(s)}${s.A.by ? ", " + s.A.by : ""} · published ${nrWhen(s.A.published) || ago(s.a.t)} · ${s.a.url}\nHeadline: ${s.A.title || s.a.title}\n` + nrParas(s).map((p, i) => `[S${s.i + 1} P${i + 1}] ${p}`).join("\n").slice(0, per)).join("\n\n");
   if (b){ b.disabled = true; b.textContent = "Drafting…"; }
-  try{ const t = await llm(NR_SYS, `Headline: ${src.title || a.title}\nSource: ${src.site || a.source}${src.by ? " · " + src.by : ""}\nPublished: ${nrWhen(src.published) || ago(a.t)}\nURL: ${a.url}\n\nArticle:\n${body}`);
-    if (el){ el.value = t.trim() + `\n\nSource: ${nrCite(src, a)}`; nrShowCheck(); } audit("News summary drafted with AI", "", trunc(a.title, 80)); }
+  try{ const t = await llm(NR_SYS, `Event: ${C.a.title}\n\n${body}`); const used = new Set([...t.matchAll(NR_CITE)].flatMap(m => nrCites(m[1]).map(c => c[0])));
+    if (el){ el.value = t.trim() + `\n\nSources:\n${nrSourcesList(used.size ? used : null)}`; nrSetView(true); nrShowCheck(); } audit("News summary drafted with AI", "", `${trunc(C.a.title, 70)} · ${live.length} sources`); }
   catch(e){ toast("AI draft failed", e.message, "var(--red)"); }
   finally{ if (b){ b.disabled = false; b.textContent = "Draft with AI"; } } }
-function nrInsert(text){ const el = document.getElementById("nrSum"); if (!el) return; const s = el.selectionStart != null && document.activeElement === el ? el.selectionStart : el.value.length, pre = el.value.slice(0, s), add = (pre && !/\n$/.test(pre) ? "\n" : "") + text;
-  el.value = pre + add + el.value.slice(s); el.focus(); el.selectionStart = el.selectionEnd = s + add.length; }
-document.addEventListener("click", async e => { const t = e.target.closest("[data-newsread],[data-nrkind],[data-nradd],[data-nrgo],[data-nrdraft],[data-nrai],[data-nrcheck],[data-nrcopy],[data-nrsave],[data-nrtrack],[data-nrcite],[data-nrcopytext],[data-nraddsel],[data-nrreader],[data-nrpaste]"); if (!t) return;
+function nrInsert(text){ nrSetView(false); const el = document.getElementById("nrSum"); if (!el) return; const v = el.value, k = v.search(/\n\s*Sources?:\s*\n/), s = el.selectionStart != null && document.activeElement === el ? el.selectionStart : k >= 0 ? k : v.length, pre = v.slice(0, s), add = (pre && !/\n$/.test(pre) ? "\n" : "") + text;
+  el.value = pre + add + v.slice(s); el.focus(); el.selectionStart = el.selectionEnd = s + add.length; nrPreview(); }
+function nrJump(si, pi, text){ const C = nrS(); C.sel = si; nrPaint(); nrPaintSrc({ pi, text }); }
+function nrSaveNow(){ const C = nrS(), v = document.getElementById("nrSum").value, key = nrKey(C.a), extra = C.srcs.filter(s => s.user && s.st !== "removed").map(s => s.a.url);
+  if (!v.trim() && !extra.length) delete NRD.saved[key]; else NRD.saved[key] = { sum: v, at: Date.now(), by: ME ? ME.name : "", title: C.a.title, extra, n: nrLive().length }; lsSet("psoc.newsread.v1", NRD.saved); }
+document.addEventListener("click", async e => { const t = e.target.closest("[data-newsread],[data-nrtab],[data-nrrm],[data-nraddm],[data-nraddurl],[data-nrkind],[data-nradd],[data-nrjump],[data-nrdraft],[data-nrai],[data-nrcheck],[data-nrcopy],[data-nrsave],[data-nrtrack],[data-nrcite],[data-nrcopytext],[data-nraddsel],[data-nrreader],[data-nrpaste],[data-nrview]"); if (!t) return;
   const d = t.dataset;
   if (d.newsread !== undefined){ if (t.tagName === "A" && (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1)) return; e.preventDefault(); e.stopPropagation(); nrOpen(d.newsread); return; }
-  const a = NRD.cur; if (!a || !document.querySelector("#box.nrw")) return; e.stopPropagation();
-  const keepSum = () => { const el = document.getElementById("nrSum"); return el ? el.value : ""; }, rerender = A => { const v = keepSum(); nrRender(a, A); const el = document.getElementById("nrSum"); if (el && v) el.value = v; };
-  if (d.nrkind){ NRD.kind = d.nrkind; rerender(NRD.cache[nrKey(a)] || { err: "", paras: [] }); return; }
-  if (d.nradd !== undefined){ const f = NRD.facts[+d.nradd]; if (f) nrInsert(`• ${f.s} [P${f.pi + 1}]`); return; }
-  if (d.nrgo !== undefined && !e.target.closest("button")){ const p = document.querySelector(`#nrBody [data-nrp="${d.nrgo}"]`); if (p){ p.scrollIntoView({ block: "center", behavior: "smooth" }); p.classList.remove("flash"); void p.offsetWidth; p.classList.add("flash"); } return; }
-  if (d.nrdraft !== undefined){ const el = document.getElementById("nrSum"); el.value = nrDraft(a, NRD.src, NRD.facts) + `\n\nSource: ${nrCite(NRD.src, a)}`; nrShowCheck(); return; }
-  if (d.nrai !== undefined){ nrAI(a); return; }
+  const C = nrS(); if (!C || !document.querySelector("#box.nrw")) return; if (e.target.closest("a.nrgo")) return; e.stopPropagation();
+  if (d.nrtab !== undefined){ C.sel = +d.nrtab; nrPaint(); return; }
+  if (d.nrrm !== undefined){ C.srcs[+d.nrrm].st = "removed"; if (C.sel === +d.nrrm) C.sel = 0; nrPaint(); return; }
+  if (d.nraddm !== undefined){ const m = DATA.news.find(x => x.id === d.nraddm); if (m && !C.srcs.some(s => s.a.url === m.url)){ C.srcs.push({ a: m, st: "loading" }); C.sel = C.srcs.length - 1; nrPaint(); nrLoadAll(); } return; }
+  if (d.nraddurl !== undefined){ const u = (document.getElementById("nrAddU").value || "").trim(); if (!/^https?:\/\/\S+\.\S+/.test(u)){ toast("Paste the article's full address", "", "var(--amber)"); return; } if (C.srcs.some(s => s.a.url === u)){ toast("That source is already in the story", "", "var(--amber)"); return; }
+    C.srcs.push({ a: nrSrcItem(C.a, { url: u, title: nrHost(u), source: nrHost(u) }), st: "loading", user: true }); C.sel = C.srcs.length - 1; nrPaint(); nrLoadAll(); return; }
+  if (d.nrkind){ NRD.kind = d.nrkind; nrPaintFacts(); return; }
+  if (d.nradd !== undefined){ const f = NRD.facts[+d.nradd]; if (f) nrInsert(`• ${f.s} [S${f.si + 1} P${f.pi + 1}]`); return; }
+  if (d.nrjump !== undefined){ const [si, pi] = d.nrjump.split(",").map(Number); nrJump(si, pi, d.nrtext || ""); return; }
+  if (d.nrview !== undefined){ nrSetView(document.getElementById("nrPrev").hidden); return; }
+  if (d.nrdraft !== undefined){ const el = document.getElementById("nrSum"); el.value = nrDraft(); nrSetView(true); nrShowCheck(); return; }
+  if (d.nrai !== undefined){ nrAI(); return; }
   if (d.nrcheck !== undefined){ nrShowCheck(); return; }
-  if (d.nrcopy !== undefined){ const v = keepSum(); if (!v.trim()) return; try{ await navigator.clipboard.writeText(v); toast("Summary copied", "", "var(--teal)"); }catch(err){ toast("Copy failed", "Select the text and copy it", "var(--amber)"); } return; }
-  if (d.nrcite !== undefined){ try{ await navigator.clipboard.writeText(nrCite(NRD.src, a)); toast("Citation copied", "", "var(--teal)"); }catch(err){} return; }
-  if (d.nrcopytext !== undefined){ try{ await navigator.clipboard.writeText(`${NRD.src.title}\n${nrCite(NRD.src, a)}\n\n` + NRD.src.paras.map((p, i) => `[P${i + 1}] ${p}`).join("\n\n")); toast("Article text copied", "", "var(--teal)"); }catch(err){} return; }
-  if (d.nraddsel !== undefined){ const sel = String(window.getSelection() || "").trim(), node = window.getSelection().anchorNode, p = node && (node.nodeType === 1 ? node : node.parentElement).closest("[data-nrp]"); if (!sel){ toast("Select text in the article first", "", "var(--amber)"); return; } nrInsert(`• "${sel.replace(/\s+/g, " ")}"${p ? ` [P${+p.dataset.nrp + 1}]` : ""}`); return; }
-  if (d.nrsave !== undefined){ const v = keepSum(); if (!v.trim()){ delete NRD.saved[nrKey(a)]; } else { const r = nrShowCheck(); NRD.saved[nrKey(a)] = { sum: v, at: Date.now(), by: ME ? ME.name : "", title: a.title, unchecked: r.missing.length }; } lsSet("psoc.newsread.v1", NRD.saved); audit("News summary saved", "", trunc(a.title, 80)); toast("Summary saved", "Kept in this browser with the story; it goes into the log when you track the story as an escalation", "var(--teal)"); renderPanel(); return; }
-  if (d.nrtrack !== undefined){ const v = keepSum(); if (v.trim()){ NRD.saved[nrKey(a)] = { sum: v, at: Date.now(), by: ME ? ME.name : "", title: a.title }; lsSet("psoc.newsread.v1", NRD.saved); } closeModal(); openEventModal(null, prefillNews(a)); return; }
-  if (d.nrreader !== undefined){ const rem = document.getElementById("nrRemember"); if (rem && rem.checked !== CFG.nr.reader){ CFG.nr.reader = rem.checked; saveCfg(); } t.disabled = true; t.textContent = "Reading…"; const A = await nrLoad(a, "reader"); if (NRD.cur === a) rerender(A); return; }
-  if (d.nrpaste !== undefined){ const A = await nrLoad(a, "paste"); if (!A.paras.length){ toast("Paste the article text first", "", "var(--amber)"); return; } rerender(A); return; }
+  if (d.nrcopy !== undefined){ const v = document.getElementById("nrSum").value; if (!v.trim()) return; const html = v.split("\n").map(l => l.trim() ? `<div>${nrLineHtml(l, true)}</div>` : "<br>").join(""); const ok = await copyRich(html, v); toast(ok === false ? "Copy failed" : "Summary copied", ok === false ? "Select the text and copy it" : "Citations become links to the original articles at the cited place", ok === false ? "var(--amber)" : "var(--teal)"); return; }
+  if (d.nrcite !== undefined){ try{ await navigator.clipboard.writeText(nrSourcesList()); toast("Source list copied", "", "var(--teal)"); }catch(err){} return; }
+  if (d.nrcopytext !== undefined){ try{ await navigator.clipboard.writeText(nrLive().filter(s => s.st === "ok").map(s => `=== S${s.i + 1}: ${nrSite(s)} — ${s.A.title}\n${s.a.url}\n\n` + nrParas(s).map((p, i) => `[S${s.i + 1} P${i + 1}] ${p}`).join("\n\n")).join("\n\n")); toast("Source text copied", "", "var(--teal)"); }catch(err){} return; }
+  if (d.nraddsel !== undefined){ const sel = String(window.getSelection() || "").trim(), node = window.getSelection().anchorNode, p = node && (node.nodeType === 1 ? node : node.parentElement).closest("[data-nrp]"); if (!sel){ toast("Select text in the article first", "", "var(--amber)"); return; } nrInsert(`• "${sel.replace(/\s+/g, " ")}"${p ? ` [S${C.sel + 1} P${+p.dataset.nrp + 1}]` : ""}`); return; }
+  if (d.nrsave !== undefined){ nrShowCheck(); nrSaveNow(); audit("News summary saved", "", `${trunc(C.a.title, 70)} · ${nrLive().length} sources`); toast("Summary saved", "Kept in this browser with the story; it goes into the log when you track the story as an escalation", "var(--teal)"); renderPanel(); return; }
+  if (d.nrtrack !== undefined){ nrSaveNow(); closeModal(); openEventModal(null, prefillNews(C.a)); return; }
+  if (d.nrreader !== undefined){ const rem = document.getElementById("nrRemember"); if (rem && rem.checked !== CFG.nr.reader){ CFG.nr.reader = rem.checked; saveCfg(); } const s = C.srcs[+d.nrreader]; t.disabled = true; t.textContent = "Reading…"; const A = await nrLoad(s.a, "reader"); if (A.paras.length){ s.A = A; s.st = "ok"; } else s.err = A.err; nrPaint();
+    if (CFG.nr.reader) C.srcs.forEach(x => { if (x !== s && x.st === "fail"){ x.st = "loading"; } }), nrLoadAll(); return; }
+  if (d.nrpaste !== undefined){ const s = C.srcs[+d.nrpaste], A = await nrLoad(s.a, "paste"); if (!A.paras.length){ toast("Paste the article text first", "", "var(--amber)"); return; } s.A = A; s.st = "ok"; nrPaint(); return; }
 }, true);
 document.addEventListener("change", e => { if (e.target && e.target.id === "nrRemember"){ CFG.nr.reader = e.target.checked; saveCfg(); } });
 // the saved summary travels with the story into an escalation
-prefillNews = (function(orig){ return function(a){ const p = orig(a), S = nrSaved(a); if (S && S.sum) p.logMsg = (p.logMsg || "") + "\nSummary (from the source): " + S.sum; return p; }; })(prefillNews);
-{ const st = document.createElement("style"); st.textContent = `.box.nrw{width:min(1240px,100%)}
+prefillNews = (function(orig){ return function(a){ const p = orig(a), S = nrSaved(a); if (S && S.sum) p.logMsg = (p.logMsg || "") + "\nSummary (from " + (S.n || 1) + " source" + ((S.n || 1) === 1 ? "" : "s") + "): " + S.sum; return p; }; })(prefillNews);
+{ const st = document.createElement("style"); st.textContent = `.box.nrw{width:min(1320px,100%)}
 .nr .nrhead h3{margin:6px 0 4px;font-size:19px;line-height:1.3}.nr .nrsrc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}.nr .nrsrc b{color:var(--text)}.nr .via{color:var(--teal)}
 .nr .nrbtns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}.nr .nrbtns a.pill{text-decoration:none}
-.nrgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;margin-top:6px}.nrgrid section{min-width:0}
-.nrtl{display:flex;align-items:center;gap:8px;font:700 11px/1.2 system-ui,sans-serif;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:10px 0 6px}.nrtl small{font-weight:400;letter-spacing:0;text-transform:none}.nrtl .tab-mini{margin-left:auto;text-transform:none;letter-spacing:0}
-#nrBody{max-height:62vh;overflow:auto;padding-right:6px;border-right:1px solid var(--line)}#nrBody p{margin:0 0 10px;line-height:1.55;font-size:14px}#nrBody h4{margin:14px 0 6px}#nrBody .pn{display:inline-block;min-width:26px;margin-right:6px;font:600 10.5px system-ui,sans-serif;color:var(--muted);vertical-align:1px}
-#nrBody p.flash{animation:nrfl 1.6s ease}@keyframes nrfl{0%,40%{background:rgba(242,201,76,.25)}100%{background:transparent}}
+.nrgrid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;margin-top:6px}.nrgrid section{min-width:0}
+.nrtl{display:flex;align-items:center;gap:8px;font:700 11px/1.2 system-ui,sans-serif;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:10px 0 6px}.nrtl small{font-weight:400;letter-spacing:0;text-transform:none}
+.nrtabs{display:flex;flex-wrap:wrap;gap:5px}.nrtab{display:flex;gap:5px;align-items:center;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:4px 10px;font:12px system-ui,sans-serif;cursor:pointer}.nrtab b{color:var(--teal)}.nrtab i{font-style:normal;font-size:11px;color:#27AE60}.nrtab.fail i{color:var(--amber)}.nrtab.loading i{color:var(--muted)}.nrtab.on{border-color:var(--teal);background:rgba(45,156,219,.14)}
+.nrsh{border-bottom:1px solid var(--line);padding:8px 0 2px;margin-bottom:8px}.nrst{font-weight:700;margin-top:4px}
+#nrBody{max-height:56vh;overflow:auto;padding-right:6px}#nrBody p{margin:0 0 10px;line-height:1.55;font-size:14px;border-radius:4px}#nrBody h4{margin:14px 0 6px}#nrBody .pn{display:inline-block;min-width:26px;margin-right:6px;font:600 10.5px system-ui,sans-serif;color:var(--muted);vertical-align:1px}
+#nrBody p.flash{animation:nrfl 2.2s ease}@keyframes nrfl{0%,40%{background:rgba(45,156,219,.18)}100%{background:transparent}}
+mark.nrhl{background:rgba(45,156,219,.28);color:inherit;outline:1px solid rgba(45,156,219,.7);border-radius:3px;padding:1px 0}
+a.nrgo{color:var(--teal);text-decoration:none;font-size:12px;padding:0 3px}a.nrgo:hover{text-decoration:underline}
 mark.nrnum{background:rgba(242,201,76,.22);color:inherit;border-bottom:1px solid #F2C94C;border-radius:2px;padding:0 1px}
 #nrFacts{max-height:30vh;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}.nrf{border:1px solid var(--line);border-radius:6px;padding:6px 8px;cursor:pointer}.nrf:hover{border-color:var(--teal)}
-.nrf .k{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:3px}.nrf .k span{font:600 10.5px system-ui,sans-serif;color:var(--c);border:1px solid var(--c);border-radius:999px;padding:0 6px}.nrf .k .pr{font-size:10.5px;color:var(--muted)}.nrf .k i{font-size:11px;color:var(--muted)}
+.nrf .k{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:3px}.nrf .k span{font:600 10.5px system-ui,sans-serif;color:var(--c);border:1px solid var(--c);border-radius:999px;padding:0 6px}.nrf .k .pr{font-size:11px;color:var(--muted);font-weight:500}.nrf .k i{font-size:11px;color:var(--muted)}.nrf .k em{font:600 10.5px system-ui,sans-serif;font-style:normal;color:#27AE60}.nrf .k em.fd{color:var(--amber)}
 .nrf .t{font-size:12.5px;line-height:1.45}.nradd{margin-left:auto;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;width:24px;height:22px;cursor:pointer}.nradd:hover{border-color:var(--teal);color:var(--teal)}
+.nrc{border:1px solid rgba(45,156,219,.6);background:rgba(45,156,219,.12);color:#8CC8F0;border-radius:4px;padding:0 5px;font:600 11px/1.6 system-ui,sans-serif;cursor:pointer;margin:0 1px}.nrc:hover{background:rgba(45,156,219,.3)}.nrc.bad{border-color:var(--amber);color:var(--amber);background:transparent;cursor:default}
+.nrprev{border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;line-height:1.6;max-height:40vh;overflow:auto;background:var(--bg)}
+.nrmore{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;margin:4px 0}.nrmore .tab-mini{flex:none}
 .nrkinds{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}#nrSum{width:100%;box-sizing:border-box;font:13px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px}
 .nrwarn{margin-top:6px;padding:6px 8px;border-left:3px solid var(--amber);background:rgba(242,153,74,.1);font-size:12.5px}.nrok{margin-top:6px;padding:6px 8px;border-left:3px solid #27AE60;background:rgba(39,174,96,.1);font-size:12.5px}
 .nrfail{padding:10px;border:1px dashed var(--line);border-radius:8px}.nrfail textarea{width:100%;box-sizing:border-box}.nrwait{padding:30px;text-align:center;color:var(--muted)}
 .act.nrsum{border-color:var(--teal);color:var(--teal)}
-@media (max-width:820px){.nrgrid{grid-template-columns:1fr}#nrBody{max-height:none;border-right:0}#nrFacts{max-height:none}}`; document.head.appendChild(st); }
+@media (max-width:820px){.nrgrid{grid-template-columns:1fr}#nrBody{max-height:none}#nrFacts{max-height:none}}`; document.head.appendChild(st); }
 boot();
 
 </script>
