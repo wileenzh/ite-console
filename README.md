@@ -164,6 +164,17 @@ accuracy over two hours, the GPSJam method), plus a GPS interference map. Source
 the PSOC server (paid; key on the server, `/api/fr24/live/flight-positions/full?bounds=N,S,W,E`). Whole-view traffic
 loads from country zoom (250 nm around the centre); optional site watch checks the air around each site city in turn.
 
+**Conflict and control** (Feeds › Conflict and control): conflict maps in the style of published assessed-control maps,
+shared between operators. Each map has sides with colours, **areas of control** (drawn on the map, imported from
+GeoJSON or KML, or a **live public ArcGIS layer** such as a research institute's assessed-control layer), **contested**
+ground drawn hatched, **supply routes** (open, contested, cut), **significant fighting** rings (24 h, fading to
+72 h), optional **ACLED** battles and explosions (myACLED account; password not kept), as-of time, sources and a change
+log. A legend box shows on the map. The **Armed conflict** risk feed raises alerts for fighting near sites and people
+(50 km), control changes (by containment) and routes cut. **Figure** exports the current view as a PNG with title,
+as-of time, key judgement call-outs, legend, our sites and sources, for reports and email. A training example
+(invented sides and shapes) is included for practice. Credit the publisher of any layer you load; their copyright
+applies.
+
 ## Intelligence events (Intelligence Monitoring › Intelligence events)
 
 From PULSE's Intelligence dashboard. The Datasurfr events API (X-API-Key), the Max Security Reports API v3 (company +
