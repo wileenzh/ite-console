@@ -462,3 +462,17 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
   plume, darker towards the track, with its outer line at JMA's 70 % circle. During playback a smaller swirl moves
   along the track with the time beside it. When two storms sit close together, only the selected storm's name is
   shown.
+
+## Air traffic: automatic feed switching and diagnosis (23 Oct)
+
+- **Automatic switching**: if the chosen free feed fails (blocked by the browser, rate-limited or down), the console
+  tries the other free feeds — adsb.lol, airplanes.live and **adsb.fi** (new) — and stays on the one that works.
+  A failed feed is skipped for 5 minutes. It can be turned off in Air traffic settings.
+- **Warning on the map**: when no feed answers, an orange "Air traffic unavailable" bar on the map says why for
+  each feed, with **Test feeds** and **Settings** buttons (previously the error only showed in the Layers panel).
+- **Test feeds** (map bar or Air traffic settings): asks every feed for aircraft near the map centre from this
+  browser, and through the PSOC server when one is set, and reports OK with a count, blocked, busy or refused; one click
+  switches to the first feed that works.
+- **Security policy fix**: the flight feeds (and NASA GIBS satellite imagery) are now on the approved-host list
+  before the page's Content Security Policy is built, so they also work with the connection gateway in Enforce mode.
+  Before this fix they were blocked in that mode.
