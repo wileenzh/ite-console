@@ -524,3 +524,31 @@ for the same week as the alarm table (Tuesday 0800 SGT to Tuesday 0800 SGT by de
 - **Copy for email** pastes the whole section (numbers, table and notes) with its formatting; **Copy summary**
   includes the notes. The **Executive snapshot** shows the same five numbers in a strip at the top, labelled with
   the week they cover.
+
+## Typhoon fixes and news outlets (23 Oct)
+
+**Typhoon tracker**
+- JMA's own category is read for every forecast point. A storm forecast to become an **extratropical low** (JMA
+  温帯低気圧) now shows as **LOW** (purple) in the labels, table, tooltips, legend and playback, instead of "TD 0 kt".
+  A missing wind is shown as "—", never as 0 kt.
+- Playback no longer carries the last known wind into a point that has none; at the end it shows
+  "extratropical low".
+- **Peak forecast** says "now · weakening" when the storm is at its strongest already, instead of quoting the
+  1-hour estimate.
+- JMA's forecast shows as soon as it arrives; GDACS (JTWC tracks, other ocean basins) fills in when it answers. If
+  GDACS does not answer, an amber note says so in plain words ("no answer within 20 s") with **Try again**,
+  replacing the red "signal is aborted without reason". Every request that times out now says this.
+- Forecast-time labels stay inside the map.
+- Fixed: the storm card was pinned over the top navigation (a style clash with the operator console's Alerts
+  panel, which now has its own class).
+
+**News outlets**
+- **Breaking news (APAC)** reads 53 APAC newsrooms: Singapore, Malaysia, Indonesia, the Philippines, Thailand,
+  Vietnam, Myanmar, Cambodia, Hong Kong, China, Taiwan, Japan, South Korea, India, Pakistan, Bangladesh,
+  Australia, New Zealand, the Pacific and regional desks.
+- **International news** (new tab beside it) reads 22 international outlets: UK, Qatar, Germany, France, Europe,
+  US, Canada and the UN.
+- A story carried by both groups appears on both pages, and **Read & summarise** shows every outlet that carried it.
+- Each page shows how many outlets are on and answering. **Manage outlets** lists them by country with their
+  health (stories read or the error), lets you turn any off, and adds your own RSS or Atom feed. Most news sites do
+  not let a web page read their feeds; with the PSOC server set under Integrations, all of them are read through it.
