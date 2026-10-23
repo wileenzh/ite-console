@@ -645,3 +645,56 @@ an underline.
 - **What matters now**, which opens each item;
 - the last 7 days by day, this week against last week, and decisions and support needed;
 - **Copy leadership brief**. It refreshes every minute.
+
+## Stakeholder views by audience, BAU and Security Operations sections (23 Oct)
+
+**Stakeholders** now has one page per audience, in this order: APAC director, Regional (RSOM), Country (DSOM),
+PSOC leadership, Clients, Releases to operations. The **Executive snapshot** tab has been removed. Old links to it
+open the APAC director dashboard.
+
+**APAC director**: the whole of APAC (unchanged). It links to PSOC leadership, Regional and Country.
+**Decisions and support needed** is now worked out from live data:
+- SEV 1 incidents;
+- P1 escalations without an event notice;
+- P1 risks;
+- SERV responses more than 12 h overdue.
+
+**Country (DSOM)**: what a datacenter security operations manager needs for their own country.
+- A country picker. It opens on the user's scope country when one is set in Users & roles.
+- Red / Amber / Green for the country.
+- Headline numbers: waiting on action, high alarms unacknowledged, Lenel offline, cameras offline, open incidents,
+  SERV releases, sites in impact zones, high-priority risks.
+- **Do now in <country>**, with procedures, and the live stream for that country's sites only.
+- Risks for the country's cities and its SERV releases.
+- A site table: Lenel, cameras offline, alarms waiting, incidents and impact zone for every site.
+- **Copy country brief**.
+- The patrol officers' phone preview is kept underneath, collapsed.
+
+**PSOC leadership**: what the PSOC manager needs to know about what the PSOC is looking at.
+- Load: Steady / Busy / Stretched.
+- Headline numbers: decisions waiting and past SLA, escalations open and overdue, incidents and SEV 1–2,
+  unacknowledged high alarms, SERV releases ready to file, RFIs open, products and messages today, sources answering.
+- **On the PSOC's screen now**: overdue escalations, SEV 1–2 incidents, escalations with their next update,
+  high-impact hazards, P1/P2 risks, breaking news.
+- **Performance today**: decisions made, mean time to decide, alarms acknowledged, mean time to acknowledge,
+  products issued.
+- **Monitoring coverage**: every source that isn't answering or is stale. Hover a source for the reason.
+- **Waiting on decisions**, oldest first, against the SLA.
+- What leadership receives from the PSOC is kept underneath, collapsed.
+
+**BAU Operations** is grouped into five operational sections:
+- Live
+- Alarms (access alarms, camera analytics)
+- Incidents & requests
+- Systems health (Lenel, camera health, camera outages)
+- Reports (dashboard and a new **Weekly metrics** page)
+
+**Security Operations** is grouped into five operational sections:
+- Live
+- Patrol & response
+- Perimeter & detection
+- Site intelligence
+- Setup & training
+
+Each section button shows its alarm count and remembers the last page you opened in it. On a phone, use the bottom
+bar and More as before.
