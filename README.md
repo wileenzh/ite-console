@@ -476,3 +476,23 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
 - **Security policy fix**: the flight feeds (and NASA GIBS satellite imagery) are now on the approved-host list
   before the page's Content Security Policy is built, so they also work with the connection gateway in Enforce mode.
   Before this fix they were blocked in that mode.
+
+## News: read the article, facts and figures, summarise from the source (23 Oct)
+
+Every news story has **Read & summarise** (the headline opens it too; **Original ↗** still opens the publisher's
+page in a new tab).
+
+- **Source text**: the article itself, pulled from the publisher's page (author and published time from the
+  page's article data). Navigation, adverts and "read more" links are removed, paragraphs are numbered P1, P2…, and
+  every figure is highlighted. Copy the citation or the whole text.
+- **Facts and figures**: every sentence with a number, sorted by kind: People (killed, injured, evacuated…), Money,
+  Percent, Measure (km, km/h, magnitude…), Count (flights, homes…), When, and Quote (with who said it). Filter by
+  kind, click one to jump to its paragraph, **＋** adds it to the summary with its paragraph reference.
+- **Summary**: **Draft from source** picks the article's own key sentences (no AI needed); **Draft with AI** (when
+  the PSOC server or an AI key is set) writes Bottom line / Key facts / Figures / Who said what using only the
+  article, citing paragraphs. Edit it freely; **Add selection to summary** quotes highlighted text.
+  **Check against source** flags any number that isn't in the article and any paragraph reference that doesn't
+  exist. **Save** keeps it with the story (this browser); **Track as escalation** carries it into the escalation log.
+- **When a site blocks the browser** (most do): set the PSOC server under Integrations and articles are read
+  through it. Otherwise choose **Use the reader service** (r.jina.ai; it receives only the article's address, and
+  you can tick always), or paste the article text. Until then, facts come from the feed's own summary.
