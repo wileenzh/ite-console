@@ -23,7 +23,7 @@ described in the hosting guide that ships with the full package.
   **Send options ▾**. A burst of new actions shows as one notice. The top navigation scrolls within itself instead of
   pushing the page sideways; on a phone, product pages open on the preview with a product picker.
 
-## Channels (Vision Command Centre › Channels)
+## Channels (Visual Command Centre › Channels)
 
 Monitor-ready views for the PSOC video wall, one facet each, in large type, refreshing by themselves: **Aerial Map**
 (satellite imagery with sites and alerts, touring each alert's impact zone), **Alerts — Summary** and **Alerts — Detail**
@@ -95,7 +95,7 @@ Intelligence repository, ops products in the Operations repository. Each archive
 the issued copy exactly as sent ("Open the issued copy"; kept in the issuing browser's database until the PSOC server
 holds it), with every time it was issued and how. "Archive all now" files the current issue of every product.
 
-## Operator console (Vision Command Centre › Operator console)
+## Operator console (Visual Command Centre › Operator console)
 
 Modelled on how Everbridge documents its Visual Command Center operator console (support articles and datasheet),
 built on ITE's own data with ITE's own names and look. A full map with a **Feeds** panel — Search; **Alerts**;
@@ -399,3 +399,33 @@ playback** slider; a storm header (max wind, gusts, pressure, movement, wind rad
 **Figure for reports** draws a 1600 × 1000 chart with header, land, cone, swaths, tracks, labels, sites, side panel and
 legend. The Operator console gets the same drawing as the **Typhoon tracks** context layer.
 
+## Visual Command Centre, air traffic page, typhoon chart style, cameras (23 Oct)
+
+- **Visual Command Centre**: the group is named Visual Command Centre; its screens share a dark slate look with a blue
+  accent (slim tile headers, blue active tab).
+- **Air traffic** (Visual Command Centre › Air traffic): a full flight-tracking screen — map of live ADS-B aircraft,
+  search (callsign, registration, type, Mode S; Enter finds a flight anywhere), filters (airborne, emergencies, below
+  10,000 ft, helicopters / drones, military), list of aircraft in view (emergencies first), flight card with route,
+  altitude colours, GPS interference map. The Operator console top bar has an **✈ Aircraft** button.
+- **Typhoon tracker, weather-console style**: thin intensity-coloured past track with a dot at every fix and the
+  date each day, thin dashed forecast track with a coloured dot and a time / wind / pressure label at every forecast
+  time and ticks every 6 hours (labels every 12), solid thin cone outline, wind swaths, a plain storm symbol and a
+  quiet name block, dark base map with **satellite infrared** (Himawari, NASA GIBS) underneath. Under the map: an
+  **intensity chart** (wind and pressure against time, class bands, now line) and **timings at our sites** (when
+  gales and storm-force winds are expected at each site, with the closest approach). The report figure uses the
+  same style.
+- **Demo camera scenes**: the Operational camera wall and the simulated camera show a fence line or a vehicle gate
+  with people, vehicles and nuisance (an animal, a branch in the wind, headlights, insects at night), infrared
+  black-and-white at night, camera number / name / time overlay.
+- **Perimeter › Cameras**: perimeter cameras with video analytics. Draw a **tripwire** along the fence (alarm when
+  someone crosses from outside) or an **area** (alarm when someone stays in it); people / vehicles / any object;
+  linked fence zone. Each camera is a "CCTV video analytics" device on the site, so a person on camera plus a fence
+  alarm in the same zone is a **verified intrusion**. Live view with tripwires, areas, tracked objects and the
+  model's score; detections with snapshots, labelled Real / Nuisance for training. Cameras send alarms only when
+  **armed**; with the tab open, unarmed cameras run as a preview. Example fence cameras for the example perimeter.
+- **Security Operations › Model training**: teach the analytics by example. Examples come from Camera analytics
+  triage, perimeter camera labels and practice examples generated from the demo scenes. A small neural network
+  (TensorFlow.js, in the browser) looks at the moving object's picture, shape and position; training curve, a 20 %
+  check set, accuracy, real targets kept, nuisance screened out, confusion table, threshold. Use: off / score
+  alarms / screen alarms below the threshold (kept as false alarms for review; tamper and lost feed never screened).
+  Export and import the model as a file.
