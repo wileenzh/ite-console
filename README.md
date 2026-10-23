@@ -698,3 +698,26 @@ open the APAC director dashboard.
 
 Each section button shows its alarm count and remembers the last page you opened in it. On a phone, use the bottom
 bar and More as before.
+
+## Operational decisions (23 Oct)
+
+**Operational decisions** appear on the APAC director dashboard, under the headline numbers. The Regional page shows
+those for its region and the Country page those for its country. Each one is an event and what the business is doing
+about it, so stakeholders can decide:
+- **Operational decision**: the bottom line, for example "all operational sites remain operational under minimum
+  staffing with required security coverage".
+- **Site posture**, line by line: site operations, staffing, security coverage, construction, Edge sites, offices,
+  travel, deliveries. Each line has a state (operating normally, minimum staffing, reduced, stopped, no impact,
+  nothing scheduled), the sites concerned and the detail. **Suggest from live data** drafts the lines from impact
+  zones and Lenel status.
+- **Updates**, dated, with when the next one is due. An overdue update shows on PSOC leadership and in the director's
+  decisions list.
+- **Planned arrangements**: weekend work, shift changes, deliveries.
+- **Monitoring**: who is watching, with whom. Use role titles, not names or contact details.
+- **Decisions needed**: stakeholders answer in place (Agree / Need to discuss, or the options you give). Their answer
+  and note are recorded and the item moves to "Decided".
+- **Copy update** gives the text in the usual update format for email or chat. The leadership brief includes every
+  active operational decision.
+- **Close event** moves it to "Closed in the last 7 days".
+
+Operational decisions are shared with the team like other PSOC records (store `opdec`).
