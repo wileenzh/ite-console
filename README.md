@@ -601,3 +601,47 @@ switches to it on its own when the others are blocked. Without an account it ref
   next 48 h, weeks 2–5, air quality, rivers & floods, volcanoes, official warnings and global disasters. Each has a
   status dot.
 - Each section remembers the last page you used.
+
+## Operational impact map, live operations, APAC director dashboard (23 Oct)
+
+**Operational impact** (Intelligence › Overview › Operational impact): every live hazard drawn as an impact zone over our
+sites, on its own full-width map.
+- Zones and levels:
+  - Earthquakes: estimated shaking rings (MMI VII+ severe, VI high, V moderate, IV watch).
+  - Typhoons: storm-force and gale swaths and the likely-track cone.
+  - Agency warnings: their own polygons.
+  - Also GDACS floods, volcanoes and droughts, wildfires, volcanoes, protests (tracked and reported) and escalations.
+- Each zone has a glowing marker with its hazard icon and the number of sites inside; severe and high zones pulse.
+  Every site takes its worst zone.
+- **Severe / High / Moderate / Watch** counts filter the list of sites in impact zones. Click a site or zone to go to it.
+- Hazard types can be switched on and off.
+- **Circle zone** and **Area zone** let anyone draw their own impact zone (name, radius, level) to see which sites are
+  inside, for example a road closure or a planned march.
+- **Copy impact summary** gives a text summary.
+
+**Intelligence navigation**: section tabs with icons and a highlighted active section; softer page pills with
+an underline.
+
+**Live operations** (first tab in BAU Operations and in Security Operations), the operator's page:
+- **Live stream** (updates every 10 seconds):
+  - BAU: access alarms, Lenel offline, camera problems, incidents and releases awaiting responses.
+  - Security Operations: perimeter alarms, patrol reports and taskings, drones, camera analytics and protests.
+  - Items are sorted by priority. Click one for **what to do**: the procedure for duress, door forced or held,
+    tamper, badge, controller offline, camera, perimeter, drone and protest. Acknowledge or open each item in place.
+- **Do now**: the work in order (acknowledge critical alarms, Lenel offline, cameras to confirm, perimeter to verify,
+  incidents to update, releases to chase, action queue), each with its procedure.
+- **This shift**: start- and end-of-shift routine, shift checklist, escalation timers, action queue.
+- Counts: waiting on you, critical, events in the last hour, mean time to acknowledge, Lenel offline and cameras.
+- **Training scenario**: practice alarms, with a perimeter alarm, drone and patrol reports for Security Operations.
+  New ones arrive every minute or so, clearly marked; stop it to remove them.
+
+**APAC director dashboard** (Stakeholders, first tab; also on the Leadership home):
+- for the senior director of physical security operations;
+- overall APAC status (Red / Amber / Green) with a one-line bottom line;
+- eight headline numbers: significant events, SEV 1–2 incidents, sites in high-impact zones, high-priority risks,
+  welfare checks, RENs, SENs, Lenel availability;
+- a map of significant events: impact zones, incidents and escalations;
+- a status card per region that opens the Regional view;
+- **What matters now**, which opens each item;
+- the last 7 days by day, this week against last week, and decisions and support needed;
+- **Copy leadership brief**. It refreshes every minute.
