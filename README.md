@@ -429,3 +429,13 @@ legend. The Operator console gets the same drawing as the **Typhoon tracks** con
   check set, accuracy, real targets kept, nuisance screened out, confusion table, threshold. Use: off / score
   alarms / screen alarms below the threshold (kept as false alarms for review; tamper and lost feed never screened).
   Export and import the model as a file.
+- **Operator console, matched to the Visual Command Centre screens**: base-map pill bar (Road, Aerial, Hybrid, Low
+  light, Road dark, Hybrid dark, 🔧 tools); a floating **ALERTS** panel (count, collapse, cards with icon, time and
+  title, **Acknowledge all** with a disposition and note); a **layers panel docked on the right** with "Business or
+  category…" search, show/hide-all eye and in-view / total counts, and rows for Acknowledged Alerts, Global Security
+  Items, Desk Journals / Roves (with a desk journal entry form), Cases, Assets (Datacenters, Offices, Campus areas,
+  People; **Filters / legend** by site class with shaded cube icons; Visualization; **Radius zone**; **Contents**;
+  Export to Excel), Active Cameras, Conflict, Air traffic, Local Conditions and Distribution, each with a
+  group check box; a **DETAILS** panel in the dock with a red close button; shaded building icons when zoomed in;
+  pill-shaped zoom slider and Location box; lat/long readout at the bottom centre.
+
