@@ -773,3 +773,24 @@ PSOC leadership and Country (DSOM) stay operational: both show operational decis
    response, giving the probability of interruption, the critical detection point and an adversary sequence chart.
 7. **Risk and decisions**: ARO × chance of success × impact = ALE per attack; countermeasures with cost and effect,
    compared live; return on investment; recommendation and decision.
+
+## Specific impact areas (24 Oct)
+
+Impact zones now follow the real area of each hazard instead of a 25 km circle around a city:
+- **Agency warnings**:
+  - the polygon or circle the agency publishes (CAP) is used first;
+  - if there is none, the states, provinces or prefectures the warning names (in its area, then its title and text)
+    are drawn from built-in admin-1 boundaries, so a Selangor and Kuala Lumpur warning covers only those two;
+  - Singapore, Hong Kong and Macau warnings cover the whole territory;
+  - **marine warnings** (rough seas, sea areas, waters off, swell) are kept off land: no site is marked and no
+    escalation opens from them;
+  - warnings that name no area the console can map are listed under **Not on the map**, with **Draw its area**.
+- **Escalations** use the area of the warning they came from, otherwise a small ring around each site they name. Only
+  an escalation with neither falls back to a radius around its event point, labelled approximate.
+- **GDACS floods, droughts and other events** use GDACS's published affected-area polygon once it loads.
+- Every zone shows how its area was set: published by the agency, named area, whole territory, sites named,
+  estimated shaking, forecast wind swath, or approximate.
+
+The boundaries are Natural Earth admin-1 (public domain): detailed near our sites, coarser elsewhere, 265 KB embedded.
+District-level areas (for example Petaling or Klang inside Selangor) are not mapped yet. Use **Draw its area** when a
+warning is narrower than a state.
