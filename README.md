@@ -889,3 +889,41 @@ automatically.
   - the spot monitor;
   - the security console, with the five layers and the incident list.
 - Monitors have bezels and screen glow. Selecting a layer highlights its tiles on the wall.
+
+## Situation update (24 Oct)
+
+Each operational decision card has a **Situation update** button. It opens a composer that writes the stakeholder
+message in the PSOC's format:
+- **Title**: (Initial / Update / Final) Country | Hazard NAME.
+- **Situation**: As of [date], at [hhmm] hours local time ([hhmm] UTC), … The draft comes from live data: the
+  nearest tropical cyclone, its intensity trend (weakening, intensifying or steady) and whether it is approaching
+  or moving away, plus any agency warnings in force for the country. Then the outlook and the monitoring line.
+- **Impact and posture**: the operational impact level (Low to Severe) and the overall site posture (for example
+  Impacted but Managed), with the reason and an impact statement.
+- **Current Site Posture**: one bullet per site, each with:
+  - its class;
+  - its status (operational, operational under minimum staffing, under construction, closed, evacuated);
+  - staffing by role (the roles are editable, CRS / RES / SO / SSS by default), written out as "one CRS, one RES, and
+    one SO";
+  - checkpoint staffed, patrols suspended, COD arrangements, COLO locked, construction or vendors suspended, and a
+    free note.
+- **The closing paragraphs**:
+  - minimum staffing and suspended activities;
+  - personnel safety and site access, plus "No flooding, road blockages, … or alarms has been reported" (untick any
+    item that has been reported);
+  - perimeter-camera observations;
+  - continuing actions and escalation.
+- **Figure 1**: Hazard Forecast Track Relative to Country Datacenters (+N hours, date, local and UTC). It is drawn
+  from the forecast with coastlines and state lines:
+  - past and forecast track, with the position at +N hours;
+  - storm-force and gale-force wind areas, and the forecast uncertainty;
+  - the country's datacenters, labelled together where they cluster;
+  - a legend and the source.
+
+The preview can be edited before copying. Buttons:
+- **Copy message** copies rich text with the figure, and plain text.
+- **Copy Figure 1** and **Download Figure 1**.
+- **Save draft**.
+- **Log as sent** adds the update to the decision and counts it in today's messages.
+
+The organisation name in the impact sentence is a setting in the composer and is not stored in the repo.
