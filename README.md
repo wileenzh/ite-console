@@ -794,3 +794,32 @@ Impact zones now follow the real area of each hazard instead of a 25 km circle a
 The boundaries are Natural Earth admin-1 (public domain): detailed near our sites, coarser elsewhere, 265 KB embedded.
 District-level areas (for example Petaling or Klang inside Selangor) are not mapped yet. Use **Draw its area** when a
 warning is narrower than a state.
+
+## Site plan as a blueprint (24 Oct)
+
+Security Operations › Site intelligence › Site plans now draws each site as a blueprint:
+- **The drawing**: the perimeter fence, the building, the data halls with rack rows and cold aisles, the corridor, the
+  security lobby with desk, turnstiles and mantrap, the loading dock with three roller doors and the apron, the
+  generator yard with generators and the fuel tank, the main gate with the guard house and barrier, and the car park.
+  It has dimensions, a north arrow and a title block. Renamed zones keep their places; extra zones appear as rooms
+  along the bottom.
+- **17 cameras** in a standard layout, each with its field of view: corners, fence line, gate, car park, lobby,
+  mantrap, dock, both data halls, generator yard and fuel tank.
+- **Click any point** to open the camera that sees it straight away. Cameras stay on their side of the walls, so a
+  data hall point shows a data hall camera. If several cameras see the point you can switch between them; if none
+  does, the nearest camera in that area is shown, labelled as such. A crosshair marks the point on the plan.
+- **Doors** show access control live: cyan secure, yellow for an unacknowledged alarm in the last hour on that
+  door, red when Lenel is down. Click a door to see it on camera.
+- **Incidents** are pins in their zone. Click a pin to see the spot on camera.
+- **Cameras** with a camera outage are crossed out in red. Cameras linked to a real feed are filled in; the rest show
+  a demo feed (gate, fence, data hall aisle, lobby or dock scene).
+- **Place cameras**:
+  - drag a camera to move it;
+  - turn it, widen or narrow it, and lengthen or shorten its view;
+  - rename it;
+  - link it to a feed from the camera wall;
+  - add or remove cameras, or go back to the standard layout.
+
+  Changes are kept per site and recorded in the audit log.
+
+The plan is a typical layout, not the site's as-built drawing. Each site's cameras can be placed to match reality.
