@@ -849,3 +849,43 @@ The site plan page is laid out like a security operations room, in dark control-
 
   Clicking a layer highlights it on the plan and shows only its cameras on the wall.
 - The spot monitor opens on the most urgent layer's camera.
+
+## Realistic CCTV from a 3D site model, laid out as a video wall (24 Oct)
+
+**Feeds.** Camera feeds are now rendered from a 3D model of the site, built with three.js (pinned with a
+fingerprint, loaded from the library CDN) from the same layout as the blueprint:
+- the fence with posts and welded mesh;
+- the guard house and an animated barrier;
+- the car park with parked cars, and the access road;
+- the building facade and roof;
+- the data halls with rows of racks, cold-aisle containment, cable trays and ceiling lights;
+- the lobby with desk, turnstiles and the glass mantrap;
+- the dock with roller doors, pallets and a truck at bay 3;
+- the generator yard with generators and the fuel tank;
+- lamp posts and trees.
+
+**How each camera renders.** Each camera uses its blueprint position, direction and field of view, mounted at 3.6 m
+indoors or 5.5 m on a pole outside, tilted down. The picture goes through a CCTV lens filter: grayscale, contrast,
+grain, scanlines, wide-angle barrel, vignette and a slight glow around lights. NVR text shows the camera, the date
+and time, the site and the layer.
+
+**Movement, day and night.**
+- People walk the site: staff from the car park through the turnstiles and mantrap into a data hall, technicians
+  in the cold aisles, a guard patrolling, a dock worker, the receptionist and the gate guard.
+- A car comes through the gate and parks; the barrier lifts for it.
+- A dock door with an alarm is drawn open.
+- At night the cameras switch to infrared, lit by their own illuminators.
+
+The data hall aisle cameras now look straight down the cold aisles, and the lobby entrance camera looks at the
+entrance from the car park. Without WebGL, the 2D demo scenes are used. On slow machines the frame rate drops
+automatically.
+
+**Layout, as in a security operations room.**
+- **The video wall**, across the top:
+  - VMS outdoor (layers 1–2, a 3 × 3 grid);
+  - the site map (the blueprint);
+  - VMS indoor (layers 3–5).
+- **The operator desk**, below:
+  - the spot monitor;
+  - the security console, with the five layers and the incident list.
+- Monitors have bezels and screen glow. Selecting a layer highlights its tiles on the wall.
