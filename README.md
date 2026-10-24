@@ -927,3 +927,30 @@ The preview can be edited before copying. Buttons:
 - **Log as sent** adds the update to the decision and counts it in today's messages.
 
 The organisation name in the impact sentence is a setting in the composer and is not stored in the repo.
+
+## Situation update as a Teams post (24 Oct)
+
+The situation update now goes to people in Teams, the way the PSOC director reads it, and the composer shows the post
+exactly as it will appear.
+- **The Teams card**, an Adaptive Card:
+  - the team and "Situation update #N", then "Country | Hazard", the message type and the time in local and UTC;
+  - three facts: operational impact (coloured), site posture and the hazard trend (weakening or intensifying,
+    approaching or moving away, distance);
+  - the bottom line and the outlook;
+  - a site posture table: site, class, status, who is on duty, notes;
+  - safety, access and systems as ticks, with anything reported in red;
+  - perimeter-camera observations and the next update;
+  - a link back to the console.
+- **Post to channel**, in order of what is set up:
+  - through a Teams workflow ("Post to a channel when a webhook request is received"), as the card;
+  - when signed in with Microsoft, straight to the channel from its link, with Figure 1 inline;
+  - through the PSOC server;
+  - otherwise the channel opens with the post on the clipboard.
+- **Send to chat**: one group chat per event with everyone involved (RSOM, DSOM, resilience, site teams). Every
+  update goes into the same thread. When signed in with Microsoft, the chat is created and posted to, with Figure 1;
+  otherwise Teams opens the chat with the summary filled in and the full post on the clipboard.
+- **Email…**: the full write-up in the house format with Figure 1, sent through Microsoft 365 or as a draft.
+
+**The composer** has five numbered sections: headline, situation, sites, safety and systems, and who receives it.
+Choices are buttons, sites are compact rows, and the Teams post is previewed alongside. Each send is recorded on the
+operational decision ("Last situation update … → channel"), added to its updates and counted in the day's messages.
