@@ -823,3 +823,29 @@ Security Operations › Site intelligence › Site plans now draws each site as 
   Changes are kept per site and recorded in the audit log.
 
 The plan is a typical layout, not the site's as-built drawing. Each site's cameras can be placed to match reality.
+
+## Control-room view and the five layers of physical security (24 Oct)
+
+The site plan page is laid out like a security operations room, in dark control-room colours:
+- **Blueprint** on the left, with the **spot monitor** and **camera wall** on the right:
+  - the spot monitor is one large feed with REC, the time, the camera's layer, and the other cameras that see the same
+    spot;
+  - the camera wall is every site camera as a live tile in a grid, CCTV-styled. Down cameras show NO SIGNAL.
+- **Clicking the blueprint** (any point, door, incident pin or camera) switches the spot monitor to that camera at
+  once, with no popup. Cameras that also see the spot are outlined on the wall. **Full screen** opens the large view.
+  Click a wall tile to put it on the spot monitor.
+- **Five layers of physical security**, from the outside in:
+  1. **Perimeter**: fence, fence sensors, thermal cameras, guarded gate, barrier.
+  2. **Site grounds**: car park, dock apron, generator yard, lighting, patrols.
+  3. **Building entry**: reception, ID check, turnstiles, loading dock screening.
+  4. **Secure core**: mantrap with anti-tailgating, badge + PIN, corridor.
+  5. **Data halls and racks**: badge + biometric doors, cage and rack locks.
+
+  Each layer has a numbered badge on the blueprint and a card showing its cameras, doors and incidents, with a status
+  of Secure, Attention or Breach risk and the reasons:
+  - Breach risk: a SEV 1–2 incident, a forced door, access control offline for layers 3–5, or a verified perimeter
+    alarm;
+  - Attention: any other incident, door alarm, camera down or perimeter alarm.
+
+  Clicking a layer highlights it on the plan and shows only its cameras on the wall.
+- The spot monitor opens on the most urgent layer's camera.
