@@ -23998,6 +23998,102 @@ html.mc .phacts button{border-radius:12px;background:var(--glass);border-color:v
 html.mc .phacts button:first-child{background:var(--teal);border-color:var(--teal);color:var(--sig-ink);box-shadow:0 8px 24px -10px var(--teal)}
 html.mc .wfbig.primary,html.mc .pill.primary.wfbig{box-shadow:0 8px 24px -10px var(--teal)}
 `; document.head.appendChild(st); }
+/* ---------- Night ops, professional layout: a left navigation rail with icons grouped by kind of work (collapsible), a slim top bar with the
+   Detect → Report pipeline as status lights, a search field, icon controls and the clock; fewer stacked bars above the work ---------- */
+const MC_GI = { bau: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', secops: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>', vcc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  intel: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l5-5"/>', threat: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>', respond: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  sentiment: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/><path d="M9 11h.01M15 11h.01"/>', travel: '<path d="M10.5 3.5 13 9l6.5-.5c1.5 0 1.5 2 0 2.2L13 11l-2.5 5.5H8.5L10 11 5 10.5 3.5 13H2l1-3.5L2 6h1.5L5 8.5 10 8 8.5 3.5z"/>',
+  repo: '<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>', stake: '<circle cx="9" cy="7" r="3"/><path d="M3 21v-2a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v2"/><path d="M16 3.5a3 3 0 0 1 0 6M21 21v-2a5 5 0 0 0-3.5-4.8"/>',
+  query: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4M9 9a2 2 0 1 1 2.8 1.8c-.6.3-.8.7-.8 1.2M11 14.5v.5"/>', ai: '<rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 13h.01M15 13h.01M9 16h6"/>',
+  lead: '<path d="M3 20h18M5 20V9l7-5 7 5v11"/><path d="M10 20v-5h4v5"/>', admin: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>' };
+const MC_CLUSTERS = [["Operations", ["bau", "secops", "vcc", "respond"]], ["Intelligence", ["intel", "threat", "sentiment", "travel"]], ["Stakeholders and reports", ["stake", "lead", "repo", "query", "ai"]], ["System", ["admin"]]];
+const MC_HI = { guideBtn: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5M12 16.5v.5"/>', soundBtn: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
+  testBtn: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0M2 4l2 2M22 4l-2 2"/>', sitesBtn: '<path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>',
+  setBtn: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  intBtn: '<path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0z"/><path d="M12 16v5"/>', themeBtn: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>' };
+const mcSvg = d => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+function mcRailBuild(){ if (document.getElementById("mcRail")) return; const modes = document.getElementById("modes"), brand = document.querySelector(".hdr .brandblock"); if (!modes) return;
+  const r = document.createElement("aside"); r.id = "mcRail"; r.setAttribute("aria-label", "Sections"); r.innerHTML = `<div class="mcrtop"></div><div class="mcrnav"></div><button class="mcrtog" type="button" aria-label="Collapse the menu">${mcSvg('<path d="M15 6l-6 6 6 6"/>')}<span>Collapse</span></button>`;
+  document.body.insertBefore(r, document.body.firstChild); if (brand) r.querySelector(".mcrtop").appendChild(brand); r.querySelector(".mcrnav").appendChild(modes);
+  r.querySelector(".mcrtog").onclick = () => { UI.mcRail = UI.mcRail === "mini" ? "full" : "mini"; saveUI(); mcRailState(); };
+  mcRailState(); mcModes(); mcHeader(); mcFlow(); }
+renderFlow = (function(orig){ return function(){ const r = orig.apply(this, arguments); try{ mcFlow(); document.querySelectorAll("#flowbar .flowstep").forEach(b => { const n = b.querySelector("b"), t = b.querySelector("span"); if (n && t && !b.dataset.tip){ b.dataset.tip = 1; b.title = `${n.textContent}: ${t.textContent}. ${b.title}`; } }); }catch(e){} return r; }; })(renderFlow);
+// the pipeline moves into the top bar (it is created after the header, and may be re-created)
+function mcFlow(){ const hdr = document.querySelector(".hdr"), flow = document.getElementById("flowbar"); if (!hdr || !flow || flow.closest(".hdr")) return; let slot = hdr.querySelector(".mcflow"); if (!slot){ slot = document.createElement("div"); slot.className = "mcflow"; hdr.insertBefore(slot, hdr.firstChild); } slot.appendChild(flow); }
+function mcRailState(){ document.body.classList.toggle("mcmini", UI.mcRail === "mini"); const t = document.querySelector("#mcRail .mcrtog"); if (t){ t.setAttribute("aria-label", UI.mcRail === "mini" ? "Expand the menu" : "Collapse the menu"); t.querySelector("span").textContent = UI.mcRail === "mini" ? "Expand" : "Collapse"; }
+  try{ if (typeof map !== "undefined" && map) setTimeout(() => map.invalidateSize(), 220); }catch(e){} }
+// icons, tooltips and clusters on the section buttons (renderModes rewrites them, so this runs after every render)
+function mcModes(){ const nav = document.getElementById("modes"); if (!nav || !nav.closest("#mcRail")) return; const btns = [...nav.querySelectorAll(".mode[data-group]")]; if (!btns.length) return;
+  btns.forEach(b => { if (!b.querySelector(".mci")){ const lbl = [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim(); b.title = lbl; b.innerHTML = `<span class="mci">${mcSvg(MC_GI[b.dataset.group] || MC_GI.intel)}</span><span class="mcl">${esc(lbl)}</span>` + [...b.querySelectorAll(".b")].map(x => x.outerHTML).join(""); } });
+  nav.querySelectorAll(".mcrh").forEach(x => x.remove()); const by = Object.fromEntries(btns.map(b => [b.dataset.group, b])), used = new Set();
+  MC_CLUSTERS.forEach(([h, ids]) => { const bs = ids.map(i => by[i]).filter(Boolean); if (!bs.length) return; if (bs.some(b => b.style.display !== "none" && !b.hidden)){ const hd = document.createElement("div"); hd.className = "mcrh"; hd.textContent = h; nav.appendChild(hd); } bs.forEach(b => { nav.appendChild(b); used.add(b); }); });
+  btns.filter(b => !used.has(b)).forEach(b => nav.appendChild(b)); }
+renderModes = (function(orig){ return function(){ const r = orig.apply(this, arguments); try{ mcModes(); }catch(e){} return r; }; })(renderModes);
+// header controls become icon buttons with tooltips; text stays for screen readers
+function mcHeader(){ Object.entries(MC_HI).forEach(([id, d]) => { const b = document.getElementById(id); if (!b) return; b.classList.add("mcib"); if (!b.querySelector(".mcii")) b.insertAdjacentHTML("afterbegin", `<span class="mcii">${mcSvg(d)}</span>`); const txt = b.textContent.trim(); b.title = txt; b.setAttribute("aria-label", txt);
+    if (id === "soundBtn") b.dataset.on = /on/i.test(txt.replace(/sound/i, "")) ? "1" : "0"; if (id === "sitesBtn"){ const m = txt.match(/\((\d+)\)/); b.dataset.n = m ? m[1] : ""; } });
+  const go = document.getElementById("goBtn"); if (go) go.classList.add("mcsearch"); }
+// keep tooltips and states current when the buttons change their own text
+setInterval(() => { if (!document.documentElement.classList.contains("mc")) return; mcRailBuild(); mcHeader(); mcFlow(); if (!document.querySelector("#modes .mci")) mcModes(); }, 1000);
+{ const st = document.createElement("style"); st.textContent = `
+html.mc body{--rail:252px}html.mc body.mcmini{--rail:68px}
+html.mc body:not(.phone){padding-left:var(--rail);transition:padding-left .2s ease}
+html.mc #mcRail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);z-index:60;display:flex;flex-direction:column;background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 92%,transparent),var(--bg));border-right:1px solid var(--line);transition:width .2s ease;overflow:hidden}
+html.mc body.phone #mcRail{display:none}
+html.mc #mcRail .mcrtop{padding:14px 16px 12px;border-bottom:1px solid var(--line);min-height:62px;display:flex;align-items:center}
+html.mc #mcRail .brandblock{padding:0;grid-template-columns:30px auto}
+html.mc #mcRail .brandname{font-size:14px;white-space:nowrap}html.mc #mcRail .brandsub{white-space:nowrap}
+html.mc #mcRail .mcrnav{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 10px 10px;scrollbar-width:none}
+html.mc #mcRail #modes.modes{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin:0;padding:0;border:0;overflow:visible;background:transparent}
+html.mc #mcRail .mcrh{font:600 11px var(--font);color:color-mix(in srgb,var(--muted) 80%,transparent);padding:14px 10px 6px;white-space:nowrap;letter-spacing:.01em}
+html.mc #mcRail #modes .mode{display:flex;align-items:center;gap:12px;width:100%;padding:8px 10px;border-radius:10px;font:500 13px var(--font);color:var(--muted);text-align:left;box-shadow:none;position:relative;text-shadow:none;white-space:nowrap}
+html.mc #mcRail #modes .mode:hover{background:var(--glass-hi);color:var(--text)}
+html.mc #mcRail #modes .mode[aria-pressed="true"],html.mc #mcRail #modes .mode.on{background:color-mix(in srgb,var(--teal) 12%,transparent);color:var(--text);font-weight:600;box-shadow:none;text-shadow:none}
+html.mc #mcRail #modes .mode[aria-pressed="true"]::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--teal);box-shadow:0 0 12px var(--teal)}
+html.mc #mcRail .mci{flex:none;width:20px;height:20px;display:grid;place-items:center}html.mc #mcRail .mci svg{width:19px;height:19px}
+html.mc #mcRail #modes .mode[aria-pressed="true"] .mci{color:var(--teal)}
+html.mc #mcRail .mcl{flex:1;overflow:hidden;text-overflow:ellipsis}
+html.mc #mcRail #modes .mode .b{margin-left:auto}
+html.mc #mcRail .mcrtog{display:flex;align-items:center;gap:10px;margin:8px 10px 12px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font:500 12.5px var(--font);cursor:pointer;white-space:nowrap}
+html.mc #mcRail .mcrtog:hover{color:var(--text);border-color:color-mix(in srgb,var(--teal) 45%,var(--line))}html.mc #mcRail .mcrtog svg{width:16px;height:16px;flex:none;transition:transform .2s}
+html.mc body.mcmini #mcRail .mcrtog svg{transform:rotate(180deg)}
+html.mc body.mcmini #mcRail .mcl,html.mc body.mcmini #mcRail .mcrh,html.mc body.mcmini #mcRail .brandname,html.mc body.mcmini #mcRail .brandsub,html.mc body.mcmini #mcRail .mcrtog span{display:none}
+html.mc body.mcmini #mcRail .mcrh{display:block;height:1px;padding:0;margin:10px 6px;background:var(--line);font-size:0}
+html.mc body.mcmini #mcRail .mcrtop{padding:14px 0;justify-content:center}html.mc body.mcmini #mcRail .brandblock{grid-template-columns:30px}
+html.mc body.mcmini #mcRail #modes .mode{justify-content:center;padding:9px 0}html.mc body.mcmini #mcRail #modes .mode .b{position:absolute;top:2px;right:4px;transform:scale(.8)}
+html.mc body.mcmini #mcRail .mcrtog{justify-content:center;margin:8px}
+/* top bar */
+html.mc .hdr{display:flex;align-items:center;gap:12px;padding:0 16px;min-height:56px;flex-wrap:nowrap;grid-template-areas:none}
+html.mc .hdr .mcflow{flex:1;min-width:0;overflow:hidden}
+html.mc .hdr #flowbar{border:0;padding:0;min-height:0;background:transparent;gap:2px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+html.mc .hdr .flowstep{border:0;background:transparent;padding:6px 9px;border-radius:8px;gap:8px;align-items:center;font-size:12.5px}
+html.mc .hdr .flowstep:hover{background:var(--glass-hi)}
+html.mc .hdr .flowstep b{font-weight:600;color:var(--text)}html.mc .hdr .flowstep span{display:none}
+html.mc .hdr .flowstep::before{content:"";width:8px;height:8px;border-radius:50%;flex:none;background:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 16%,transparent)}
+html.mc .hdr .flowstep.t1::before{background:var(--yellow);box-shadow:0 0 0 3px color-mix(in srgb,var(--yellow) 18%,transparent),0 0 10px var(--yellow)}
+html.mc .hdr .flowstep.t2::before{background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 18%,transparent),0 0 10px var(--amber)}
+html.mc .hdr .flowstep.t3::before{background:var(--red);box-shadow:0 0 0 3px color-mix(in srgb,var(--red) 18%,transparent),0 0 12px var(--red);animation:mcBreathe2 2.4s ease-in-out infinite}
+@keyframes mcBreathe2{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--red) 6%,transparent),0 0 18px var(--red)}}
+html.mc .hdr .flowstep.here{background:color-mix(in srgb,var(--teal) 10%,transparent);box-shadow:inset 0 -2px 0 var(--teal);border-radius:8px 8px 0 0}
+html.mc .hdr .flowarr{display:none}
+html.mc .hdr .flowhide{display:none}
+html.mc .hdrright{flex:none;gap:4px;padding:0;margin-left:auto}
+html.mc .hdrright .mcsearch{min-width:170px;justify-content:space-between;display:inline-flex;align-items:center;gap:10px;background:var(--panel-2);color:var(--muted);font-weight:500;border-radius:10px;padding:6px 8px 6px 12px;margin-right:6px}
+html.mc .hdrright .mcsearch:hover{color:var(--text)}
+html.mc .hdrright .mcib{position:relative;width:34px;height:34px;padding:0;display:inline-grid;place-items:center;font-size:0;border-radius:9px;border-color:transparent;background:transparent;color:var(--muted)}
+html.mc .hdrright .mcib:hover{color:var(--text);background:var(--glass-hi);border-color:var(--line)}
+html.mc .hdrright .mcib .mcii{display:grid;place-items:center}html.mc .hdrright .mcib svg{width:18px;height:18px}
+html.mc #soundBtn[data-on="0"] .mcii::after{content:"";position:absolute;left:9px;right:9px;top:50%;height:1.8px;background:currentColor;transform:rotate(-40deg)}
+html.mc #sitesBtn[data-n]:not([data-n=""])::after{content:attr(data-n);position:absolute;top:1px;right:-2px;font:700 9.5px/1 var(--readout);padding:2px 4px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+html.mc #armBtn{border-radius:999px;margin:0 4px;font-size:12px}
+html.mc .hdrright .mebtn{order:20;margin-left:6px}html.mc .hdrright .clock{order:21}
+html.mc .hdrright .mebtn small{display:none}html.mc .hdrright .mebtn{font-size:0;padding:3px!important;border-radius:999px}html.mc .hdrright .mebtn .av{font-size:11px}
+html.mc #armBtn{font-size:0!important}html.mc #armBtn::after{content:"Alarm off";font-size:12px}html.mc #armBtn.armed::after{content:"Armed"}
+html.mc .divider{background:color-mix(in srgb,var(--line) 70%,transparent)!important}html.mc .divider::after{opacity:.45}
+/* fixed things sit beside the rail */
+html.mc body:not(.phone) #tvbtn{left:calc(var(--rail) + 14px)}
+`; document.head.appendChild(st); }
+mcRailBuild();
 
 boot();
 

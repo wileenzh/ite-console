@@ -1088,3 +1088,17 @@ The console and the mobile app have a mission-control look.
 - **Light mode (day ops):** the same layout on white and soft blue-grey.
 
 The look is one stylesheet layered over the existing screens, so nothing about how pages work has changed.
+
+## Professional layout (25 Oct)
+
+- **Left menu:** every section is listed with an icon, grouped by kind of work: Operations, Intelligence,
+  Stakeholders and reports, System. The current section is marked with a teal bar. **Collapse** at the bottom shrinks
+  the menu to icons only (hover for the name), and the choice is remembered.
+- **Top bar:** one slim bar holds:
+  - the Detect → Triage → Escalate → Respond → Report pipeline, as status lights (teal clear, amber busy, red
+    overdue; hover for the counts);
+  - the Go to… search field;
+  - the alarm state;
+  - icon buttons for guide, sound, test alarm, sites (with the count), settings, integrations and dark/light;
+  - your avatar and the clock.
+- **Phone:** unchanged; it keeps its own bottom tabs.
