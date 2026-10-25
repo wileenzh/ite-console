@@ -1070,3 +1070,21 @@ Patrol officer accounts are always guards, and leadership accounts are always th
 GitHub builds an Android test APK (and a signed Play bundle once the signing secrets are set) and checks that the iOS
 project compiles, on every push. `mobile/README.md` covers building, signing and private distribution through
 TestFlight, Apple Business Manager and managed Google Play.
+
+## New look: night ops (25 Oct)
+
+The console and the mobile app have a mission-control look.
+- **Colour:** deep navy glass panels and one signal teal for whatever is active or selected. Amber and red are kept
+  for status.
+- **Type:** readouts, headings and the clock use B612, the typeface Airbus designed for cockpit displays. Everything
+  else is in IBM Plex Sans.
+- **Status lights:** every summary readout has a small light in its status colour, and critical lights breathe
+  slowly so they catch the eye. Nothing else moves on its own, and moving effects are off when the device asks for
+  reduced motion.
+- **Header:** one compact row with the radar mark, the controls and the clock, with the sections in a tab strip below.
+  The workflow strip (Detect → Report) reads on one line.
+- **Labels and tables:** labels are in sentence case. Tables have aligned headers and more room.
+- **Windows and messages:** dialogs, toasts and the phone's top and bottom bars are frosted glass.
+- **Light mode (day ops):** the same layout on white and soft blue-grey.
+
+The look is one stylesheet layered over the existing screens, so nothing about how pages work has changed.
