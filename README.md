@@ -954,3 +954,67 @@ exactly as it will appear.
 **The composer** has five numbered sections: headline, situation, sites, safety and systems, and who receives it.
 Choices are buttons, sites are compact rows, and the Teams post is previewed alongside. Each send is recorded on the
 operational decision ("Last situation update … → channel"), added to its updates and counted in the day's messages.
+
+## Site risk profiles, manpower and training, and My duties (25 Oct)
+
+Each site now has its own risk picture, and the people who protect it are tracked in the console.
+
+**Site risk profiles** (Intelligence › Risk & trends):
+- **Terrain study:**
+  - ground height at the site and at 1 km and 5 km in eight directions, from the Open-Meteo elevation service
+    (cached for 30 days);
+  - cross-sections north–south and west–east;
+  - a classification (coastal lowland, low-lying plain, hilly, upland and so on);
+  - flood, storm-surge and landslide susceptibility, plus seismic risk for the city;
+  - manual fields: soil, drainage, flood history, access routes and neighbours.
+- **Water and electricity:**
+  - water supply and storage hours, utility feeds, generator fuel hours and UPS;
+  - the live water and power signals for the city.
+- **Protest activity near the site:** tracked protests and news reports within 10 km over the last 90 days, plus
+  incidents at the site.
+- **Site risk register**, in the register's colours:
+  - inherent, residual and live score for every risk;
+  - a "what is different here" column (low-lying, single utility feed, protests nearby, and so on).
+  The city's register is adjusted for the site's terrain, utilities and nearby protests, and for the mitigations done
+  there.
+- **Mitigation — what has been done:**
+  - each action has a status, owner, due date and evidence, and is linked to a risk;
+  - training actions (for example "Train guards: typhoon and severe weather response") take their progress from the
+    guards' own training records;
+  - suggestions are offered for the top risks at the site;
+  - **Copy summary** gives a text version.
+
+**Manpower & training** (Security Operations › Workforce), for managers:
+- **Now:** on duty against required, the shortfall, and late clock-ins.
+- **Next 7 days:** open posts per day and night shift for every site, as a heat map.
+- **Duties at the selected site:** a post-by-post board, with open posts that can be assigned to a free guard.
+- **Training compliance:** by site and course, certificates expired, missing or expiring, and training logged by
+  guards waiting to be verified.
+- **What has been done in the last 30 days:** training, drills, mitigations and shifts worked.
+- **Settings:** required posts per shift (defaults by site class) can be edited per site; there is also a copyable
+  brief.
+
+**My duties** (also open to the security patrol officer role), phone first, for guards:
+- the current or next shift, with **Clock in**/**Clock out**;
+- confirming or releasing a shift (a released shift shows as an open post for the manager);
+- picking up open posts at the guard's site;
+- the guard's hours and training status;
+- **Log training or a drill**. A logged record counts as current but stays "awaiting verification" until a manager
+  verifies or rejects it.
+
+Everything a guard does here feeds the manager, campus, site and DSOM views.
+
+**Stakeholders:**
+- **Campus security:** one card per campus showing people on post, training, top site risks, mitigations, terrain and
+  nearby protests.
+- **Site security manager:** one site, showing the shift board, the next 7 days, training, open incidents, the five
+  layers of physical security, site risks and mitigation progress.
+- **The Country (DSOM) view** gains a per-site table of the highest site risk, its site factors, mitigations done,
+  people on post, open posts and training.
+
+A site without any shifts recorded shows "no roster recorded" rather than a shortfall.
+
+**Load sample workforce** creates fictional guards (display names only), rosters and training records for one
+country so the pages can be tried; **Clear sample** removes them. Guard records hold a display name, role, home site
+and employer only; no phone numbers or IDs. All new records (guards, shifts, training, mitigations, site profiles,
+required posts) are shared with the team like other PSOC records.
