@@ -23746,6 +23746,115 @@ setInterval(() => { if (UI.mode !== "siteplan" || document.hidden) return; const
 .socroom:has(.vwrow.teal) .socscr canvas,.socroom:has(.vwrow.teal) .socscr .socreal{filter:grayscale(1) sepia(.4) hue-rotate(128deg) saturate(1.3) brightness(1.3) contrast(.86)}.vwg .soct .soctl{display:none}.vwempty{background:#0d1f1e!important;color:#2f5e57!important}.vwg .soct.down .vwts{background:#8a1f23}
 .socdesk.vw3{grid-template-columns:minmax(0,1.05fr) minmax(0,1.3fr) minmax(0,.95fr)}.socdesk.vw3 .mon.plan{align-self:start}
 @media (max-width:1250px){.socdesk.vw3{grid-template-columns:1fr 1fr}.socdesk.vw3 .mon.plan{grid-column:1/-1}}@media (max-width:700px){.vwg{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px}.vwg .vwempty{display:none}.vwg>.soct:not(.vwempty):nth-last-child(1 of .soct:not(.vwempty)):nth-child(odd){grid-column:1/-1}.socdesk.vw3{grid-template-columns:1fr}.vwhd{gap:6px}}`; document.head.appendChild(st); }
+/* ---------- Mobile app: one app with a home screen and bottom tabs for each role (security guard, site security manager, DSOM, RSOM,
+   APAC director, PSOC officer); in the store app it also uses the phone: shift reminders, haptics, back button, status bar, push ---------- */
+const MOB = { key: "psoc.uni.mprof.v1", asked: "psoc.uni.mprofasked.v1", orig: "", native: !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform()) };
+const MOB_IC = { shift: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', patrol: '<circle cx="12" cy="5" r="2"/><path d="M10 22l1-7-3-3 2-4h4l2 4-3 3 1 7"/>', report: '<path d="M12 3 2 20h20zM12 10v4M12 17v.5"/>',
+  alerts: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', site: '<path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/>', roster: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7 13h3M7 17h3M14 13h3"/>',
+  risk: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', cams: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/>', country: '<path d="M4 4h10l-1 4h7l-2 6h-8l1-4H4z"/><path d="M4 4v17"/>',
+  dec: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', team: '<circle cx="9" cy="7" r="3"/><path d="M3 21v-2a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v2"/><path d="M16 3.5a3 3 0 0 1 0 6M21 21v-2a5 5 0 0 0-3.5-4.8"/>',
+  region: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>', apac: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', campus: '<path d="M2 21h20M4 21V9l8-5 8 5v12"/><path d="M9 21v-5h6v5M8 11h2M14 11h2"/>' };
+// [label, what it shows, tabs: [label, mode or @action, icon]]
+const MOB_PROFILES = {
+  guard: ["Security guard", "Your shift, patrols, reporting and the alerts for your site", [["Shift", "wf-duty", "shift"], ["Patrol", "patrol", "patrol"], ["Report", "@flag", "report"], ["Alerts", "m-alerts", "alerts"]]],
+  ssm: ["Site security manager", "Your site: people on post, roster, risks and cameras", [["Site", "sh-ssm", "site"], ["Roster", "wf-man", "roster"], ["Risk", "siterisk", "risk"], ["Cameras", "siteplan", "cams"]]],
+  dsom: ["DSOM · country", "Your country's sites, decisions, workforce and site risks", [["Country", "sh-secops", "country"], ["Decisions", "m-dec", "dec"], ["Workforce", "wf-man", "team"], ["Sites", "siterisk", "site"]]],
+  rsom: ["RSOM · region", "Your region: business impact, decisions, risk and workforce", [["Region", "sh-region", "region"], ["Decisions", "m-dec", "dec"], ["Risk", "risk", "risk"], ["Workforce", "wf-man", "team"]]],
+  dir: ["APAC director", "APAC at a glance, decisions needed, risk and value, campuses", [["APAC", "sh-dir", "apac"], ["Decisions", "m-dec", "dec"], ["Risk & value", "@dirrisk", "risk"], ["Campuses", "sh-campus", "campus"]]],
+  psoc: ["PSOC officer", "What needs you now, the map, the action queue and incidents", null] };
+function mobAllowed(){ const r = ME && ME.role; if (r === "patrol") return ["guard"]; if (r === "leader") return ["dir"]; if (r === "client" || r === "ops") return []; return Object.keys(MOB_PROFILES); }
+function mobProfile(){ const A = mobAllowed(); if (!A.length) return "psoc"; const p = lsGet(MOB.key, ""); if (A.includes(p)) return p; return A.length === 1 ? A[0] : "psoc"; }
+function mobSetProfile(p){ try{ phMore(false); }catch(e){} lsSet(MOB.key, p); lsSet(MOB.asked, 1); audit("Mobile profile", MOB_PROFILES[p][0], ""); mobNav(true); const P = MOB_PROFILES[p]; if (P[2]) mobGo(P[2][0][1]); else { PH.view = "home"; phApply(); } }
+function mobGo(t){ try{ phMore(false); }catch(e){} if (t === "@flag"){ try{ openFlag(); }catch(e){ console.warn("flag", e); } return; } if (t === "@dirrisk"){ UI.dirView = "risk"; saveUI(); phGo("sh-dir"); return; } if (t === "sh-dir"){ UI.dirView = "ov"; saveUI(); } phGo(t); }
+// the bottom bar for the profile (the PSOC officer keeps the standard Home · Map · Queue · Incidents · More)
+function mobNav(force){ const nav = document.getElementById("pnav"); if (!nav) return; if (!MOB.orig) MOB.orig = nav.innerHTML; const p = mobProfile(), P = MOB_PROFILES[p]; if (!force && nav.dataset.prof === p) return; nav.dataset.prof = p;
+  if (!P[2]){ nav.innerHTML = MOB.orig; return; } const more = (MOB.orig.match(/<button data-pnav="more"[^>]*>[\s\S]*?<\/button>/) || [""])[0];
+  nav.innerHTML = P[2].map(([l, go, ic]) => `<button data-mtab="${go}"><svg viewBox="0 0 24 24" aria-hidden="true">${MOB_IC[ic]}</svg><span>${esc(l)}</span><i class="pb" hidden></i></button>`).join("") + more; }
+function mobCurrent(t){ if (t === "@dirrisk") return UI.mode === "sh-dir" && UI.dirView === "risk"; if (t === "sh-dir") return UI.mode === "sh-dir" && UI.dirView !== "risk"; if (t === "@flag") return false; return UI.mode === t; }
+phChrome = (function(orig){ return function(){ const r = orig.apply(this, arguments); try{ if (!PH.on) return r; mobNav(); const p = mobProfile(), P = MOB_PROFILES[p]; if (!P[2]) return r; const menu = !$("#pmore").hidden;
+    $$("#pnav [data-mtab]").forEach(b => b.setAttribute("aria-current", !menu && mobCurrent(b.dataset.mtab) ? "page" : "false")); const mb = $('#pnav [data-pnav="more"]'); if (mb) mb.setAttribute("aria-current", menu || !P[2].some(t => mobCurrent(t[1])) ? "page" : "false");
+    if (!menu) $("#ptop .pt2").textContent = P[0] + " · " + ($("#ptop .pt2").textContent || "");
+    const badge = (t, n, hot) => { const i = $(`#pnav [data-mtab="${t}"] .pb`); if (!i) return; i.hidden = !n; i.textContent = n > 99 ? "99+" : n; i.classList.toggle("hot", !!hot); };
+    if (p === "guard"){ const fl = $("#pflip"); if (fl) fl.hidden = true; } if (P[2].some(t => t[1] === "m-dec")) badge("m-dec", mobDecAsks().length, false); if (p === "guard") badge("m-alerts", mobAlerts().n, mobAlerts().hot); }catch(e){} return r; }; })(phChrome);
+// roles with their own home open on their first tab
+phHome = (function(orig){ return function(){ const p = mobProfile(), P = MOB_PROFILES[p]; if (PH.on && P[2] && PH.view === "home"){ if (!MOB.redir){ MOB.redir = 1; setTimeout(() => { MOB.redir = 0; mobGo(P[2][0][1]); mobPick(); }, 0); } return; } const r = orig.apply(this, arguments); mobPick(); return r; }; })(phHome);
+document.addEventListener("click", e => { const t = e.target.closest("[data-mtab]"); if (!t) return; e.stopPropagation(); e.preventDefault(); mobGo(t.dataset.mtab); }, true);
+// choose the profile once (and any time from the menu)
+function mobPickHtml(){ const A = mobAllowed(), cur = mobProfile(); return `<div class="mobpick">${A.map(k => `<button class="mobp${k === cur ? " on" : ""}" data-mprof="${k}"><b>${esc(MOB_PROFILES[k][0])}</b><span>${esc(MOB_PROFILES[k][1])}</span></button>`).join("")}</div>`; }
+function mobPick(force){ if (!PH.on || !ME) return; const A = mobAllowed(); if (A.length < 2 || (!force && lsGet(MOB.asked, 0))) return; if ($("#ov.show")) return; lsSet(MOB.asked, 1);
+  openModal(head("How do you use ITE?") + `<div class="bd"><p class="s" style="margin-top:0">The app opens on the screens for your role. You can change this any time from the menu.</p>${mobPickHtml()}</div>`); }
+phMore = (function(orig){ return function(open){ const r = orig.apply(this, arguments); try{ if (open && mobAllowed().length > 1){ const b = $("#pmore .pmb"); if (b && !b.querySelector(".mobmenu")) b.insertAdjacentHTML("afterbegin", `<div class="mobmenu"><div class="phsec">My role in the app</div>${mobPickHtml()}${can("admin") ? `<label class="mobpush"><input type="checkbox" data-mobpush${CFG.mobile && CFG.mobile.push ? " checked" : ""}> Push notifications in the store app <span class="s">(needs the Firebase and Apple Push keys on the PSOC server)</span></label>` : ""}</div>`); } }catch(e){} return r; }; })(phMore);
+document.addEventListener("change", e => { if (!e.target.matches("[data-mobpush]")) return; CFG.mobile = Object.assign({}, CFG.mobile || {}, { push: e.target.checked }); saveCfg(); audit("Mobile push", e.target.checked ? "on" : "off", ""); if (e.target.checked) mobPush(); });
+document.addEventListener("click", e => { const t = e.target.closest("[data-mprof]"); if (!t) return; e.stopPropagation(); if ($("#ov.show")) closeModal(); mobSetProfile(t.dataset.mprof); }, true);
+/* ---- scope for the profile ---- */
+function mobCountry(){ const cs = (() => { try{ return wfCountries(); }catch(e){ return []; } })(), sc = ME && ME.scope ? String(ME.scope).toLowerCase() : "", g = (() => { try{ return wfMe(); }catch(e){ return null; } })();
+  if (mobProfile() === "ssm"){ const s = SITES.find(x => x.code === UI.ssmSite); if (s) return s.country; } if (g){ const s = SITES.find(x => x.code === g.site); if (s) return s.country; }
+  return cs.includes(UI.dsomCc) ? UI.dsomCc : cs.find(c => sc.includes(c.toLowerCase())) || cs[0] || ""; }
+function mobRegion(){ try{ const R = rrRegions(); return R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){ return ""; } }
+function mobDecFilter(){ const p = mobProfile(); if (p === "dsom" || p === "ssm" || p === "guard"){ const cc = mobCountry(); return [r => r.country === cc, cc]; } if (p === "rsom"){ const rg = mobRegion(); return [r => opdCountryRegion(r.country) === rg, rg]; } return [null, "all of APAC"]; }
+function mobDecAsks(){ const [f] = mobDecFilter(); return opdList(r => r.status !== "closed" && (!f || f(r))).flatMap(r => opdOpenAsks(r).map(a => ({ r, a }))); }
+/* ---- Decisions ---- */
+function mobDecPanel(){ const [f, where] = mobDecFilter(), asks = mobDecAsks();
+  return `<div class="ptools"><span class="label">Operational decisions</span><span class="s">${esc(where)}</span></div><div class="pbody">
+    ${asks.length ? `<div class="mobask"><b>${asks.length} decision${asks.length === 1 ? "" : "s"} waiting for you</b>${asks.slice(0, 4).map(x => `<div class="s">• ${esc(x.r.title)}: ${esc(x.a.text)}</div>`).join("")}</div>` : ""}
+    ${opdSection(f, where, "No operational decisions in force here. When an event affects sites, the PSOC records the site posture and what stakeholders need to decide.")}</div>`; }
+// the decision buttons are handled by the Stakeholders handler: borrow its page for the click
+document.addEventListener("click", e => { if (UI.mode !== "m-dec") return; const t = e.target.closest("[data-opdnew],[data-opdedit],[data-opdupd],[data-opdcopy],[data-opdans]"); if (!t) return; UI.mode = "sh-region"; setTimeout(() => { if (UI.mode === "sh-region") UI.mode = "m-dec"; }, 0); }, true);
+/* ---- Alerts for the guard's site ---- */
+function mobSite(){ let g = null; try{ g = wfMe(); }catch(e){} const code = g ? g.site : UI.wfMeSite; return SITES.find(s => s.code === code) || (sxSites(s => wfReqN(s.code) > 0)[0]) || null; }
+function mobAlerts(){ const s = mobSite(), now = Date.now(); if (!s) return { s: null, items: [], n: 0, hot: false }; const city = metroOf(s) || s.city || "", items = [];
+  (SHARED.patrolrel || []).filter(r => !r.deleted && r.status !== "closed" && (r.officers || []).includes(ME ? ME.name : "") && now - (r.createdAt || 0) < 3 * 864e5).forEach(r => items.push({ k: "task", hot: true, t: r.title || "Tasking from the PSOC", s: `From the PSOC · ${ago(r.createdAt)}`, go: "patrol" }));
+  opdList(r => r.status !== "closed" && r.country === s.country).forEach(r => { const mine = (r.posture || []).filter(p => !(p.sites || []).length || (p.sites || []).includes(s.code)); items.push({ k: "dec", t: r.title, s: [r.summary].concat(mine.map(p => `${p.area}: ${p.text || p.state}`)).filter(Boolean).join(" · ").slice(0, 260) }); });
+  (DATA.alerts || []).filter(a => (a.points || []).includes(city) && (!a.end || a.end > now)).slice(0, 6).forEach(a => items.push({ k: "warn", hot: (SEV_ORDER[a.severity] || 0) >= 3, t: a.title, s: `${a.area || city} · ${(a.source || {}).name || "official warning"}` }));
+  try{ const A = sxActivity(s.code); A.prot.forEach(p => items.push({ k: "prot", t: p.title || "Protest nearby", s: `${p.city || ""}${p.when ? " · " + sgt(p.when) : ""} · within 10 km` })); }catch(e){}
+  (SHARED.incidents || []).filter(x => !x.deleted && x.status !== "resolved" && x.site === s.code).forEach(x => items.push({ k: "inc", hot: sevNum(x.sev) <= 2, t: `${x.id} ${x.title || "Incident"}`, s: `Open incident at ${s.code}` }));
+  return { s, items, n: items.length, hot: items.some(i => i.hot) }; }
+const MOB_AK = { task: ["Tasking", "#E5484D"], dec: ["Site posture", "#2F80ED"], warn: ["Warning", "#F2994A"], prot: ["Protest", "#9B51E0"], inc: ["Incident", "#E5484D"] };
+function mobAlertsPanel(){ const A = mobAlerts(); if (!A.s) return `<div class="pbody"><p class="s">No site recorded for you yet. Open Shift to choose your site.</p></div>`; let R = []; try{ R = sxRows(A.s.code).slice(0, 3); }catch(e){}
+  return `<div class="ptools"><span class="label">Alerts</span><span class="s">${esc(A.s.code)} · ${esc(metroOf(A.s) || A.s.city || "")}</span></div><div class="pbody" style="max-width:720px">
+    ${A.items.length ? A.items.map(i => `<div class="mobal${i.hot ? " hot" : ""}" style="--c:${MOB_AK[i.k][1]}"${i.go ? ` data-mobgo="${i.go}"` : ""}><span class="wfchip" style="--c:${MOB_AK[i.k][1]}">${MOB_AK[i.k][0]}</span><b>${esc(i.t)}</b><div class="s">${esc(i.s)}</div></div>`).join("") : `<div class="wfshift" style="--c:#3E9C5A"><div class="big">All clear</div><div class="s">No taskings, warnings, protests or open incidents for ${esc(A.s.code)}.</div></div>`}
+    ${R.length ? `<section class="dc" style="margin-top:12px"><div class="dch">Top risks at ${esc(A.s.code)} now</div>${R.map(x => `<div class="rrtop"><span class="rrpri" style="--c:${RR_PRI[x.pri][2]}">${x.pri}</span><b>${esc(x.r.name)}</b><span class="s"> ${x.cur.toFixed(1)}</span></div>`).join("")}</section>` : ""}
+    <div class="wfbtns"><button class="pill wfbig" data-mtab="@flag" style="background:#C4314B;border-color:#C4314B;color:#fff">Report to the PSOC</button></div></div>`; }
+document.getElementById("panel").addEventListener("click", e => { const t = e.target.closest("[data-mobgo]"); if (!t || UI.mode !== "m-alerts") return; e.stopPropagation(); phGo(t.dataset.mobgo); });
+/* ---- register the two pages ---- */
+{ const so = G("secops"); if (so && !so.tabs.some(t => t[0] === "m-alerts")) so.tabs.push(["m-alerts", "Site alerts"]); const sk = G("stake"); if (sk && !sk.tabs.some(t => t[0] === "m-dec")) sk.tabs.splice(Math.max(0, sk.tabs.findIndex(t => t[0] === "sh-lead")), 0, ["m-dec", "Operational decisions"]);
+  if (GROUP_SECTIONS.secops){ const wk = GROUP_SECTIONS.secops.find(s => s[0] === "workforce"); if (wk && !wk[2].some(p => p[0] === "m-alerts")) wk[2].push(["m-alerts", "Site alerts"]); }
+  ROLE_VIEWS.patrol = [...new Set((ROLE_VIEWS.patrol || []).concat(["wf-duty", "m-alerts"]))]; ROLE_VIEWS.leader = [...new Set((ROLE_VIEWS.leader || []).concat(["sh-dir", "m-dec", "sh-campus"]))]; }
+NON_CITY_MODES.push("m-dec", "m-alerts");
+Object.assign(KEYS, { "m-dec": ["OPERATIONAL DECISIONS", [], "The decisions in force for your scope and what is waiting for your answer"], "m-alerts": ["SITE ALERTS", [], "Taskings, site posture, official warnings, protests and incidents for your site"] });
+renderPanelInner = (function(orig){ return function(p){ if (UI.mode === "m-dec"){ p.innerHTML = mobDecPanel(); return; } if (UI.mode === "m-alerts"){ p.innerHTML = mobAlertsPanel(); return; } return orig.apply(this, arguments); }; })(renderPanelInner);
+{ const _smM = setMode; setMode = function(m){ const was = UI.mode, W = ["m-dec", "m-alerts"]; if (W.includes(m) && !W.includes(was)) UI.layoutBeforeMob = UI.layout; const r = _smM.apply(this, arguments); try{ if (W.includes(UI.mode)) setLayout("panel"); else if (W.includes(was) && UI.layoutBeforeMob){ setLayout(UI.layoutBeforeMob); UI.layoutBeforeMob = null; } }catch(e){} return r; }; }
+{ const st = document.createElement("style"); st.textContent = `.mobpick{display:flex;flex-direction:column;gap:8px}.mobp{display:flex;flex-direction:column;gap:2px;text-align:left;padding:12px 14px;border:1px solid var(--line);border-left:5px solid var(--teal);border-radius:10px;background:var(--card,transparent);color:inherit;font:inherit;cursor:pointer}.mobp b{font-size:15px}.mobp span{font-size:12.5px;color:var(--muted)}.mobp.on{background:color-mix(in srgb,var(--teal) 14%,transparent);border-color:var(--teal)}
+.mobmenu{margin-bottom:12px}.mobpush{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px}.mobask{border:1px solid #F2994A;border-left:5px solid #F2994A;border-radius:10px;padding:10px 12px;margin-bottom:12px;background:color-mix(in srgb,#F2994A 9%,transparent)}
+.mobal{border:1px solid var(--line);border-left:5px solid var(--c);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px}.mobal.hot{background:color-mix(in srgb,var(--c) 10%,transparent)}.mobal[data-mobgo]{cursor:pointer}.mobal .wfchip{align-self:flex-start}
+html.native #installHint{display:none!important}`; document.head.appendChild(st); }
+/* ---- in the store app: the phone's own features ---- */
+function mobPlug(n){ try{ return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins[n]) || null; }catch(e){ return null; } }
+const mobHash = s => { let h = 7; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h) % 2000000000; };
+async function mobReminders(){ const LN = mobPlug("LocalNotifications"); if (!LN || !ME) return { n: 0 }; let g = null; try{ g = wfMe(); }catch(e){} if (!g) return { n: 0 };
+  try{ const perm = await LN.checkPermissions(); if (perm.display !== "granted"){ const r = await LN.requestPermissions(); if (r.display !== "granted") return { n: 0 }; } }catch(e){}
+  const now = Date.now(), tz = wfTz(g.site), fmt = t => new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t);
+  const S = wfLive("shifts").filter(x => x.guard === g.id && (x.st === "planned" || x.st === "confirmed")).map(x => ({ x, t0: wfShiftTimes(x.day, x.k, wfTz(x.site))[0] })).filter(o => o.t0 - 60 * 60e3 > now && o.t0 - now < 7 * 864e5);
+  const notes = S.map(o => ({ id: mobHash(o.x.id), title: `Shift at ${o.x.site} in 1 hour`, body: `${o.x.post} · ${WF_SHIFTS[o.x.k][0]} shift starts ${fmt(o.t0)}${o.x.st === "planned" ? " — please confirm" : ""}`, schedule: { at: new Date(o.t0 - 60 * 60e3), allowWhileIdle: true }, extra: { mode: "wf-duty" } }));
+  try{ const pend = await LN.getPending(); const old = (pend.notifications || []).filter(n => n.extra && n.extra.mode === "wf-duty"); if (old.length) await LN.cancel({ notifications: old.map(n => ({ id: n.id })) }); if (notes.length) await LN.schedule({ notifications: notes }); }catch(e){ console.warn("reminders", e); }
+  MOB.remAt = Date.now(); return { n: notes.length }; }
+async function mobPush(){ const PN = mobPlug("PushNotifications"); if (!PN || !(CFG.mobile && CFG.mobile.push) || MOB.pushOn) return; MOB.pushOn = true;
+  try{ const r = await PN.requestPermissions(); if (r.receive !== "granted") return; PN.addListener("registration", t => { MOB.pushToken = t.value; if (serverBase()) fetch(serverBase() + "/api/push/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t.value, platform: Capacitor.getPlatform(), user: ME ? ME.name : "", profile: mobProfile() }) }).catch(() => {}); });
+    PN.addListener("pushNotificationActionPerformed", a => { const m = a && a.notification && a.notification.data && a.notification.data.mode; if (m) phGo(m); }); await PN.register(); }catch(e){ console.warn("push", e); } }
+function mobNativeInit(){ if (!MOB.native || MOB.init) return; MOB.init = true; document.documentElement.classList.add("native", "installed"); try{ localStorage.setItem("ite.installhint", "1"); }catch(e){}
+  const SB = mobPlug("StatusBar"), SP = mobPlug("SplashScreen"), APP = mobPlug("App"), LN = mobPlug("LocalNotifications"), HP = mobPlug("Haptics");
+  try{ SB && SB.setStyle({ style: "DARK" }); SB && SB.setBackgroundColor && SB.setBackgroundColor({ color: "#0E171C" }); }catch(e){} try{ SP && SP.hide(); }catch(e){}
+  // Android back button: close what is open, then step back to the first tab, then leave the app
+  try{ APP && APP.addListener("backButton", () => { if ($("#ov.show")){ closeModal(); return; } if ($("#pmore") && !$("#pmore").hidden){ phMore(false); return; } const P = MOB_PROFILES[mobProfile()]; const first = P[2] ? P[2][0][1] : null;
+    if (first ? !mobCurrent(first) : PH.view !== "home"){ if (first) mobGo(first); else { PH.view = "home"; phApply(); } return; } APP.exitApp && APP.exitApp(); }); }catch(e){}
+  try{ APP && APP.addListener("resume", () => { try{ renderAll(); }catch(e){} mobReminders(); }); }catch(e){}
+  try{ LN && LN.addListener("localNotificationActionPerformed", a => { const m = a && a.notification && a.notification.extra && a.notification.extra.mode; if (m) phGo(m); }); }catch(e){}
+  // a short buzz when an action lands
+  document.addEventListener("click", e => { if (!HP) return; if (e.target.closest("[data-wfin],[data-wfout],[data-wfpick],#flGo,[data-opdans],[data-wflog]")) try{ HP.impact({ style: "MEDIUM" }); }catch(err){} }, true);
+  setTimeout(() => { mobReminders(); mobPush(); }, 2500); setInterval(() => { if (Date.now() - (MOB.remAt || 0) > 10 * 60e3) mobReminders(); }, 60e3); }
+// shift changes reschedule the reminders straight away
+wfShiftAct = (function(orig){ return function(){ const r = orig.apply(this, arguments); if (MOB.native) setTimeout(mobReminders, 300); return r; }; })(wfShiftAct);
+mobNativeInit(); setInterval(() => { if (!MOB.native && window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform()){ MOB.native = true; mobNativeInit(); } }, 1500);
 
 boot();
 

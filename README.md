@@ -1036,3 +1036,37 @@ video wall.
 
 Tiles show the simulated views from the 3D site model. A camera given a live feed (Site cameras) shows that feed in
 its tile, with the same tint.
+
+## Mobile app for each role, and the store app (25 Oct)
+
+On a phone, and in the store app, the console opens on the screens for the person's role, each with its own bottom
+tabs:
+- **Security guard:** Shift (clock in and out) · Patrol · Report (flag to the PSOC with photo and location) · Alerts
+  for my site.
+- **Site security manager:** Site · Roster · Risk · Cameras.
+- **DSOM:** Country · Decisions · Workforce · Sites.
+- **RSOM:** Region · Decisions · Risk · Workforce.
+- **APAC director:** APAC · Decisions · Risk & value · Campuses.
+- **PSOC officer:** the standard Home · Map · Queue · Incidents.
+
+**Choosing a role:** people pick their role the first time, and can change it under **More › My role in the app**.
+Patrol officer accounts are always guards, and leadership accounts are always the director.
+
+**Two new pages**, also on the desktop console:
+- **Stakeholders › Operational decisions:** the decisions in force for your scope, with what is waiting for your
+  answer.
+- **Security Operations › Site alerts:** taskings, site posture, official warnings, protests and incidents for the
+  guard's site.
+
+**The store app** (iOS and Android) is in `mobile/`, built with Capacitor 8. It adds:
+- shift reminders an hour before each booked shift;
+- haptics;
+- the Android back button;
+- a native status bar and splash screen;
+- a bundled map library;
+- camera and location for reports;
+- push notifications, once the Firebase and Apple Push keys are added.
+
+GitHub builds an Android test APK (and a signed Play bundle once the signing secrets are set) and checks that the iOS
+project compiles, on every push. `mobile/README.md` covers building, signing and private distribution through
+TestFlight, Apple Business Manager and managed Google Play.
