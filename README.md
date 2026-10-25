@@ -1018,3 +1018,21 @@ A site without any shifts recorded shows "no roster recorded" rather than a shor
 country so the pages can be tried; **Clear sample** removes them. Guard records hold a display name, role, home site
 and employer only; no phone numbers or IDs. All new records (guards, shifts, training, mitigations, site profiles,
 required posts) are shared with the team like other PSOC records.
+
+## Video wall (25 Oct)
+
+The control room in **Security Operations › Site intelligence › Site plans** now opens with a full-width 3×3 CCTV
+video wall.
+- **Look:** tinted footage on a teal frame with thin gutters. Each tile has its camera number at the top left and a
+  running timecode (HH:MM:SS:frames, site local time) at the bottom.
+- **Choosing cameras:**
+  - **All cameras**, **Outdoor · layers 1–2** or **Indoor · layers 3–5**;
+  - page through nine at a time, or **Tour** to move to the next page every 12 seconds;
+  - picking a layer on the console turns the wall to that layer's cameras.
+- **MONO** switches to plain black-and-white.
+- **Clicking a tile** puts that camera on the spot monitor.
+- **Below the wall:** the blueprint site map, the spot monitor and the security console with the five layers.
+- **On a phone:** the wall shows two tiles across.
+
+Tiles show the simulated views from the 3D site model. A camera given a live feed (Site cameras) shows that feed in
+its tile, with the same tint.

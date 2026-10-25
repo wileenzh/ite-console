@@ -23691,6 +23691,52 @@ document.getElementById("panel").addEventListener("click", async e => { if (!WF_
     wfPut("trainlog", { id: "t-" + g.id + "-" + Date.now().toString(36), guard: g.id, course: c === "drill" ? "" : c, kind: c === "drill" ? "drill" : "course", at, hours: +$("#wl_h").value || 0, ref: $("#wl_r").value.trim(), notes: $("#wl_n").value.trim(), result: "pass", self: true, verified: false, by: g.name });
     audit("Training logged", g.site, c); toast("Logged", "Sent to your manager to verify", "var(--teal)"); renderPanel(); return; }
   if (d.wfgo){ setMode(d.wfgo); return; } });
+/* ---------- Video wall: a 3×3 CCTV wall across the top of the control room — tinted footage, thin gutters, a timecode on every tile —
+   with pages and a tour; the site map, spot monitor and console sit below ---------- */
+// feeds drawn from the 3D model: wall tiles carry no burnt-in text (the wall overlays a live timecode instead); the spot monitor keeps its NVR text
+c3Shot = (function(orig){ return function(site, c, cv, big){ if (big) return orig.apply(this, arguments); const T = THREE, R = C3.R, cam = C3.cam, t0 = performance.now(), indoor = bpIndoor(bpZoneAt(c.x, c.y)), h = indoor ? 3.6 : 5.5, rng = Math.max(4, Math.min(45, c.range * C3_U * .5)), tilt = Math.atan2(h - 1.0, rng), dir = c.dir * Math.PI / 180;
+  cam.position.set(c.x * C3_U, h, c.y * C3_U); C3.ir.position.copy(cam.position); C3.ir.intensity = C3.night && !indoor ? 2.2 : 0; cam.lookAt(c.x * C3_U + Math.cos(dir) * Math.cos(tilt) * 10, h - Math.sin(tilt) * 10, c.y * C3_U + Math.sin(dir) * Math.cos(tilt) * 10);
+  const hf = Math.min(110, Math.max(25, c.fov)) * Math.PI / 180; cam.fov = Math.min(100, 2 * Math.atan(Math.tan(hf / 2) / (16 / 9)) * 180 / Math.PI); cam.near = indoor ? .1 : .3; cam.updateProjectionMatrix();
+  const rt = C3.rtS, W = 400, H = 225; R.setRenderTarget(rt); R.render(C3.S, cam); R.setRenderTarget(null);
+  const u = C3.pq.material.uniforms; u.t.value = rt.texture; u.time.value = (performance.now() / 1000) % 100; u.night.value = C3.night ? 1 : 0; u.k.value = c.fov >= 80 ? .14 : .06; u.res.value.set(W, H);
+  R.setViewport(0, 0, W, H); R.render(C3.post, C3.oc); R.setViewport(0, 0, 960, 540);
+  const g = cv.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(R.domElement, 0, 540 - H, W, H, 0, 0, cv.width, cv.height);
+  C3.ema = C3.ema * .9 + (performance.now() - t0) * .1; return true; }; })(c3Shot);
+const VW_SETS = { all: ["All cameras", () => true], out: ["Outdoor · layers 1–2", n => n <= 2], in: ["Indoor · layers 3–5", n => n >= 3] };
+function vwCams(site){ const set = VW_SETS[UI.vwSet] ? UI.vwSet : "all"; return bpCams(site).filter(c => VW_SETS[set][1](bpCamLayer(c))).sort((a, b) => bpCamLayer(a) - bpCamLayer(b) || String(a.no).localeCompare(String(b.no))); }
+const vwPages = site => Math.max(1, Math.ceil(vwCams(site).length / 9));
+function vwTc(site, t){ let tz = "Asia/Singapore"; try{ tz = wfTz(site); }catch(e){} const d = new Date(t); return new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(d) + ":" + String(Math.floor(d.getMilliseconds() / 40)).padStart(2, "0"); }
+function vwHtml(site){ const C0 = vwCams(site), L = +UI.bpLayer || 0;
+  // choosing a layer on the console turns the wall to the page with that layer's cameras
+  if (L && UI.vwLayerSeen !== L){ const i = C0.findIndex(c => bpCamLayer(c) === L); if (i >= 0) UI.vwPage = Math.floor(i / 9); } UI.vwLayerSeen = L;
+  const C = C0, pages = vwPages(site), pg = Math.min(Math.max(0, +UI.vwPage || 0), pages - 1), cams = C.slice(pg * 9, pg * 9 + 9), sp = BPS.spot && BPS.spot.site === site ? BPS.spot : null, cur = sp ? sp.ids[sp.i] : "", see = new Set(sp ? sp.ids : []), teal = UI.vwTint !== "mono";
+  const tiles = cams.map(c => bpTileHtml(site, c, cur, see).replace(/<\/button>$/, `<span class="vwid">${esc(c.no)} · ${esc(trunc(String(c.name), 22))}</span><span class="vwts" data-vwts>${vwTc(site, Date.now())}</span></button>`)).join("") + Array.from({ length: 9 - cams.length }, () => `<div class="soct empty vwempty"><span>NO CAMERA</span></div>`).join("");
+  return `<div class="vwrow${teal ? " teal" : ""}"><div class="vwhd"><span class="vwt">VIDEO WALL · ${esc(site)}</span><span class="vwsets">${Object.entries(VW_SETS).map(([k, v]) => `<button class="vwbtn${(UI.vwSet || "all") === k ? " on" : ""}" data-vwset="${k}">${esc(v[0])}</button>`).join("")}</span>
+      <span class="vwpg">${pages > 1 ? `<button class="vwbtn" data-vwpage="-1" aria-label="Previous page">◀</button><span>PAGE ${pg + 1}/${pages}</span><button class="vwbtn" data-vwpage="1" aria-label="Next page">▶</button><button class="vwbtn${UI.vwTour ? " on" : ""}" data-vwtour>${UI.vwTour ? "■ TOUR" : "▶ TOUR"}</button>` : ""}</span>
+      <span class="sp"></span><button class="vwbtn" data-vwtint>${teal ? "MONO" : "TINT"}</button><span class="soclive">● LIVE</span></div>
+    <div class="vwg">${tiles}</div></div>`; }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); if (UI.mode !== "siteplan") return r; try{
+    const room = p.querySelector(".socroom"), wall = room && room.querySelector(".socwallrow"), desk = room && room.querySelector(".socdesk"); if (!room || !wall || !desk) return r; const site = spSite();
+    const plan = wall.querySelector(".mon.plan"); if (plan) desk.insertBefore(plan, desk.firstChild); wall.remove(); desk.classList.add("vw3");
+    room.insertAdjacentHTML("afterbegin", vwHtml(site)); if (room.querySelector(".vwrow .socreal")) setTimeout(() => { try{ opsMount(); }catch(e){} }, 30);
+  }catch(e){ console.warn("video wall", e); } return r; }; })(renderPanelInner);
+document.addEventListener("click", e => { if (UI.mode !== "siteplan") return; const t = e.target.closest("[data-vwset],[data-vwpage],[data-vwtour],[data-vwtint]"); if (!t) return; e.stopPropagation(); const d = t.dataset, site = spSite();
+  if (d.vwset){ UI.vwSet = d.vwset; UI.vwPage = 0; } if (d.vwpage){ const n = vwPages(site); UI.vwPage = (((+UI.vwPage || 0) + +d.vwpage) % n + n) % n; } if (d.vwtour !== undefined){ UI.vwTour = !UI.vwTour; UI.vwTourAt = Date.now(); } if (d.vwtint !== undefined) UI.vwTint = UI.vwTint === "mono" ? "teal" : "mono";
+  saveUI(); const pp = document.getElementById("panel"), y = pp ? pp.scrollTop : 0; renderPanel(); if (pp) pp.scrollTop = y; }, true);
+// live timecode on every tile (25 frames a second), and the tour moves to the next page every 12 s
+setInterval(() => { if (UI.mode !== "siteplan" || document.hidden) return; const el = document.querySelectorAll("[data-vwts]"); if (!el.length) return; const site = spSite(), tc = vwTc(site, Date.now()); el.forEach(x => { if (x.textContent !== tc) x.textContent = tc; });
+  if (UI.vwTour && vwPages(site) > 1 && Date.now() - (UI.vwTourAt || 0) > 12000 && !document.querySelector("#ov.show")){ UI.vwTourAt = Date.now(); UI.vwPage = ((+UI.vwPage || 0) + 1) % vwPages(site); const pp = document.getElementById("panel"), y = pp ? pp.scrollTop : 0; renderPanel(); if (pp) pp.scrollTop = y; } }, 40);
+{ const st = document.createElement("style"); st.textContent = `.vwrow{background:#0b2b27;border:7px solid #0b0d10;border-radius:3px;box-shadow:0 0 0 1px #2c323a,0 14px 30px rgba(0,0,0,.65),0 0 46px rgba(31,157,143,.18)}
+.vwhd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 8px;background:#1a1e24;color:#c9d2dc;font:600 10.5px ui-monospace,Consolas,monospace;letter-spacing:.6px}.vwhd .sp{flex:1}.vwsets,.vwpg{display:flex;align-items:center;gap:4px}
+.vwbtn{background:#141b22;color:#c9d2dc;border:1px solid #2a323c;border-radius:3px;padding:2px 8px;font:600 10.5px ui-monospace,Consolas,monospace;letter-spacing:.4px;cursor:pointer}.vwbtn.on{background:#138a72;border-color:#138a72;color:#fff}.vwbtn:hover{border-color:#7FE3FF}
+.vwg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;background:#138a72}
+.vwg .soct{outline:0;border-radius:0;background:#0d1f1e}.vwg .soct.on{box-shadow:inset 0 0 0 3px #7FFFE9;outline:0}.vwg .soct.see{box-shadow:inset 0 0 0 3px #F2C94C;outline:0}.vwg .soct:not(.empty):hover{box-shadow:inset 0 0 0 3px #7FE3FF;outline:0}.vwg .soct.lsel{box-shadow:inset 0 0 0 3px #fff}
+.vwrow.teal .vwg .soct canvas,.vwrow.teal .vwg .soct .socreal{filter:grayscale(1) sepia(.4) hue-rotate(128deg) saturate(1.3) brightness(1.3) contrast(.86)}.vwrow:not(.teal) .vwg .soct .socreal{filter:grayscale(1)}
+.vwts{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);padding:3px 9px;background:#0f7a63;color:#fff;font:500 clamp(10px,1.35vw,19px) "DejaVu Sans Mono",Consolas,ui-monospace,monospace;letter-spacing:.5px;line-height:1.25;pointer-events:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vwrow:not(.teal) .vwts{background:rgba(0,0,0,.72)}.vwid{position:absolute;left:6px;top:5px;color:rgba(255,255,255,.7);font:600 clamp(9px,.8vw,11px) ui-monospace,Consolas,monospace;text-shadow:0 0 3px #000,0 1px 2px #000;pointer-events:none;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.socroom:has(.vwrow.teal) .socscr canvas,.socroom:has(.vwrow.teal) .socscr .socreal{filter:grayscale(1) sepia(.4) hue-rotate(128deg) saturate(1.3) brightness(1.3) contrast(.86)}.vwg .soct .soctl{display:none}.vwempty{background:#0d1f1e!important;color:#2f5e57!important}.vwg .soct.down .vwts{background:#8a1f23}
+.socdesk.vw3{grid-template-columns:minmax(0,1.05fr) minmax(0,1.3fr) minmax(0,.95fr)}.socdesk.vw3 .mon.plan{align-self:start}
+@media (max-width:1250px){.socdesk.vw3{grid-template-columns:1fr 1fr}.socdesk.vw3 .mon.plan{grid-column:1/-1}}@media (max-width:700px){.vwg{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px}.vwg .vwempty{display:none}.vwg>.soct:not(.vwempty):nth-last-child(1 of .soct:not(.vwempty)):nth-child(odd){grid-column:1/-1}.socdesk.vw3{grid-template-columns:1fr}.vwhd{gap:6px}}`; document.head.appendChild(st); }
 
 boot();
 
