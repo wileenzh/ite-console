@@ -24146,34 +24146,8 @@ document.getElementById("panel").addEventListener("change", e => { if (UI.mode !
 .oscard .osh{display:flex;align-items:center;gap:8px}.oscard .osh .sp,.osft .sp{flex:1}.oscard a{color:var(--text);text-decoration:none}.oscard a:hover b{color:var(--teal)}.oscard p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.45}
 .osstars{font:700 12px var(--readout,inherit);color:var(--text);white-space:nowrap}.ostags{display:flex;gap:4px;flex-wrap:wrap}.ostags span{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .osft{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}.osrow{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:8px 0}.osrow>div{flex:1;min-width:0}.osrow a{color:var(--text);text-decoration:none}.osrow select{max-width:130px}`; document.head.appendChild(st); }
-/* ---------- APAC director as a command centre, like the Visual Command Centre: one screen, no page scrolling — the status banner and
-   readouts across the top, the significant-events map in the middle, what matters now and the operational decisions on the left,
-   the regions and the last 7 days on the right; each column scrolls on its own ---------- */
-function ccFit(){ const pb = document.querySelector("#panel .pbody.dirp.ccl"); if (!pb) return; const pn = document.getElementById("panel"), top = pb.getBoundingClientRect().top + (pn ? pn.scrollTop : 0);
-  pb.style.setProperty("--ccTop", Math.max(120, Math.round(top)) + "px"); try{ if (DIR.map) DIR.map.invalidateSize(); }catch(e){} }
-renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); if (UI.mode === "sh-dir"){ const pb = p.querySelector(".pbody.dirp"); if (pb && pb.querySelector(".dmapc")){ pb.classList.add("ccl"); requestAnimationFrame(ccFit); setTimeout(() => { ccFit(); try{ dirMapDraw(); }catch(e){} }, 350); } } return r; }; })(renderPanelInner);
-window.addEventListener("resize", () => { if (UI.mode === "sh-dir") ccFit(); });
-{ const st = document.createElement("style"); st.textContent = `
-@media (min-width:1200px){
-  body:not(.phone) .pbody.dirp.ccl{display:grid;grid-template-columns:minmax(300px,.95fr) minmax(0,2.3fr) minmax(330px,1.05fr);grid-template-rows:auto auto minmax(0,1.15fr) minmax(0,1fr);
-    grid-template-areas:"head head head" "kpi kpi kpi" "now map reg" "dec map week";gap:12px;height:calc(100vh - var(--ccTop,230px));min-height:660px;padding:12px 16px 14px;box-sizing:border-box;overflow:hidden}
-  body:not(.phone) .dirp.ccl>.dhead{grid-area:head;margin:0;padding:10px 16px}
-  body:not(.phone) .dirp.ccl>.dhead .dt{font-size:17px}
-  body:not(.phone) .dirp.ccl>.dks{grid-area:kpi;margin:0;gap:10px}
-  body:not(.phone) .dirp.ccl>.dks .dk{padding:10px 12px 9px}
-  body:not(.phone) .dirp.ccl>.dks .dk b{font-size:22px}
-  body:not(.phone) .dirp.ccl>.dg,body:not(.phone) .dirp.ccl>.dg2{display:contents}
-  body:not(.phone) .dirp.ccl section.dc{min-height:0;overflow:auto;margin:0}
-  body:not(.phone) .dirp.ccl .dmapc{grid-area:map;overflow:hidden;padding:10px}
-  body:not(.phone) .dirp.ccl .dmapc .dmap{flex:1;min-height:0;height:100%;border-radius:10px}
-  body:not(.phone) .dirp.ccl>.dg>section:nth-child(2){grid-area:reg}
-  body:not(.phone) .dirp.ccl>.dg2>section:nth-child(1){grid-area:now}
-  body:not(.phone) .dirp.ccl>.dg2>section:nth-child(2){grid-area:week}
-  body:not(.phone) .dirp.ccl>.opdsec{grid-area:dec}
-  body:not(.phone) .dirp.ccl>*:not(.dhead):not(.dks):not(.dg):not(.dg2):not(.opdsec){grid-column:1/-1}
-  body:not(.phone) .dirp.ccl section.dc>.dch{position:sticky;top:-14px;z-index:2;margin:-14px -14px 10px;padding:12px 14px 8px;background:inherit;background:var(--panel);border-radius:14px 14px 0 0}
-  body:not(.phone) .dirp.ccl .dmapc>.dch{position:static;margin:0 0 8px;padding:2px 4px;background:transparent}
-}`; document.head.appendChild(st); }
+/* ---------- APAC director, Regional (RSOM) and Country (DSOM) as command centres, like the Visual Command Centre: one screen with the
+   banner and readouts on top, the map in the middle and the working lists either side (each column scrolls); details follow below ---------- */
 /* ---------- Regional (RSOM) and Country (DSOM) in the same command-centre form: banner and readouts on top; a map of the region's or
    country's sites with impact zones, incidents and escalations in the middle; the working lists either side; details below ---------- */
 const CC = { maps: {} };
@@ -24195,13 +24169,17 @@ function ccMapDraw(key, el, siteOk){ if (!el || typeof L === "undefined") return
 function ccArrange(pb, o){ if (!pb || pb.querySelector(".ccmain") || window.innerWidth < 1200 || document.body.classList.contains("phone")) return null;
   const pick = sels => sels.map(s => typeof s === "string" ? pb.querySelector(s) : s).filter(Boolean);
   const top = document.createElement("div"); top.className = "cctop"; pick(o.top).forEach(n => top.appendChild(n));
-  const main = document.createElement("div"); main.className = "ccmain"; main.innerHTML = `<div class="cccol ccl1"></div><section class="dc ccmapc"><div class="dch">${esc(o.mapTitle)} <small>${esc(o.mapSub || "")}</small></div><div class="ccmap"></div></section><div class="cccol ccl2"></div>`;
+  const main = document.createElement("div"); main.className = "ccmain"; main.innerHTML = `<div class="cccol ccl1"></div>${o.mapNode ? "" : `<section class="dc ccmapc"><div class="dch">${esc(o.mapTitle)} <small>${esc(o.mapSub || "")}</small></div><div class="ccmap"></div></section>`}<div class="cccol ccl2"></div>`;
+  if (o.mapNode){ o.mapNode.classList.add("ccmapc"); main.insertBefore(o.mapNode, main.querySelector(".ccl2")); }
   pick(o.left).forEach(n => main.querySelector(".ccl1").appendChild(n)); pick(o.right).forEach(n => main.querySelector(".ccl2").appendChild(n));
   pb.insertBefore(main, pb.firstChild); pb.insertBefore(top, main); pb.classList.add("cclay"); const more = [...pb.children].filter(n => n !== top && n !== main); if (more.length){ const h = document.createElement("div"); h.className = "ccmore"; h.textContent = "Details"; pb.insertBefore(h, more[0]); }
-  return main.querySelector(".ccmap"); }
+  return o.mapNode ? o.mapNode : main.querySelector(".ccmap"); }
 function ccFit2(){ const main = document.querySelector("#panel .ccmain"); if (!main) return; const pn = document.getElementById("panel"), top = main.getBoundingClientRect().top + (pn ? pn.scrollTop : 0);
   main.style.setProperty("--ccTop", Math.max(160, Math.round(top)) + "px"); Object.values(CC.maps).forEach(m => { try{ m.invalidateSize(); }catch(e){} }); }
 renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{
+  if (UI.mode === "sh-dir"){ const pb = p.querySelector(".pbody.dirp"); const dg = pb && pb.querySelector(":scope > .dg"), d2 = pb && pb.querySelector(":scope > .dg2");
+    if (dg && d2){ const mapS = dg.children[0], reg = dg.children[1], now = d2.children[0], wk = d2.children[1]; const el = ccArrange(pb, { top: [".dhead", ".dks"], left: [now, ".opdsec"], right: [reg, wk], mapNode: mapS });
+      if (el){ [dg, d2].forEach(x => { if (!x.children.length) x.remove(); }); requestAnimationFrame(ccFit2); setTimeout(() => { ccFit2(); try{ dirMapDraw(); }catch(e){} }, 120); } } }
   if (UI.mode === "sh-region"){ const pb = p.querySelector(".pbody.rgp"); const g = (() => { try{ const R = rrRegions(); return R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){ return ""; } })();
     const el = ccArrange(pb, { top: [".rgh", ".rgks"], left: [".opdsec", ...[...(pb ? pb.querySelectorAll(".rgg > .rgc") : [])]], right: [".rgbiz"], mapTitle: "Sites and impact — " + (rgName ? rgName(g) : g), mapSub: "impact zones, incidents and escalations" });
     if (el){ requestAnimationFrame(ccFit2); setTimeout(() => { ccFit2(); ccMapDraw("rg", el, s => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } }); }, 60); } }
@@ -24209,18 +24187,105 @@ renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(thi
     const dg = pb && pb.querySelector(":scope > .dg2"), dA = dg ? dg.children[0] : null, dB = dg ? dg.children[1] : null, el = ccArrange(pb, { top: [".dhead", ".dks"], left: [".opdsec", dA], right: [dB], mapTitle: "Sites and impact — " + cc, mapSub: "impact zones, incidents and escalations" });
     if (dg && !dg.children.length) dg.remove(); if (el){ requestAnimationFrame(ccFit2); setTimeout(() => { ccFit2(); ccMapDraw("so", el, s => s.country === cc && isLive(s)); }, 60); } }
   }catch(e){ console.warn("command layout", e); } return r; }; })(renderPanelInner);
-window.addEventListener("resize", () => { if (["sh-region", "sh-secops"].includes(UI.mode)) ccFit2(); });
+window.addEventListener("resize", () => { if (["sh-dir", "sh-region", "sh-secops"].includes(UI.mode)) ccFit2(); });
 { const st = document.createElement("style"); st.textContent = `
 .pbody.cclay .cctop{display:flex;flex-direction:column;gap:12px;margin-bottom:12px}.pbody.cclay .cctop>*{margin:0}
 .pbody.cclay .ccmain{display:grid;grid-template-columns:minmax(300px,.95fr) minmax(0,2.3fr) minmax(330px,1.05fr);gap:12px;height:calc(100vh - var(--ccTop,320px) - 14px);min-height:520px}
 .pbody.cclay .cccol{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0;padding-right:2px}.pbody.cclay .cccol>*{margin:0;flex:none}
 .pbody.cclay .cccol .rgc{border-radius:14px;background:var(--glass,var(--panel));padding:12px}
 .pbody.cclay .ccmapc{display:flex;flex-direction:column;min-height:0;padding:10px;margin:0}.pbody.cclay .ccmapc>.dch{margin:0 0 8px;padding:2px 4px}
-.pbody.cclay .ccmap{flex:1;min-height:0;border-radius:10px;overflow:hidden;background:#1b2028}
+.pbody.cclay .ccmapc .dmap{flex:1;min-height:0;border-radius:10px}.pbody.cclay .ccmap{flex:1;min-height:0;border-radius:10px;overflow:hidden;background:#1b2028}
 .pbody.cclay .ccl2 .rgbiz .dks{grid-template-columns:repeat(2,minmax(0,1fr))}.pbody.cclay .ccl2 .rgbiz .dg2{grid-template-columns:1fr}
 .pbody.cclay .ccl2 .dg2{grid-template-columns:1fr}
 .pbody.cclay .ccmore{margin:18px 2px 10px;font:700 13px var(--readout,inherit);color:var(--muted)}
 .pbody.cclay .rgks{margin:0}`; document.head.appendChild(st); }
+/* ---------- Dashboards each stakeholder shapes for themselves: the APAC director, each region (RSOM) and each country (DSOM) keep
+   "What matters to us" (their priorities, the risks, sites and topics they watch) at the top, and choose which panels show, in what order
+   and on which side, and which readouts appear. Saved per entity and shared with the team. ---------- */
+SH_KEYS.dashcfg = "psoc.uni.dashcfg.v1"; SHARED.dashcfg = lsGet(SH_KEYS.dashcfg, []); RETAIN_DAYS.dashcfg = 36500; LOCAL_CAP.dashcfg = 300; SYNC_TYPES.push("dashcfg");
+const DASH_MODES = ["sh-dir", "sh-region", "sh-secops"];
+function dashScope(){ const m = UI.mode; if (m === "sh-dir") return { key: "dir:APAC", name: "APAC", role: "APAC director", kind: "apac" };
+  if (m === "sh-region"){ let g = ""; try{ const R = rrRegions(); g = R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){} const n = (() => { try{ return rgName(g); }catch(e){ return g; } })(); return { key: "rg:" + g, name: n, role: "RSOM", kind: "region", g }; }
+  const cc = ((document.querySelector("#panel .dhead .dt") || {}).textContent || UI.dsomCc || "").trim(); return { key: "so:" + cc, name: cc, role: "DSOM", kind: "country", cc }; }
+const dashCfg = key => (SHARED.dashcfg || []).find(x => x.id === key && !x.deleted) || null;
+const dashSlug = t => String(t || "").toLowerCase().replace(/[—–-].*$/, "").replace(/[^a-z0-9 ]/g, "").trim().replace(/\s+/g, "-").slice(0, 40);
+function dashTitle(sec){ const h = sec.querySelector(":scope > .dch, :scope > .sec"); if (!h) return ""; return [...h.childNodes].filter(n => n.nodeType === 3 || (n.nodeType === 1 && !/SMALL|BUTTON|SPAN/.test(n.tagName))).map(n => n.textContent).join(" ").replace(/\s+/g, " ").trim(); }
+function dashSites(sc){ return SITES.filter(s => isLive(s) && !isOffice(s) && (sc.kind === "apac" || (sc.kind === "country" ? s.country === sc.cc : (() => { try{ return rgSiteRegion(s) === sc.g; }catch(e){ return false; } })()))); }
+// live risk rows for the entity's scope (worst city in scope)
+function dashRisks(sc){ if (sc.kind === "apac"){ try{ return rrRows("APAC"); }catch(e){ return []; } } const cities = [...new Set(dashSites(sc).map(s => metroOf(s)).filter(Boolean))], best = {};
+  cities.forEach(c => { try{ rrRows(c).forEach(x => { if (!best[x.r.id] || x.cur > best[x.r.id].cur) best[x.r.id] = Object.assign({ city: c }, x); }); }catch(e){} }); return Object.values(best); }
+/* ---- the "What matters to us" panel ---- */
+function dashPrioHtml(sc, cfg){ const P = (cfg && cfg.prio) || {}, notes = (P.notes || []).filter(n => !n.deleted), rk = P.risks || [], st = P.sites || [], wd = P.words || [], now = Date.now();
+  const empty = !notes.length && !rk.length && !st.length && !wd.length; let rows = "";
+  if (notes.length) rows += `<div class="dpsub">Priorities</div>` + notes.map(n => `<label class="dpnote${n.done ? " done" : ""}"><input type="checkbox" data-dashdone="${esc(n.id)}"${n.done ? " checked" : ""}><span>${esc(n.t)}</span>${n.who ? `<small>${esc(n.who)}</small>` : ""}</label>`).join("");
+  if (rk.length){ const R = Object.fromEntries(dashRisks(sc).map(x => [x.r.id, x])); rows += `<div class="dpsub">Risks we watch</div>` + rk.map(id => { const x = R[id], b = RISK.base.find(r => r.id === id); if (!b) return ""; return `<div class="dprow"><span class="rrpri" style="--c:${x ? RR_PRI[x.pri][2] : "#8394B0"}">${x ? x.pri : "—"}</span><b>${esc(b.name)}</b><span class="sp"></span><span class="dpnum">${x ? x.cur.toFixed(1) : "—"}</span>${x && x.live && x.live.tier ? `<span class="wfchip" style="--c:#FFB547">live signal</span>` : ""}</div>`; }).join(""); }
+  if (st.length){ let A = { hit: [] }; try{ A = impAssess(); }catch(e){} const lv = Object.fromEntries(A.hit.map(h => [h.s.code, h.level]));
+    rows += `<div class="dpsub">Sites we watch</div>` + st.map(code => { const s = SITES.find(x => x.code === code); if (!s) return ""; const inc = (SHARED.incidents || []).filter(x => !x.deleted && x.status !== "resolved" && x.site === code).length; let n = null, r0 = null; try{ if (wfHasRoster(code)) n = wfNow(code); }catch(e){} try{ r0 = sxRows(code)[0]; }catch(e){}
+      const bad = (lv[code] != null && lv[code] >= 2) || inc || (n && n.on < n.req); return `<div class="dprow"><span class="dpled" style="--c:${bad ? "#FF5468" : lv[code] != null ? "#FFB547" : "#3DDC97"}"></span><b>${esc(code)}</b><span class="s">${esc(metroOf(s) || s.city || "")}</span><span class="sp"></span>
+        <span class="s">${lv[code] != null ? esc(IMP_LV[lv[code]][0]) + " impact · " : ""}${inc ? inc + " incident" + (inc === 1 ? "" : "s") + " · " : ""}${n ? `${n.on}/${n.req} on post · ` : ""}${r0 ? esc(r0.r.name) + " " + r0.cur.toFixed(1) : ""}</span></div>`; }).join(""); }
+  if (wd.length){ const N = (DATA.news || []).filter(a => now - a.t < 864e5), AL = DATA.alerts || [];
+    rows += `<div class="dpsub">Topics we watch <small>news and warnings, last 24 h</small></div>` + wd.map(w => { const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), hits = N.filter(a => re.test(a.title || "")), al = AL.filter(a => re.test((a.title || "") + " " + (a.area || "")));
+      return `<div class="dprow"><span class="dpled" style="--c:${hits.length + al.length ? "#FFB547" : "#3E4B5E"}"></span><b>${esc(w)}</b><span class="sp"></span><span class="dpnum">${hits.length + al.length}</span></div>${hits.slice(0, 2).map(a => `<div class="dphead">${esc(trunc(a.title, 110))} <span class="s">${esc(ago(a.t))}</span></div>`).join("")}`; }).join(""); }
+  return `<section class="dc dprio" data-wid="priorities"><div class="dch">What matters to ${esc(sc.name)} <small>${cfg && cfg.by ? "set by " + esc(cfg.by) : "set by the " + esc(sc.role)}</small><span class="sp"></span><button class="tab-mini" data-dashcust>Customise</button></div>
+    ${empty ? `<div class="dpempty">Choose the priorities, risks, sites and topics that matter to ${esc(sc.name)}. They stay at the top of this dashboard for everyone who opens it.<div class="wfbtns"><button class="pill primary" data-dashcust>Choose what matters</button></div></div>` : rows}</section>`; }
+/* ---- apply the entity's layout after the page is drawn ---- */
+function dashApply(p){ if (!DASH_MODES.includes(UI.mode)) return; const pb = p.querySelector(".pbody"); if (!pb) return; const sc = dashScope(), cfg = dashCfg(sc.key);
+  const tools = p.querySelector(".ptools"); if (tools && !tools.querySelector("[data-dashcust]")) tools.insertAdjacentHTML("beforeend", `<button class="tab-mini dashbtn" data-dashcust title="Choose what this dashboard shows for ${esc(sc.name)}">⚙ Customise</button>`);
+  const l1 = pb.querySelector(".ccl1"), l2 = pb.querySelector(".ccl2"), kp = pb.querySelector(".cctop .dks, .cctop .rgks, :scope > .dks, :scope > .rgks");
+  const prio = document.createElement("div"); prio.innerHTML = dashPrioHtml(sc, cfg); const pr = prio.firstElementChild;
+  if (l1) l1.insertBefore(pr, l1.firstChild); else if (kp) kp.after(pr); else pb.insertBefore(pr, pb.firstChild);
+  const W = {}; [l1, l2].filter(Boolean).forEach(col => [...col.children].forEach(sec => { const id = sec.dataset.wid || dashSlug(dashTitle(sec)) || ("w" + Object.keys(W).length); sec.dataset.wid = id; W[id] = sec; }));
+  if (cfg && cfg.layout && l1 && l2){ const L = cfg.layout; (L.l || []).forEach(id => W[id] && l1.appendChild(W[id])); (L.r || []).forEach(id => W[id] && l2.appendChild(W[id])); (L.hide || []).forEach(id => { if (W[id]) W[id].classList.add("dashoff"); }); }
+  if (cfg && cfg.kpi && kp){ const T = [...kp.children], lab = el => ((el.querySelector("span") || {}).textContent || "").trim(); (cfg.kpi.order || []).forEach(t => { const el = T.find(x => lab(x) === t); if (el) kp.appendChild(el); }); T.forEach(el => el.classList.toggle("dashoff", (cfg.kpi.hide || []).includes(lab(el)))); if (pb.classList.contains("cclay")) kp.style.gridTemplateColumns = `repeat(${Math.max(1, T.length - (cfg.kpi.hide || []).filter(h => T.some(x => lab(x) === h)).length)},minmax(0,1fr))`; } }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{ dashApply(p); }catch(e){ console.warn("dashboard", e); } return r; }; })(renderPanelInner);
+/* ---- the customise window ---- */
+function dashEditor(){ const p = document.getElementById("panel"), pb = p.querySelector(".pbody"), sc = dashScope(), cfg = dashCfg(sc.key) || {}, l1 = pb.querySelector(".ccl1"), l2 = pb.querySelector(".ccl2"), kp = pb.querySelector(".dks, .rgks");
+  const name = id => { const s = pb.querySelector(`[data-wid="${id}"]`); return s ? (id === "priorities" ? "What matters to " + sc.name : dashTitle(s) || id) : id; };
+  let L = { l: l1 ? [...l1.children].map(x => x.dataset.wid) : [], r: l2 ? [...l2.children].map(x => x.dataset.wid) : [], hide: (cfg.layout && cfg.layout.hide || []).slice() };
+  const kl = kp ? [...kp.children].map(el => ((el.querySelector("span") || {}).textContent || "").trim()).filter(Boolean) : [], khide = new Set((cfg.kpi && cfg.kpi.hide) || []);
+  const P = JSON.parse(JSON.stringify(cfg.prio || {})), sites = dashSites(sc).sort((a, b) => a.code.localeCompare(b.code)), rk = new Set(P.risks || []), st = new Set(P.sites || []);
+  const lay = () => ["l", "r"].map(side => `<div class="dcol"><div class="dpsub">${side === "l" ? "Left" : "Right"} column</div>${L[side].map((id, i) => `<div class="dlrow${L.hide.includes(id) ? " off" : ""}"><label><input type="checkbox" data-dshow="${esc(id)}"${L.hide.includes(id) ? "" : " checked"}> ${esc(name(id))}</label><span class="sp"></span>
+      <button class="tab-mini" data-dmv="${side}|${i}|-1" aria-label="Move up"${i ? "" : " disabled"}>↑</button><button class="tab-mini" data-dmv="${side}|${i}|1" aria-label="Move down"${i < L[side].length - 1 ? "" : " disabled"}>↓</button><button class="tab-mini" data-dmv="${side}|${i}|x" aria-label="Move to the other side">${side === "l" ? "→" : "←"}</button></div>`).join("") || `<p class="s">Empty</p>`}</div>`).join("");
+  openModal(head(`Customise — ${sc.role}${sc.kind === "apac" ? "" : " · " + sc.name}`) + `<div class="bd dashed">
+    <div class="dpsub">What matters to ${esc(sc.name)}</div>
+    <label class="fld">Our priorities (one per line; add “ | owner” for who leads it)<textarea id="dpN" rows="4" placeholder="e.g. Typhoon season readiness at coastal sites | DSOM&#10;Close the guard training gap before the audit">${esc((P.notes || []).filter(n => !n.deleted).map(n => n.t + (n.who ? " | " + n.who : "")).join("\n"))}</textarea></label>
+    <div class="fld">Risks we watch</div><div class="dchips">${RISK.base.map(r => `<label class="dchip"><input type="checkbox" data-drisk="${r.id}"${rk.has(r.id) ? " checked" : ""}> ${esc(r.name)}</label>`).join("")}</div>
+    <div class="fld" style="margin-top:10px">Sites we watch <small>${sites.length} in ${esc(sc.name)}</small></div><input id="dpSq" type="search" placeholder="Filter sites" style="margin:4px 0 6px"><div class="dchips dsites">${sites.map(s => `<label class="dchip" data-dsite-l="${esc((s.code + " " + (metroOf(s) || s.city || "")).toLowerCase())}"><input type="checkbox" data-dsite="${esc(s.code)}"${st.has(s.code) ? " checked" : ""}> ${esc(s.code)} <small>${esc(metroOf(s) || s.city || "")}</small></label>`).join("")}</div>
+    <label class="fld" style="margin-top:10px">Topics we watch in news and warnings (comma separated)<input id="dpW" value="${esc((P.words || []).join(", "))}" placeholder="e.g. typhoon, power outage, protest, water rationing"></label>
+    <div class="dpsub" style="margin-top:14px">Panels</div><div class="dlay">${lay()}</div>
+    ${kl.length ? `<div class="dpsub" style="margin-top:14px">Readouts across the top</div><div class="dchips">${kl.map(k => `<label class="dchip"><input type="checkbox" data-dkpi="${esc(k)}"${khide.has(k) ? "" : " checked"}> ${esc(k)}</label>`).join("")}</div>` : ""}
+    <p class="help">Saved for ${esc(sc.name)} and shared with everyone who opens this dashboard.</p></div>
+    <div class="ft"><button class="pill" id="dpReset">Reset to default</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="dpGo">Save</button></div>`, true);
+  const box = $("#box");
+  box.addEventListener("click", e => { const b = e.target.closest("[data-dmv]"); if (!b) return; const [side, i, d] = b.dataset.dmv.split("|"), k = +i, A = L[side]; if (d === "x"){ const [id] = A.splice(k, 1); L[side === "l" ? "r" : "l"].push(id); } else { const j = k + +d; [A[k], A[j]] = [A[j], A[k]]; } box.querySelector(".dlay").innerHTML = lay(); });
+  box.addEventListener("change", e => { const c = e.target.closest("[data-dshow]"); if (!c) return; const id = c.dataset.dshow; L.hide = L.hide.filter(x => x !== id); if (!c.checked) L.hide.push(id); c.closest(".dlrow").classList.toggle("off", !c.checked); });
+  $("#dpSq").addEventListener("input", e => { const q = e.target.value.trim().toLowerCase(); box.querySelectorAll("[data-dsite-l]").forEach(x => x.hidden = !!q && !x.dataset.dsiteL.includes(q)); });
+  $("#dpGo").onclick = () => { const old = Object.fromEntries(((cfg.prio || {}).notes || []).map(n => [n.t, n]));
+    const notes = $("#dpN").value.split("\n").map(x => x.trim()).filter(Boolean).map(line => { const [t, who] = line.split("|").map(x => x.trim()); const o = old[t]; return { id: o ? o.id : "n" + Math.random().toString(36).slice(2, 8), t, who: who || "", done: o ? !!o.done : false, at: o ? o.at : Date.now() }; });
+    const rec = { id: sc.key, scope: sc.name, role: sc.role, layout: L, kpi: { hide: [...box.querySelectorAll("[data-dkpi]")].filter(c => !c.checked).map(c => c.dataset.dkpi) },
+      prio: { notes, risks: [...box.querySelectorAll("[data-drisk]:checked")].map(c => c.dataset.drisk), sites: [...box.querySelectorAll("[data-dsite]:checked")].map(c => c.dataset.dsite), words: $("#dpW").value.split(",").map(x => x.trim()).filter(Boolean).slice(0, 12) }, by: ME ? ME.name : "", updatedAt: Date.now() };
+    putShared("dashcfg", rec); audit("Dashboard customised", sc.role + " · " + sc.name, ""); closeModal(); renderPanel(); toast("Dashboard saved", `What matters to ${sc.name} is shared with the team`, "var(--teal)"); };
+  $("#dpReset").onclick = () => { const c = dashCfg(sc.key); if (c){ c.deleted = true; c.updatedAt = Date.now(); putShared("dashcfg", c); } closeModal(); renderPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (!DASH_MODES.includes(UI.mode)) return; const t = e.target.closest("[data-dashcust]"); if (!t) return; e.stopPropagation(); dashEditor(); }, true);
+document.getElementById("panel").addEventListener("change", e => { if (!DASH_MODES.includes(UI.mode)) return; const c = e.target.closest("[data-dashdone]"); if (!c) return; const sc = dashScope(), cfg = dashCfg(sc.key); if (!cfg) return; const n = ((cfg.prio || {}).notes || []).find(x => x.id === c.dataset.dashdone); if (!n) return; n.done = c.checked; cfg.updatedAt = Date.now(); putShared("dashcfg", cfg); renderPanel(); });
+{ const st = document.createElement("style"); st.textContent = `
+.dashoff{display:none!important}
+.dprio{border-color:color-mix(in srgb,var(--teal) 35%,var(--line))!important;background:linear-gradient(180deg,color-mix(in srgb,var(--teal) 7%,transparent),transparent 120px),var(--glass,var(--panel))!important}
+.dprio .dch{display:flex;align-items:center;gap:8px}.dprio .dch .sp{flex:1}
+.dpsub{font:600 11.5px var(--font);color:var(--muted);margin:10px 0 6px;letter-spacing:.01em}.dpsub:first-of-type{margin-top:2px}.dpsub small{font-weight:400}
+.dprow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);font-size:12.5px;min-width:0}.dprow .sp{flex:1}.dprow .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dpnum{font:700 13px var(--readout,inherit)}.dpled{flex:none;width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+.dphead{font-size:12px;color:var(--muted);padding:2px 0 4px 16px}
+.dpnote{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;cursor:pointer}.dpnote input{margin-top:2px}.dpnote small{margin-left:auto;color:var(--muted);white-space:nowrap}.dpnote.done span{text-decoration:line-through;color:var(--muted)}
+.dpempty{font-size:13px;color:var(--muted);line-height:1.5}
+.dashed .dchips{display:flex;flex-wrap:wrap;gap:6px;max-height:170px;overflow:auto}.dashed .dchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;cursor:pointer}.dashed .dchip small{color:var(--muted)}
+.dashed .dlay{display:grid;grid-template-columns:1fr 1fr;gap:12px}.dashed .dlrow{display:flex;align-items:center;gap:4px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;font-size:12.5px}.dashed .dlrow .sp{flex:1}.dashed .dlrow.off{opacity:.5}
+.dashbtn{border-color:color-mix(in srgb,var(--teal) 45%,var(--line))!important;color:var(--text)!important}
+/* the look of every panel on these dashboards */
+.pbody.cclay .cccol>section.dc,.pbody.cclay .cccol>.rgc{border-radius:14px}
+.pbody.cclay .cccol>section.dc>.dch,.pbody.cclay .cccol>.rgc>.sec{display:flex;align-items:center;gap:8px;font:700 13px var(--readout,inherit);letter-spacing:.01em;color:var(--text);text-transform:none;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.pbody.cclay .cccol>section.dc>.dch small,.pbody.cclay .cccol>.rgc>.sec small{font:400 11.5px var(--font);color:var(--muted)}
+@media (max-width:700px){.dashed .dlay{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 
 boot();
 

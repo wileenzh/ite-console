@@ -1163,3 +1163,25 @@ working lists either side. Each column scrolls on its own.
 
 On all three, the status banner and readouts sit across the top, and the detail tables follow below the command screen.
 On screens narrower than 1200 px and on phones, the pages keep their stacked layout.
+
+## Dashboards each stakeholder shapes (26 Oct)
+
+**What matters to us.** The APAC director, each region (RSOM) and each country (DSOM) dashboard opens with a panel the
+entity fills in:
+- **Priorities:** one per line, with an optional lead. Tick them when they're done.
+- **Risks we watch:** each shows its live score and priority for that scope, and flags a live signal.
+- **Sites we watch:** each shows impact level, open incidents, people on post and its top site risk, with a status
+  light.
+- **Topics we watch:** words or phrases matched against the last 24 hours of news and official warnings, with the
+  latest headlines.
+
+**Customise** (on the page's toolbar, or on the panel) lets the entity:
+- choose which panels show;
+- set their order, and move them between the left and right columns;
+- choose which readouts appear across the top.
+
+**Saving.** The set-up is saved per entity (APAC, each region, each country), so North Asia's RSOM and Japan's DSOM
+each keep their own. It's shared with everyone who opens that dashboard, and records who set it. **Reset to default**
+returns to the standard layout.
+
+**Look.** Every panel on these pages now has the same header style.
