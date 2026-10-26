@@ -24229,44 +24229,62 @@ function dashPrioHtml(sc, cfg){ const P = (cfg && cfg.prio) || {}, notes = (P.no
   return `<section class="dc dprio" data-wid="priorities"><div class="dch">What matters to ${esc(sc.name)} <small>${cfg && cfg.by ? "set by " + esc(cfg.by) : "set by the " + esc(sc.role)}</small><span class="sp"></span><button class="tab-mini" data-dashcust>Customise</button></div>
     ${empty ? `<div class="dpempty">Choose the priorities, risks, sites and topics that matter to ${esc(sc.name)}. They stay at the top of this dashboard for everyone who opens it.<div class="wfbtns"><button class="pill primary" data-dashcust>Choose what matters</button></div></div>` : rows}</section>`; }
 /* ---- apply the entity's layout after the page is drawn ---- */
-function dashApply(p){ if (!DASH_MODES.includes(UI.mode)) return; const pb = p.querySelector(".pbody"); if (!pb) return; const sc = dashScope(), cfg = dashCfg(sc.key);
+function dashApply(p){ if (!DASH_MODES.includes(UI.mode)) return; const pb = p.querySelector(".pbody"); if (!pb) return; const sc = dashScope(), cfg = dashCfg(sc.key), eff = dlEff(sc, cfg);
   const tools = p.querySelector(".ptools"); if (tools && !tools.querySelector("[data-dashcust]")) tools.insertAdjacentHTML("beforeend", `<button class="tab-mini dashbtn" data-dashcust title="Choose what this dashboard shows for ${esc(sc.name)}">⚙ Customise</button>`);
   const l1 = pb.querySelector(".ccl1"), l2 = pb.querySelector(".ccl2"), kp = pb.querySelector(".cctop .dks, .cctop .rgks, :scope > .dks, :scope > .rgks");
   const prio = document.createElement("div"); prio.innerHTML = dashPrioHtml(sc, cfg); const pr = prio.firstElementChild;
   if (l1) l1.insertBefore(pr, l1.firstChild); else if (kp) kp.after(pr); else pb.insertBefore(pr, pb.firstChild);
   const W = {}; [l1, l2].filter(Boolean).forEach(col => [...col.children].forEach(sec => { const id = sec.dataset.wid || dashSlug(dashTitle(sec)) || ("w" + Object.keys(W).length); sec.dataset.wid = id; W[id] = sec; }));
-  if (cfg && cfg.layout && l1 && l2){ const L = cfg.layout; (L.l || []).forEach(id => W[id] && l1.appendChild(W[id])); (L.r || []).forEach(id => W[id] && l2.appendChild(W[id])); (L.hide || []).forEach(id => { if (W[id]) W[id].classList.add("dashoff"); }); }
-  if (cfg && cfg.kpi && kp){ const T = [...kp.children], lab = el => ((el.querySelector("span") || {}).textContent || "").trim(); (cfg.kpi.order || []).forEach(t => { const el = T.find(x => lab(x) === t); if (el) kp.appendChild(el); }); T.forEach(el => el.classList.toggle("dashoff", (cfg.kpi.hide || []).includes(lab(el)))); if (pb.classList.contains("cclay")) kp.style.gridTemplateColumns = `repeat(${Math.max(1, T.length - (cfg.kpi.hide || []).filter(h => T.some(x => lab(x) === h)).length)},minmax(0,1fr))`; } }
+  if (eff.layout && l1 && l2){ const L = eff.layout; (L.l || []).forEach(id => W[id] && l1.appendChild(W[id])); (L.r || []).forEach(id => W[id] && l2.appendChild(W[id])); (L.hide || []).forEach(id => { if (W[id]) W[id].classList.add("dashoff"); }); }
+  if (eff.kpi && kp){ const T = [...kp.children], lab = el => ((el.querySelector("span") || {}).textContent || "").trim(); (eff.kpi.order || []).forEach(t => { const el = T.find(x => lab(x) === t); if (el) kp.appendChild(el); }); T.forEach(el => el.classList.toggle("dashoff", (eff.kpi.hide || []).includes(lab(el)))); if (pb.classList.contains("cclay")) kp.style.gridTemplateColumns = `repeat(${Math.max(1, T.length - (eff.kpi.hide || []).filter(h => T.some(x => lab(x) === h)).length)},minmax(0,1fr))`; } }
 renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{ dashApply(p); }catch(e){ console.warn("dashboard", e); } return r; }; })(renderPanelInner);
 /* ---- the customise window ---- */
-function dashEditor(){ const p = document.getElementById("panel"), pb = p.querySelector(".pbody"), sc = dashScope(), cfg = dashCfg(sc.key) || {}, l1 = pb.querySelector(".ccl1"), l2 = pb.querySelector(".ccl2"), kp = pb.querySelector(".dks, .rgks");
+function dashEditor(target){ const p = document.getElementById("panel"), pb = p.querySelector(".pbody"), sc = dashScope(), cfg = dashCfg(sc.key) || {}, l1 = pb.querySelector(".ccl1"), l2 = pb.querySelector(".ccl2"), kp = pb.querySelector(".dks, .rgks");
+  target = target || "all"; if (target !== "all" && target !== dlUid() && !dlCanOthers()) target = dlUid(); const team = target === "all", me = target === dlUid();
+  const users = (SHARED.users || []).filter(u => !u.disabled && u.id !== dlUid()).sort((a, b) => a.name.localeCompare(b.name)), who = team ? "" : me ? (ME ? ME.name : "you") : ((users.find(u => u.id === target) || {}).name || target.replace(/^u:/, ""));
+  const urec = team ? null : dlRec(target + "|" + sc.key), src = team ? cfg : (urec && urec.layout ? urec : cfg);
   const name = id => { const s = pb.querySelector(`[data-wid="${id}"]`); return s ? (id === "priorities" ? "What matters to " + sc.name : dashTitle(s) || id) : id; };
-  let L = { l: l1 ? [...l1.children].map(x => x.dataset.wid) : [], r: l2 ? [...l2.children].map(x => x.dataset.wid) : [], hide: (cfg.layout && cfg.layout.hide || []).slice() };
-  const kl = kp ? [...kp.children].map(el => ((el.querySelector("span") || {}).textContent || "").trim()).filter(Boolean) : [], khide = new Set((cfg.kpi && cfg.kpi.hide) || []);
+  const dom = { l: l1 ? [...l1.children].map(x => x.dataset.wid).filter(Boolean) : [], r: l2 ? [...l2.children].map(x => x.dataset.wid).filter(Boolean) : [] };
+  let L = { l: dom.l.slice(), r: dom.r.slice(), hide: (src.layout && src.layout.hide || []).slice() };
+  if (src.layout){ const all = [...dom.l, ...dom.r], seen = new Set(); L.l = (src.layout.l || []).filter(id => all.includes(id) && !seen.has(id) && seen.add(id)); L.r = (src.layout.r || []).filter(id => all.includes(id) && !seen.has(id) && seen.add(id)); dom.l.forEach(id => seen.has(id) || L.l.push(id)); dom.r.forEach(id => seen.has(id) || L.r.push(id)); }
+  const kl = kp ? [...kp.children].map(el => ((el.querySelector("span") || {}).textContent || "").trim()).filter(Boolean) : [], khide = new Set((src.kpi && src.kpi.hide) || []);
   const P = JSON.parse(JSON.stringify(cfg.prio || {})), sites = dashSites(sc).sort((a, b) => a.code.localeCompare(b.code)), rk = new Set(P.risks || []), st = new Set(P.sites || []);
+  const V = team ? Object.assign({}, DL_DEF, cfg.view || {}) : dlView(sc, target).v;
   const lay = () => ["l", "r"].map(side => `<div class="dcol"><div class="dpsub">${side === "l" ? "Left" : "Right"} column</div>${L[side].map((id, i) => `<div class="dlrow${L.hide.includes(id) ? " off" : ""}"><label><input type="checkbox" data-dshow="${esc(id)}"${L.hide.includes(id) ? "" : " checked"}> ${esc(name(id))}</label><span class="sp"></span>
       <button class="tab-mini" data-dmv="${side}|${i}|-1" aria-label="Move up"${i ? "" : " disabled"}>↑</button><button class="tab-mini" data-dmv="${side}|${i}|1" aria-label="Move down"${i < L[side].length - 1 ? "" : " disabled"}>↓</button><button class="tab-mini" data-dmv="${side}|${i}|x" aria-label="Move to the other side">${side === "l" ? "→" : "←"}</button></div>`).join("") || `<p class="s">Empty</p>`}</div>`).join("");
   openModal(head(`Customise — ${sc.role}${sc.kind === "apac" ? "" : " · " + sc.name}`) + `<div class="bd dashed">
-    <div class="dpsub">What matters to ${esc(sc.name)}</div>
+    <div class="dlwho"><span class="s">Layout for</span><button type="button" class="pill${team ? " on" : ""}" data-dlwho="all">Everyone on ${esc(sc.name)}</button><button type="button" class="pill${me ? " on" : ""}" data-dlwho="${esc(dlUid())}">Just me</button>
+      ${dlCanOthers() && users.length ? `<select id="dlWho" aria-label="Someone else"><option value="">Someone else…</option>${users.map(u => `<option value="${esc(u.id)}"${u.id === target ? " selected" : ""}>${esc(u.name)} · ${esc(ROLES[u.role] || u.role)}${dlRec(u.id + "|" + sc.key) || dlRec(u.id + "|*") ? " ✓" : ""}</option>`).join("")}</select>` : ""}</div>
+    <p class="help" style="margin-top:0">${team ? `The team layout: everyone sees it unless they have their own.` : me ? `Your own layout. Only you see it; the team's priorities still show.` : `${esc(who)}'s layout. They see it when they open this dashboard; they can still change it themselves.`}</p>
+    ${dlEditorHtml(V, target, sc)}
+    ${team ? `<div class="dpsub" style="margin-top:14px">What matters to ${esc(sc.name)}</div>
     <label class="fld">Our priorities (one per line; add “ | owner” for who leads it)<textarea id="dpN" rows="4" placeholder="e.g. Typhoon season readiness at coastal sites | DSOM&#10;Close the guard training gap before the audit">${esc((P.notes || []).filter(n => !n.deleted).map(n => n.t + (n.who ? " | " + n.who : "")).join("\n"))}</textarea></label>
     <div class="fld">Risks we watch</div><div class="dchips">${RISK.base.map(r => `<label class="dchip"><input type="checkbox" data-drisk="${r.id}"${rk.has(r.id) ? " checked" : ""}> ${esc(r.name)}</label>`).join("")}</div>
     <div class="fld" style="margin-top:10px">Sites we watch <small>${sites.length} in ${esc(sc.name)}</small></div><input id="dpSq" type="search" placeholder="Filter sites" style="margin:4px 0 6px"><div class="dchips dsites">${sites.map(s => `<label class="dchip" data-dsite-l="${esc((s.code + " " + (metroOf(s) || s.city || "")).toLowerCase())}"><input type="checkbox" data-dsite="${esc(s.code)}"${st.has(s.code) ? " checked" : ""}> ${esc(s.code)} <small>${esc(metroOf(s) || s.city || "")}</small></label>`).join("")}</div>
-    <label class="fld" style="margin-top:10px">Topics we watch in news and warnings (comma separated)<input id="dpW" value="${esc((P.words || []).join(", "))}" placeholder="e.g. typhoon, power outage, protest, water rationing"></label>
+    <label class="fld" style="margin-top:10px">Topics we watch in news and warnings (comma separated)<input id="dpW" value="${esc((P.words || []).join(", "))}" placeholder="e.g. typhoon, power outage, protest, water rationing"></label>` : `<p class="help">What matters to ${esc(sc.name)} is the team's, so it is set under <b>Everyone</b>.</p>`}
     <div class="dpsub" style="margin-top:14px">Panels</div><div class="dlay">${lay()}</div>
     ${kl.length ? `<div class="dpsub" style="margin-top:14px">Readouts across the top</div><div class="dchips">${kl.map(k => `<label class="dchip"><input type="checkbox" data-dkpi="${esc(k)}"${khide.has(k) ? "" : " checked"}> ${esc(k)}</label>`).join("")}</div>` : ""}
-    <p class="help">Saved for ${esc(sc.name)} and shared with everyone who opens this dashboard.</p></div>
-    <div class="ft"><button class="pill" id="dpReset">Reset to default</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="dpGo">Save</button></div>`, true);
-  const box = $("#box");
-  box.addEventListener("click", e => { const b = e.target.closest("[data-dmv]"); if (!b) return; const [side, i, d] = b.dataset.dmv.split("|"), k = +i, A = L[side]; if (d === "x"){ const [id] = A.splice(k, 1); L[side === "l" ? "r" : "l"].push(id); } else { const j = k + +d; [A[k], A[j]] = [A[j], A[k]]; } box.querySelector(".dlay").innerHTML = lay(); });
-  box.addEventListener("change", e => { const c = e.target.closest("[data-dshow]"); if (!c) return; const id = c.dataset.dshow; L.hide = L.hide.filter(x => x !== id); if (!c.checked) L.hide.push(id); c.closest(".dlrow").classList.toggle("off", !c.checked); });
-  $("#dpSq").addEventListener("input", e => { const q = e.target.value.trim().toLowerCase(); box.querySelectorAll("[data-dsite-l]").forEach(x => x.hidden = !!q && !x.dataset.dsiteL.includes(q)); });
-  $("#dpGo").onclick = () => { const old = Object.fromEntries(((cfg.prio || {}).notes || []).map(n => [n.t, n]));
+    <p class="help">${team ? `Saved for ${esc(sc.name)} and shared with everyone who opens this dashboard.` : `Saved for ${esc(who)} only.`}</p></div>
+    <div class="ft"><button class="pill" id="dpReset">${team ? "Reset to default" : "Back to the team layout"}</button><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="dpGo">Save</button></div>`, true);
+  // the window may reuse the same box: only this opening's handlers act
+  const box = $("#box"), gen = box._dgen = (box._dgen || 0) + 1, live = () => box._dgen === gen && box.isConnected; dlEditorWire(box, live);
+  box.addEventListener("click", e => { if (!live()) return; const w = e.target.closest("[data-dlwho]"); if (w){ dashEditor(w.dataset.dlwho); return; } const b = e.target.closest("[data-dmv]"); if (!b) return; const [side, i, d] = b.dataset.dmv.split("|"), k = +i, A = L[side]; if (d === "x"){ const [id] = A.splice(k, 1); L[side === "l" ? "r" : "l"].push(id); } else { const j = k + +d; [A[k], A[j]] = [A[j], A[k]]; } box.querySelector(".dlay").innerHTML = lay(); });
+  box.addEventListener("change", e => { if (!live()) return; if (e.target.id === "dlWho"){ if (e.target.value) dashEditor(e.target.value); return; } const c = e.target.closest("[data-dshow]"); if (!c) return; const id = c.dataset.dshow; L.hide = L.hide.filter(x => x !== id); if (!c.checked) L.hide.push(id); c.closest(".dlrow").classList.toggle("off", !c.checked); });
+  if ($("#dpSq")) $("#dpSq").addEventListener("input", e => { if (!live()) return; const q = e.target.value.trim().toLowerCase(); box.querySelectorAll("[data-dsite-l]").forEach(x => x.hidden = !!q && !x.dataset.dsiteL.includes(q)); });
+  const kpiNow = () => ({ hide: [...box.querySelectorAll("[data-dkpi]")].filter(c => !c.checked).map(c => c.dataset.dkpi) });
+  $("#dpGo").onclick = () => { const view = dlEditorRead(box);
+    if (!team){ const by = ME ? ME.name : "", base = { uid: target, user: who, by }, allD = !!($("#dlAll") && $("#dlAll").checked), one = dlRec(target + "|" + sc.key);
+      if (allD) putShared("dashuser", Object.assign({}, dlRec(target + "|*") || {}, base, { id: target + "|*", scope: "*", scopeName: "All dashboards", view }));
+      putShared("dashuser", Object.assign({}, one || {}, base, { id: target + "|" + sc.key, scope: sc.key, scopeName: sc.name, view: allD ? null : view, layout: L, kpi: kpiNow() }));
+      audit("Dashboard layout saved", sc.role + " · " + sc.name, me ? "own layout" : "for " + who); closeModal(); renderPanel(); toast("Layout saved", me ? "Your layout for " + (allD ? "all dashboards" : sc.name) : `${who} will see this layout`, "var(--teal)"); return; }
+    const old = Object.fromEntries(((cfg.prio || {}).notes || []).map(n => [n.t, n]));
     const notes = $("#dpN").value.split("\n").map(x => x.trim()).filter(Boolean).map(line => { const [t, who] = line.split("|").map(x => x.trim()); const o = old[t]; return { id: o ? o.id : "n" + Math.random().toString(36).slice(2, 8), t, who: who || "", done: o ? !!o.done : false, at: o ? o.at : Date.now() }; });
-    const rec = { id: sc.key, scope: sc.name, role: sc.role, layout: L, kpi: { hide: [...box.querySelectorAll("[data-dkpi]")].filter(c => !c.checked).map(c => c.dataset.dkpi) },
+    const rec = { id: sc.key, scope: sc.name, role: sc.role, layout: L, kpi: kpiNow(), view,
       prio: { notes, risks: [...box.querySelectorAll("[data-drisk]:checked")].map(c => c.dataset.drisk), sites: [...box.querySelectorAll("[data-dsite]:checked")].map(c => c.dataset.dsite), words: $("#dpW").value.split(",").map(x => x.trim()).filter(Boolean).slice(0, 12) }, by: ME ? ME.name : "", updatedAt: Date.now() };
     putShared("dashcfg", rec); audit("Dashboard customised", sc.role + " · " + sc.name, ""); closeModal(); renderPanel(); toast("Dashboard saved", `What matters to ${sc.name} is shared with the team`, "var(--teal)"); };
-  $("#dpReset").onclick = () => { const c = dashCfg(sc.key); if (c){ c.deleted = true; c.updatedAt = Date.now(); putShared("dashcfg", c); } closeModal(); renderPanel(); }; }
-document.getElementById("panel").addEventListener("click", e => { if (!DASH_MODES.includes(UI.mode)) return; const t = e.target.closest("[data-dashcust]"); if (!t) return; e.stopPropagation(); dashEditor(); }, true);
+  $("#dpReset").onclick = () => { if (team){ const c = dashCfg(sc.key); if (c){ c.deleted = true; c.updatedAt = Date.now(); putShared("dashcfg", c); } }
+    else [target + "|" + sc.key, target + "|*"].forEach(id => { const c = dlRec(id); if (c){ c.deleted = true; putShared("dashuser", c); } }); closeModal(); renderPanel(); }; }
+document.getElementById("panel").addEventListener("click", e => { if (!DASH_MODES.includes(UI.mode)) return; const t = e.target.closest("[data-dashcust]"); if (!t) return; e.stopPropagation(); dashEditor(t.classList.contains("dlbadge") ? dlUid() : "all"); }, true);
 document.getElementById("panel").addEventListener("change", e => { if (!DASH_MODES.includes(UI.mode)) return; const c = e.target.closest("[data-dashdone]"); if (!c) return; const sc = dashScope(), cfg = dashCfg(sc.key); if (!cfg) return; const n = ((cfg.prio || {}).notes || []).find(x => x.id === c.dataset.dashdone); if (!n) return; n.done = c.checked; cfg.updatedAt = Date.now(); putShared("dashcfg", cfg); renderPanel(); });
 { const st = document.createElement("style"); st.textContent = `
 .dashoff{display:none!important}
@@ -24286,25 +24304,140 @@ document.getElementById("panel").addEventListener("change", e => { if (!DASH_MOD
 .pbody.cclay .cccol>section.dc>.dch,.pbody.cclay .cccol>.rgc>.sec{display:flex;align-items:center;gap:8px;font:700 13px var(--readout,inherit);letter-spacing:.01em;color:var(--text);text-transform:none;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .pbody.cclay .cccol>section.dc>.dch small,.pbody.cclay .cccol>.rgc>.sec small{font:400 11.5px var(--font);color:var(--muted)}
 @media (max-width:700px){.dashed .dlay{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+/* ---------- Dashboard layouts for each person: on the APAC director, RSOM and DSOM screens anyone can drag the edges to resize the
+   map and the side columns, pick a layout (map in the middle, left, right, on top, or lists only), choose the base map, and maximise
+   the map. That is saved as their own layout. Managers, administrators and leadership can set a layout for anyone, and for the whole
+   team. Order of precedence: the person's layout for this dashboard › their layout for all dashboards › the team's layout › default. ---------- */
+SH_KEYS.dashuser = "psoc.uni.dashuser.v1"; SHARED.dashuser = lsGet(SH_KEYS.dashuser, []); RETAIN_DAYS.dashuser = 36500; LOCAL_CAP.dashuser = 3000; SYNC_TYPES.push("dashuser");
+const DL_DEF = { tpl: "three", l: 22, r: 26, h: 0, base: "" };
+const DL_TPL = [["three", "Map in the middle", "Lists either side"], ["right", "Map left", "Lists on the right"], ["left", "Map right", "Lists on the left"], ["top", "Map on top", "Lists below"], ["lists", "Lists only", "No map"]];
+const DL = { max: {} };
+const dlUid = () => ME ? userId(ME.name) : "u:local";
+const dlRec = id => (SHARED.dashuser || []).find(x => x.id === id && !x.deleted) || null;
+const dlCanOthers = () => !!ME && (can("settings") || ME.role === "leader");
+const dlClamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(v)));
+// the layout in force for a person on a dashboard, and where it comes from
+function dlView(sc, uid){ uid = uid || dlUid(); const one = dlRec(uid + "|" + sc.key), all = dlRec(uid + "|*"), team = dashCfg(sc.key);
+  const src = one && one.view ? one : all && all.view ? all : null;
+  const v = Object.assign({}, DL_DEF, team && team.view || {}, src ? src.view : {});
+  return { v, src: src ? (src.by && src.by !== (ME && ME.name) && src.uid === dlUid() ? "set" : src === all ? "mineall" : "mine") : team && team.view ? "team" : "default", by: src ? src.by : team ? team.by : "" }; }
+// panels and readouts: the person's own for this dashboard, else the team's
+function dlEff(sc, cfg){ const u = dlRec(dlUid() + "|" + sc.key); return { layout: (u && u.layout) || (cfg && cfg.layout) || null, kpi: (u && u.kpi) || (cfg && cfg.kpi) || null }; }
+function dlSaveMine(patch){ const sc = dashScope(), id = dlUid() + "|" + sc.key, old = dlRec(id), cur = dlView(sc).v;
+  const rec = Object.assign({}, old || { id, uid: dlUid(), user: ME ? ME.name : "", scope: sc.key, scopeName: sc.name }, { view: Object.assign({}, cur, patch), by: ME ? ME.name : "" });
+  putShared("dashuser", rec); }
+/* ---- lay the command screen out ---- */
+function dlGrid(main, v){ if (!main) return; if (!main.querySelector(":scope > .ccsp")) ["s1", "s2", "s3"].forEach(s => { const d = document.createElement("div"); d.className = "ccsp"; d.dataset.sp = s; d.title = s === "s3" ? "Drag to change the height" : "Drag to resize"; main.appendChild(d); });
+  const sp = s => main.querySelector(`:scope > .ccsp[data-sp="${s}"]`), mapc = main.querySelector(":scope > .ccmapc"), fit = "calc(100vh - var(--ccTop,320px) - 14px)", H = v.h ? `${v.h + 12}px` : fit, S = main.style;
+  let cols, areas, rows, h = H, on = ["s1", "s2", "s3"], auto = false;
+  if (v.tpl === "right"){ cols = `minmax(0,1fr) 12px ${v.r}%`; areas = `"m s2 l" "m s2 r" "s3 s3 s3"`; rows = "minmax(0,1fr) minmax(0,1fr) 12px"; on = ["s2", "s3"]; }
+  else if (v.tpl === "left"){ cols = `${v.l}% 12px minmax(0,1fr)`; areas = `"l s1 m" "r s1 m" "s3 s3 s3"`; rows = "minmax(0,1fr) minmax(0,1fr) 12px"; on = ["s1", "s3"]; }
+  else if (v.tpl === "top"){ cols = "minmax(0,1fr) 12px minmax(0,1fr)"; areas = `"m m m" "s3 s3 s3" "l . r"`; rows = `${v.h || Math.round(innerHeight * .55)}px 12px auto`; h = "auto"; on = ["s3"]; auto = true; }
+  else if (v.tpl === "lists"){ cols = "minmax(0,1fr) 12px minmax(0,1fr)"; areas = `"l . r"`; rows = "auto"; h = "auto"; on = []; auto = true; }
+  else { cols = `${v.l}% 12px minmax(0,1fr) 12px ${v.r}%`; areas = `"l s1 m s2 r" "s3 s3 s3 s3 s3"`; rows = "minmax(0,1fr) 12px"; }
+  const mx = DL.max[dashScope().key] && v.tpl !== "lists";
+  if (mx){ cols = "minmax(0,1fr)"; areas = `"m"`; rows = "minmax(0,1fr)"; h = fit; on = []; auto = false; }
+  S.gridTemplateColumns = cols; S.gridTemplateAreas = areas; S.gridTemplateRows = rows; S.height = h; S.minHeight = auto ? "0" : "360px"; S.gap = "0"; main.dataset.tpl = v.tpl; main.classList.toggle("ccauto", auto); main.classList.toggle("ccmaxed", !!mx);
+  ["s1", "s2", "s3"].forEach(s => { const e = sp(s); if (e) e.style.display = on.includes(s) ? "" : "none"; });
+  if (mapc) mapc.classList.toggle("dashoff", v.tpl === "lists"); }
+// controls on the map's own header: base map, size, maximise
+function dlMapBar(main, v){ const h = main && main.querySelector(":scope > .ccmapc > .dch"); if (!h || h.querySelector(".dlbar")) return;
+  const cur = (BASES[UI.ly.base] || {}).label || UI.ly.base, mx = DL.max[dashScope().key];
+  h.insertAdjacentHTML("beforeend", `<span class="dlbar"><select class="dlbase" data-dlbase aria-label="Base map"><option value="">Base map: as Intelligence map</option>${dlBaseOpts(v.base)}</select>
+    <span class="dlseg" role="group" aria-label="Map size">${[["s", "S", "Smaller map"], ["m", "M", "Standard"], ["l", "L", "Larger map"]].map(([k, t, ti]) => `<button class="tab-mini${dlSizeKey(v) === k ? " on" : ""}" data-dlsize="${k}" title="${ti}">${t}</button>`).join("")}</span>
+    <button class="tab-mini" data-dlmax title="${mx ? "Back to the dashboard (Esc)" : "Maximise the map"}" aria-label="${mx ? "Restore" : "Maximise"} the map">${mx ? "⤡" : "⤢"}</button></span>`); }
+function dlBaseOpts(sel){ return Object.entries(BASES).map(([id, b]) => `<option value="${esc(id)}"${id === sel ? " selected" : ""}>${esc(b.label)}${/^g-/.test(id) && !CFG.gKey ? " (needs Google key)" : ""}</option>`).join(""); }
+const DL_SIZES = { s: { l: 27, r: 31, h: .42 }, m: { l: 22, r: 26, h: .55 }, l: { l: 15, r: 18, h: .72 } };
+function dlSizeKey(v){ if (v.tpl === "top"){ const f = (v.h || innerHeight * .55) / innerHeight; return f < .48 ? "s" : f > .64 ? "l" : "m"; } const x = v.tpl === "left" ? v.l : v.tpl === "right" ? v.r : (v.l + v.r) / 2; return x >= 27 ? "s" : x <= 19 ? "l" : "m"; }
+function dlSize(k){ const z = DL_SIZES[k], v = dlView(dashScope()).v; dlSaveMine(v.tpl === "top" ? { h: Math.round(innerHeight * z.h) } : { l: z.l, r: z.r }); dlRefresh(); }
+function dlRefresh(){ const pb = document.querySelector("#panel .pbody.cclay"), main = pb && pb.querySelector(".ccmain"); if (!main) return; const v = dlView(dashScope()).v; dlGrid(main, v);
+  const bar = main.querySelector(".dlbar"); if (bar) bar.remove(); dlMapBar(main, v); dlBadge(); dlResize(); try{ if (typeof mhHost === "function" && !document.body.classList.contains("phone")){ if (!mhHost() && MH.on) mhHome(); } }catch(e){} }
+function dlResize(){ requestAnimationFrame(() => { try{ if (typeof MH !== "undefined" && MH.on) map.invalidateSize(false); }catch(e){} Object.values(CC.maps || {}).forEach(m => { try{ m.invalidateSize(); }catch(e){} }); }); }
+function dlBadge(){ const o = dlView(dashScope()), lab = { mine: "Your layout", mineall: "Your layout (all dashboards)", set: "Set for you by " + (o.by || "a manager"), team: "Team layout", default: "Standard layout" }[o.src];
+  const bar = document.querySelector("#panel .ccmain:not(.ccmaxed) > .ccmapc:not(.dashoff) .dlbar") || document.querySelector("#panel .ccmain.ccmaxed > .ccmapc .dlbar"), t = bar || document.querySelector("#panel .ptools"); if (!t) return;
+  document.querySelectorAll("#panel .dlbadge").forEach(x => { if (x.parentNode !== t) x.remove(); });
+  let b = t.querySelector(".dlbadge"); if (!b){ b = document.createElement("button"); b.className = "tab-mini dlbadge"; b.dataset.dashcust = ""; if (bar) t.insertBefore(b, t.firstChild); else t.appendChild(b); }
+  b.innerHTML = `<span aria-hidden="true">▦</span> ${esc(lab)}`; b.title = "Layout, map size and base map — for you, someone else or the whole team"; b.classList.toggle("own", o.src === "mine" || o.src === "mineall"); }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{ if (DASH_MODES.includes(UI.mode)){ const main = p.querySelector(".pbody.cclay .ccmain"); if (main){ const v = dlView(dashScope()).v; dlGrid(main, v); dlMapBar(main, v); } dlBadge(); } }catch(e){ console.warn("dashboard layout", e); } return r; }; })(renderPanelInner);
+/* ---- dragging the edges ---- */
+document.addEventListener("pointerdown", e => { const s = e.target.closest && e.target.closest(".ccmain > .ccsp"); if (!s || !DASH_MODES.includes(UI.mode)) return; e.preventDefault();
+  const main = s.parentNode, which = s.dataset.sp, v = dlView(dashScope()).v, R = main.getBoundingClientRect(); let nv = Object.assign({}, v); s.classList.add("drag"); document.body.classList.add("dldrag");
+  const mv = ev => { if (which === "s1") nv.l = dlClamp((ev.clientX - R.left) / R.width * 100, 12, 45); else if (which === "s2") nv.r = dlClamp((R.right - ev.clientX) / R.width * 100, 12, 45); else nv.h = dlClamp(ev.clientY - R.top, 280, 1600); dlGrid(main, nv); dlResize(); };
+  const up = () => { document.removeEventListener("pointermove", mv); document.removeEventListener("pointerup", up); s.classList.remove("drag"); document.body.classList.remove("dldrag");
+    if (nv.l !== v.l || nv.r !== v.r || nv.h !== v.h){ dlSaveMine({ l: nv.l, r: nv.r, h: nv.h }); const b = main.querySelector(".dlbar"); if (b){ b.remove(); dlMapBar(main, nv); } dlBadge(); } };
+  document.addEventListener("pointermove", mv); document.addEventListener("pointerup", up); });
+// keyboard: arrows on a focused edge, Esc leaves the maximised map
+document.addEventListener("keydown", e => { if (!DASH_MODES.includes(UI.mode)) return; if (e.key === "Escape" && DL.max[dashScope().key] && !document.querySelector("#modal.on, .modal.on")){ DL.max[dashScope().key] = false; dlRefresh(); return; }
+  const s = e.target.closest && e.target.closest(".ccmain > .ccsp"); if (!s || !/Arrow/.test(e.key)) return; e.preventDefault(); const v = dlView(dashScope()).v, d = /Left|Up/.test(e.key) ? -1 : 1, w = s.dataset.sp;
+  dlSaveMine(w === "s1" ? { l: dlClamp(v.l + d * 2, 12, 45) } : w === "s2" ? { r: dlClamp(v.r - d * 2, 12, 45) } : { h: dlClamp((v.h || s.parentNode.getBoundingClientRect().height - 12) + d * 40, 280, 1600) }); dlRefresh(); setTimeout(() => { const n = document.querySelector(`.ccmain > .ccsp[data-sp="${w}"]`); if (n) n.focus(); }, 0); });
+document.getElementById("panel").addEventListener("click", e => { if (!DASH_MODES.includes(UI.mode)) return; const z = e.target.closest("[data-dlsize]"), m = e.target.closest("[data-dlmax]"), b = e.target.closest("[data-dlbase]");
+  if (b){ e.stopPropagation(); return; } if (z){ e.stopPropagation(); dlSize(z.dataset.dlsize); } if (m){ e.stopPropagation(); const k = dashScope().key; DL.max[k] = !DL.max[k]; dlRefresh(); } }, true);
+document.getElementById("panel").addEventListener("change", e => { if (!DASH_MODES.includes(UI.mode)) return; const b = e.target.closest("[data-dlbase]"); if (!b) return; e.stopPropagation(); dlSaveMine({ base: b.value }); dlRefresh(); toast("Base map saved", b.value ? (BASES[b.value] || {}).label + " on this dashboard, for you" : "This dashboard follows the Intelligence map", "var(--teal)"); }, true);
+/* ---- the layout part of the Customise window ---- */
+function dlEditorHtml(v, target, sc){ const tl = DL_TPL.map(([id, t, s]) => `<button type="button" class="dltpl${v.tpl === id ? " on" : ""}" data-dltpl="${id}" aria-pressed="${v.tpl === id}"><span class="dlmini t-${id}"><i class="l"></i><i class="m"></i><i class="r"></i></span><b>${t}</b><small>${s}</small></button>`).join("");
+  return `<div class="dpsub">Layout and map</div><div class="dltpls">${tl}</div>
+    <div class="dlsl"><label>Left column <output id="dlLo">${v.l}%</output><input type="range" id="dlL" min="12" max="45" value="${v.l}"></label>
+      <label>Right column <output id="dlRo">${v.r}%</output><input type="range" id="dlR" min="12" max="45" value="${v.r}"></label>
+      <label>Height <output id="dlHo">${v.h ? v.h + " px" : "fits the screen"}</output><input type="range" id="dlH" min="0" max="1600" step="20" value="${v.h || 0}"><small>All the way left fits the screen</small></label>
+      <label>Base map<select id="dlB"><option value="">As the Intelligence map (${esc((BASES[UI.ly.base] || {}).label || UI.ly.base)})</option>${dlBaseOpts(v.base)}</select></label></div>
+    ${target !== "all" ? `<label class="dlall"><input type="checkbox" id="dlAll"${dlRec(target + "|*") && !dlRec(target + "|" + sc.key) ? " checked" : ""}> Use this layout and base map on all of ${target === dlUid() ? "my" : "their"} dashboards (APAC, regional and country)</label>` : ""}
+    <p class="help">You can also drag the edges between the map and the lists, and the bottom edge, on the dashboard itself. That saves to your own layout.</p>`; }
+function dlEditorRead(box){ const tpl = (box.querySelector(".dltpl.on") || {}).dataset; return { tpl: tpl ? tpl.dltpl : "three", l: +box.querySelector("#dlL").value, r: +box.querySelector("#dlR").value, h: +box.querySelector("#dlH").value || 0, base: box.querySelector("#dlB").value }; }
+function dlEditorWire(box, live){ live = live || (() => true); box.addEventListener("click", e => { if (!live()) return; const b = e.target.closest("[data-dltpl]"); if (!b) return; box.querySelectorAll(".dltpl").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); }); });
+  box.addEventListener("input", e => { if (!live()) return; if (e.target.id === "dlL") box.querySelector("#dlLo").textContent = e.target.value + "%"; if (e.target.id === "dlR") box.querySelector("#dlRo").textContent = e.target.value + "%"; if (e.target.id === "dlH") box.querySelector("#dlHo").textContent = +e.target.value ? e.target.value + " px" : "fits the screen"; }); }
+{ const st = document.createElement("style"); st.textContent = `
+.pbody.cclay .ccmain>.ccl1{grid-area:l}.pbody.cclay .ccmain>.ccl2{grid-area:r}.pbody.cclay .ccmain>.ccmapc{grid-area:m}
+.pbody.cclay .ccmain>.ccsp[data-sp="s1"]{grid-area:s1}.pbody.cclay .ccmain>.ccsp[data-sp="s2"]{grid-area:s2}.pbody.cclay .ccmain>.ccsp[data-sp="s3"]{grid-area:s3}
+.ccsp{position:relative;cursor:col-resize;touch-action:none;outline:none}.ccsp[data-sp="s3"]{cursor:row-resize}
+.ccsp::after{content:"";position:absolute;inset:0 5px;border-radius:2px;background:transparent;transition:background .15s}.ccsp[data-sp="s3"]::after{inset:5px 0}
+.ccsp::before{content:"";position:absolute;left:50%;top:50%;width:4px;height:28px;margin:-14px 0 0 -2px;border-radius:2px;background:color-mix(in srgb,var(--muted) 45%,transparent)}.ccsp[data-sp="s3"]::before{width:28px;height:4px;margin:-2px 0 0 -14px}
+.ccsp:hover::after,.ccsp:focus-visible::after,.ccsp.drag::after{background:var(--teal)}body.dldrag{user-select:none;cursor:grabbing}body.dldrag iframe,body.dldrag .leaflet-container{pointer-events:none}
+.pbody.cclay .ccmain.ccauto>.cccol{overflow:visible}
+.pbody.cclay .ccmain[data-tpl="top"]>.ccl1{margin-right:0}.pbody.cclay .ccmain[data-tpl="lists"]>.ccmapc{display:none!important}
+.pbody.cclay .ccmain.ccmaxed>:not(.ccmapc){display:none!important}
+.ccmapc>.dch{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.dlbar{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:400 12px var(--font)}
+.dlbar .dlbase{max-width:220px;height:26px;padding:0 8px;font-size:12px}.dlseg{display:inline-flex}.dlseg .tab-mini{border-radius:0;margin:0 -1px 0 0}.dlseg .tab-mini:first-child{border-radius:8px 0 0 8px}.dlseg .tab-mini:last-child{border-radius:0 8px 8px 0}
+.dlseg .tab-mini.on{background:color-mix(in srgb,var(--teal) 22%,transparent);border-color:var(--teal);color:var(--text)}
+.dashed input[type=range]{accent-color:var(--teal)}.pbody.cclay .ccmapc{isolation:isolate}#map.mhguest{z-index:0!important}.dlbar .dlbadge{white-space:nowrap}
+.dlbadge.own{border-color:color-mix(in srgb,var(--teal) 45%,var(--line))!important}
+.dashed .dltpls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.dltpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:8px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--text);cursor:pointer;text-align:left;font:inherit}
+.dltpl b{font-size:12.5px}.dltpl small{font-size:11px;color:var(--muted)}.dltpl.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 10%,transparent)}
+.dlmini{display:grid;width:100%;height:46px;gap:3px;margin-bottom:4px}.dlmini i{border-radius:3px;background:color-mix(in srgb,var(--muted) 30%,transparent)}.dlmini i.m{background:color-mix(in srgb,var(--teal) 55%,transparent)}
+.dlmini i.l{grid-area:l}.dlmini i.m{grid-area:m}.dlmini i.r{grid-area:r}
+.t-three{grid-template:"l m r"/1fr 2.2fr 1fr}.t-right{grid-template:"m l" "m r"/2fr 1fr}.t-left{grid-template:"l m" "r m"/1fr 2fr}.t-top{grid-template:"m m" 1.4fr "l r" 1fr/1fr 1fr}.t-lists{grid-template:"l r"/1fr 1fr}.t-lists i.m{display:none}
+.dashed .dlsl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin-top:10px}.dashed .dlsl label{display:flex;flex-direction:column;gap:4px;font-size:12.5px}.dashed .dlsl output{font:700 12px var(--readout,inherit);color:var(--teal)}.dashed .dlsl small{color:var(--muted);font-size:11px}
+.dashed .dlall{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12.5px}
+.dashed .dlwho{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}.dashed .dlwho .pill.on{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 16%,transparent)}.dashed .dlwho select{height:30px}
+@media (max-width:900px){.dashed .dltpls{grid-template-columns:repeat(3,minmax(0,1fr))}.dashed .dlsl{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+// a base map with no tiles at all: the console's own land and sea outlines (works on any network)
+BASES["mc-outline"] = { label: "Outline only — works offline" };
+{ const _sbo = setBase; setBase = async function(id){ if (id !== "mc-outline") return _sbo.apply(this, arguments); UI.ly.base = id; saveUI();
+    if (baseTiles){ map.removeLayer(baseTiles); baseTiles = null; } map.getContainer().classList.remove("dim"); map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>'); }; }
 /* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
    (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
    zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */
 const MH = { on: false, key: "", home: null, zoomCtl: null };
 const MH_MODES = ["sh-dir", "sh-region", "sh-secops"];
-function mhSlot(){ const pb = document.querySelector("#panel .pbody.cclay"); if (!pb) return null; return pb.querySelector(".ccmapc #dirMap, .ccmapc .ccmap"); }
+// the Intelligence map's own base map, kept while a dashboard shows a different one (restored even after a reload)
+const MH_PREV = "psoc.uni.mhprevbase.v1"; MH.prevBase = null; { const b = lsGet(MH_PREV, null); if (b){ UI.ly.base = b; lsSet(MH_PREV, null); } }
+function mhSlot(){ const pb = document.querySelector("#panel .pbody.cclay"); if (!pb) return null; const s = pb.querySelector(".ccmapc #dirMap, .ccmapc .ccmap"); return s && !s.closest(".dashoff") ? s : null; }
 function mhScopeSites(){ if (UI.mode === "sh-dir") return CITIES.map(c => ({ lat: c.lat, lon: c.lon })); if (UI.mode === "sh-region"){ let g = ""; try{ const R = rrRegions(); g = R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){} return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && (() => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } })()); }
   const cc = ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && s.country === cc); }
 function mhKey(){ if (UI.mode === "sh-dir") return "dir"; if (UI.mode === "sh-region") return "rg:" + (UI.rgRegion || ""); return "so:" + ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); }
 function mhHost(){ if (typeof map === "undefined" || !map || typeof L === "undefined") return false; const slot = mhSlot(); if (!slot) return false; const el = map.getContainer();
   if (!MH.on){ MH.home = { parent: el.parentNode, next: el.nextSibling, c: map.getCenter(), z: map.getZoom() }; MH.on = true; MH.key = ""; }
   if (el.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(el); el.classList.add("mhguest"); }
-  const k = mhKey(); setTimeout(() => { try{ map.invalidateSize(false);
-      if (MH.key !== k){ MH.key = k; const S = mhScopeSites(); const B = S && S.length ? L.latLngBounds(S.map(s => [s.lat, s.lon])) : null; if (B && UI.mode === "sh-dir") map.setView(B.getCenter(), map.getBoundsZoom(B), { animate: false }); else if (B) map.fitBounds(B.pad(S.length > 1 ? .3 : 0), { maxZoom: 11, animate: false }); else if (!S) map.setView([12, 118], 4, { animate: false }); }
+  try{ const want = dlView(dashScope()).v.base; if (want && want !== UI.ly.base){ if (MH.prevBase == null){ MH.prevBase = UI.ly.base; lsSet(MH_PREV, MH.prevBase); } setBase(want); }
+    else if (!want && MH.prevBase != null && UI.ly.base !== MH.prevBase) setBase(MH.prevBase); }catch(e){ console.warn("dashboard base map", e); }
+  const mn = slot.closest(".ccmain"), k = mhKey() + "|" + (mn ? mn.dataset.tpl + (mn.classList.contains("ccmaxed") ? "x" : "") : ""); setTimeout(() => { try{ map.invalidateSize(false);
+      if (MH.key !== k){ MH.key = k; const S = mhScopeSites(); const B = S && S.length ? L.latLngBounds(S.map(s => [s.lat, s.lon])) : null; if (B && UI.mode === "sh-dir"){ const zs = map.options.zoomSnap; map.options.zoomSnap = .25; const z = map.getBoundsZoom(B, false, L.point(70, 50)); map.setView(B.getCenter(), z, { animate: false }); map.options.zoomSnap = zs; } else if (B) map.fitBounds(B.pad(S.length > 1 ? .3 : 0), { maxZoom: 11, animate: false }); else if (!S) map.setView([12, 118], 4, { animate: false }); }
       redrawMap(); }catch(e){ console.warn("map host", e); } }, 380);
   return true; }
 function mhHome(){ if (!MH.on || typeof map === "undefined" || !map) return; const el = map.getContainer(), H = MH.home; MH.on = false; MH.key = "";
   try{ if (MH.zoomCtl){ map.removeControl(MH.zoomCtl); MH.zoomCtl = null; } }catch(e){}
   el.classList.remove("mhguest"); if (H && H.parent){ if (H.next && H.next.parentNode === H.parent) H.parent.insertBefore(el, H.next); else H.parent.appendChild(el); }
+  if (MH.prevBase != null){ const b = MH.prevBase; MH.prevBase = null; lsSet(MH_PREV, null); if (UI.ly.base !== b) try{ setBase(b); }catch(e){} }
   setTimeout(() => { try{ map.invalidateSize(false); if (H) map.setView(H.c, H.z, { animate: false }); redrawMap(); }catch(e){} }, 60); }
 // the simple maps only draw when the real map can't be hosted
 dirMapDraw = (function(orig){ return function(){ if (MH.on && UI.mode === "sh-dir" && mhSlot()) return; return orig.apply(this, arguments); }; })(dirMapDraw);
@@ -24319,7 +24452,9 @@ setInterval(() => { if (MH.on && (document.body.classList.contains("phone") || !
    tiles, so a map is never blank where tile servers are blocked or slow (it shows coastlines and borders; tiles cover it when they load) ---------- */
 // rings that cross the date line are unwrapped so they don't draw a band across the map
 const mcUnwrap = ring => { const lo = ring.map(p => p[0]); return Math.max(...lo) - Math.min(...lo) > 180 ? ring.map(([x, y]) => [x < 0 ? x + 360 : x, y]) : ring; };
-const MC_WORLD = (() => { try{ return { type: "FeatureCollection", features: WORLD.map(f => { const g = f.g, poly = p => p.map(mcUnwrap); return { type: "Feature", properties: { cc: f.cc }, geometry: g.type === "Polygon" ? { type: "Polygon", coordinates: poly(g.coordinates) } : g.type === "MultiPolygon" ? { type: "MultiPolygon", coordinates: g.coordinates.map(poly) } : g }; }) }; }catch(e){ return null; } })();
+const MC_WORLD = (() => { try{ const sh = (c, d) => typeof c[0] === "number" ? [c[0] + d, c[1]] : c.map(x => sh(x, d)); const F = WORLD.map(f => { const g = f.g, poly = p => p.map(mcUnwrap); return { type: "Feature", properties: { cc: f.cc }, geometry: g.type === "Polygon" ? { type: "Polygon", coordinates: poly(g.coordinates) } : g.type === "MultiPolygon" ? { type: "MultiPolygon", coordinates: g.coordinates.map(poly) } : g }; });
+  // copies either side of the date line, so a wide map shows land all the way across
+  return { type: "FeatureCollection", features: [0, -360, 360].flatMap(d => d ? F.map(f => ({ type: "Feature", properties: f.properties, geometry: { type: f.geometry.type, coordinates: sh(f.geometry.coordinates, d) } })) : F) }; }catch(e){ return null; } })();
 function mcOffBase(m){ if (!MC_WORLD || !m || m._mcOff) return; m._mcOff = true; try{ const pane = m.createPane("offbase"); pane.style.zIndex = 150; pane.style.pointerEvents = "none";
     L.geoJSON(MC_WORLD, { pane: "offbase", interactive: false, style: { weight: .8, fillOpacity: 1, opacity: 1 }, renderer: L.svg({ pane: "offbase" }) }).addTo(m); m.getContainer().classList.add("mcoff"); }catch(e){ console.warn("offline base", e); } }
 if (typeof L !== "undefined" && L.Map && L.Map.addInitHook) L.Map.addInitHook(function(){ mcOffBase(this); });

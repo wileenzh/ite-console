@@ -1206,3 +1206,26 @@ dashboards keep their simpler map.
   land, the sea and every site, hazard and warning instead of an empty grey box. It follows the light and dark themes.
 - **APAC director map opens on APAC.** The director's map now fits all the APAC cities from Japan and India to New
   Zealand, instead of zooming out to the whole world. Each region and country still opens on its own sites.
+
+## Dashboard layouts for each person (26 Oct)
+
+On the APAC director, Regional (RSOM) and Country (DSOM) dashboards:
+
+- **Resize by dragging.** Drag the edges between the map and the side columns, or the bottom edge, to make the map
+  wider, narrower or taller. Arrow keys work on a focused edge too. The **S / M / L** buttons on the map's header give
+  quick sizes, and **⤢** maximises the map (Esc returns).
+- **Choose the layout:** map in the middle with lists either side, map left, map right, map on top with the lists
+  below, or lists only.
+- **Choose the base map** for the dashboard from the map's header: any of the Intelligence map's base maps, or
+  **Outline only** (the console's own land and sea, works on any network). Intelligence Monitoring keeps its own choice.
+- **For each person.** Whatever you change is saved as **your layout**; the button on the map's header says whose
+  layout you're seeing (Standard, Team, Yours, or "Set for you by …"). Click it, or **⚙ Customise**, and choose who
+  the layout is for:
+  - **Everyone on <entity>:** the team layout, plus "What matters", which stays the team's;
+  - **Just me:** your own panels, readouts, layout, sizes and base map;
+  - **Someone else** (duty managers, administrators and leadership): set a layout for any user, for one dashboard or
+    for all their dashboards.
+
+  A person's own layout for a dashboard wins, then their layout for all dashboards, then the team layout, then the
+  standard one. **Back to the team layout** removes a person's own layout. Layouts are shared through the PSOC server
+  like the other team records.
