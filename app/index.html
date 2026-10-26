@@ -24146,6 +24146,81 @@ document.getElementById("panel").addEventListener("change", e => { if (UI.mode !
 .oscard .osh{display:flex;align-items:center;gap:8px}.oscard .osh .sp,.osft .sp{flex:1}.oscard a{color:var(--text);text-decoration:none}.oscard a:hover b{color:var(--teal)}.oscard p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.45}
 .osstars{font:700 12px var(--readout,inherit);color:var(--text);white-space:nowrap}.ostags{display:flex;gap:4px;flex-wrap:wrap}.ostags span{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .osft{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}.osrow{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:8px 0}.osrow>div{flex:1;min-width:0}.osrow a{color:var(--text);text-decoration:none}.osrow select{max-width:130px}`; document.head.appendChild(st); }
+/* ---------- APAC director as a command centre, like the Visual Command Centre: one screen, no page scrolling — the status banner and
+   readouts across the top, the significant-events map in the middle, what matters now and the operational decisions on the left,
+   the regions and the last 7 days on the right; each column scrolls on its own ---------- */
+function ccFit(){ const pb = document.querySelector("#panel .pbody.dirp.ccl"); if (!pb) return; const pn = document.getElementById("panel"), top = pb.getBoundingClientRect().top + (pn ? pn.scrollTop : 0);
+  pb.style.setProperty("--ccTop", Math.max(120, Math.round(top)) + "px"); try{ if (DIR.map) DIR.map.invalidateSize(); }catch(e){} }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); if (UI.mode === "sh-dir"){ const pb = p.querySelector(".pbody.dirp"); if (pb && pb.querySelector(".dmapc")){ pb.classList.add("ccl"); requestAnimationFrame(ccFit); setTimeout(() => { ccFit(); try{ dirMapDraw(); }catch(e){} }, 350); } } return r; }; })(renderPanelInner);
+window.addEventListener("resize", () => { if (UI.mode === "sh-dir") ccFit(); });
+{ const st = document.createElement("style"); st.textContent = `
+@media (min-width:1200px){
+  body:not(.phone) .pbody.dirp.ccl{display:grid;grid-template-columns:minmax(300px,.95fr) minmax(0,2.3fr) minmax(330px,1.05fr);grid-template-rows:auto auto minmax(0,1.15fr) minmax(0,1fr);
+    grid-template-areas:"head head head" "kpi kpi kpi" "now map reg" "dec map week";gap:12px;height:calc(100vh - var(--ccTop,230px));min-height:660px;padding:12px 16px 14px;box-sizing:border-box;overflow:hidden}
+  body:not(.phone) .dirp.ccl>.dhead{grid-area:head;margin:0;padding:10px 16px}
+  body:not(.phone) .dirp.ccl>.dhead .dt{font-size:17px}
+  body:not(.phone) .dirp.ccl>.dks{grid-area:kpi;margin:0;gap:10px}
+  body:not(.phone) .dirp.ccl>.dks .dk{padding:10px 12px 9px}
+  body:not(.phone) .dirp.ccl>.dks .dk b{font-size:22px}
+  body:not(.phone) .dirp.ccl>.dg,body:not(.phone) .dirp.ccl>.dg2{display:contents}
+  body:not(.phone) .dirp.ccl section.dc{min-height:0;overflow:auto;margin:0}
+  body:not(.phone) .dirp.ccl .dmapc{grid-area:map;overflow:hidden;padding:10px}
+  body:not(.phone) .dirp.ccl .dmapc .dmap{flex:1;min-height:0;height:100%;border-radius:10px}
+  body:not(.phone) .dirp.ccl>.dg>section:nth-child(2){grid-area:reg}
+  body:not(.phone) .dirp.ccl>.dg2>section:nth-child(1){grid-area:now}
+  body:not(.phone) .dirp.ccl>.dg2>section:nth-child(2){grid-area:week}
+  body:not(.phone) .dirp.ccl>.opdsec{grid-area:dec}
+  body:not(.phone) .dirp.ccl>*:not(.dhead):not(.dks):not(.dg):not(.dg2):not(.opdsec){grid-column:1/-1}
+  body:not(.phone) .dirp.ccl section.dc>.dch{position:sticky;top:-14px;z-index:2;margin:-14px -14px 10px;padding:12px 14px 8px;background:inherit;background:var(--panel);border-radius:14px 14px 0 0}
+  body:not(.phone) .dirp.ccl .dmapc>.dch{position:static;margin:0 0 8px;padding:2px 4px;background:transparent}
+}`; document.head.appendChild(st); }
+/* ---------- Regional (RSOM) and Country (DSOM) in the same command-centre form: banner and readouts on top; a map of the region's or
+   country's sites with impact zones, incidents and escalations in the middle; the working lists either side; details below ---------- */
+const CC = { maps: {} };
+function ccMapDraw(key, el, siteOk){ if (!el || typeof L === "undefined") return; const old = CC.maps[key]; if (old){ try{ old.off(); old.remove(); }catch(e){} }
+  const m = CC.maps[key] = L.map(el, { zoomControl: true, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, scrollWheelZoom: false });
+  L.tileLayer(ESRI_S + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 14, attribution: "Tiles © Esri" }).addTo(m);
+  let A; try{ A = impAssess(); }catch(e){ A = { Z: [], hit: [], sites: SITES.filter(s => isLive(s) && isFinite(s.lat)) }; }
+  const sites = (A.sites && A.sites.length ? A.sites : SITES.filter(s => isLive(s))).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon) && siteOk(s)), codes = new Set(sites.map(s => s.code)), lv = {}; A.hit.forEach(h => { if (codes.has(h.s.code)) lv[h.s.code] = h.level; });
+  const pts = sites.map(s => [s.lat, s.lon]); if (pts.length) m.fitBounds(L.latLngBounds(pts).pad(pts.length > 1 ? .25 : 0), { maxZoom: 11 }); else m.setView([8, 118], 3);
+  const view = m.getBounds().pad(.6);
+  A.Z.filter(z => z.level >= 1).sort((a, b) => a.level - b.level).forEach(z => { const c = IMP_LV[z.level][1], st = { color: c, weight: 1, fillColor: c, fillOpacity: .12 + z.level * .04, interactive: false };
+    const lyr = z.shape.type === "circle" ? L.circle(z.shape.ll, Object.assign({ radius: z.shape.km * 1000 }, st)) : L.polygon(z.shape.rings.map(r => r.map(([lo, la]) => [la, lo])), st); try{ if (!view.intersects(lyr.getBounds())) return; }catch(e){} lyr.addTo(m); });
+  sites.forEach(s => L.circleMarker([s.lat, s.lon], { radius: lv[s.code] != null ? 6 : 4, weight: 1.2, color: lv[s.code] != null ? "#fff" : "#9fb0c4", fillColor: lv[s.code] != null ? IMP_LV[lv[s.code]][1] : "#34D8C0", fillOpacity: lv[s.code] != null ? 1 : .55 })
+    .bindTooltip(`<b>${esc(s.code)}</b> · ${esc(metroOf(s) || s.city || "")}${lv[s.code] != null ? " · " + IMP_LV[lv[s.code]][0] + " impact" : ""}`).addTo(m));
+  (SHARED.incidents || []).filter(x => !x.deleted && x.status !== "resolved" && codes.has(x.site)).forEach(x => { const s = sites.find(y => y.code === x.site); L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<span class="dinc${sevNum(x.sev) <= 2 ? " hot" : ""}">${esc(SEV_LABEL[x.sev] || x.sev)}</span>`, iconSize: [46, 18], iconAnchor: [23, 26] }) }).bindTooltip(esc(x.title)).addTo(m); });
+  (EVENTS || []).filter(e => e.status !== "closed" && Number.isFinite(e.eventLat) && Number.isFinite(e.eventLon) && view.contains([e.eventLat, e.eventLon])).forEach(e => L.marker([e.eventLat, e.eventLon], { icon: L.divIcon({ className: "", html: `<span class="dev">${esc(e.sev)}</span>`, iconSize: [28, 18], iconAnchor: [14, 9] }) }).bindTooltip(esc(e.desc)).addTo(m));
+  setTimeout(() => { if (CC.maps[key] === m && m._container && m._container.isConnected) m.invalidateSize(); }, 80); }
+// move the page's own parts into the command layout (the click handlers are on the panel, so they keep working)
+function ccArrange(pb, o){ if (!pb || pb.querySelector(".ccmain") || window.innerWidth < 1200 || document.body.classList.contains("phone")) return null;
+  const pick = sels => sels.map(s => typeof s === "string" ? pb.querySelector(s) : s).filter(Boolean);
+  const top = document.createElement("div"); top.className = "cctop"; pick(o.top).forEach(n => top.appendChild(n));
+  const main = document.createElement("div"); main.className = "ccmain"; main.innerHTML = `<div class="cccol ccl1"></div><section class="dc ccmapc"><div class="dch">${esc(o.mapTitle)} <small>${esc(o.mapSub || "")}</small></div><div class="ccmap"></div></section><div class="cccol ccl2"></div>`;
+  pick(o.left).forEach(n => main.querySelector(".ccl1").appendChild(n)); pick(o.right).forEach(n => main.querySelector(".ccl2").appendChild(n));
+  pb.insertBefore(main, pb.firstChild); pb.insertBefore(top, main); pb.classList.add("cclay"); const more = [...pb.children].filter(n => n !== top && n !== main); if (more.length){ const h = document.createElement("div"); h.className = "ccmore"; h.textContent = "Details"; pb.insertBefore(h, more[0]); }
+  return main.querySelector(".ccmap"); }
+function ccFit2(){ const main = document.querySelector("#panel .ccmain"); if (!main) return; const pn = document.getElementById("panel"), top = main.getBoundingClientRect().top + (pn ? pn.scrollTop : 0);
+  main.style.setProperty("--ccTop", Math.max(160, Math.round(top)) + "px"); Object.values(CC.maps).forEach(m => { try{ m.invalidateSize(); }catch(e){} }); }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{
+  if (UI.mode === "sh-region"){ const pb = p.querySelector(".pbody.rgp"); const g = (() => { try{ const R = rrRegions(); return R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){ return ""; } })();
+    const el = ccArrange(pb, { top: [".rgh", ".rgks"], left: [".opdsec", ...[...(pb ? pb.querySelectorAll(".rgg > .rgc") : [])]], right: [".rgbiz"], mapTitle: "Sites and impact — " + (rgName ? rgName(g) : g), mapSub: "impact zones, incidents and escalations" });
+    if (el){ requestAnimationFrame(ccFit2); setTimeout(() => { ccFit2(); ccMapDraw("rg", el, s => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } }); }, 60); } }
+  if (UI.mode === "sh-secops" && !isLimited()){ const pb = p.querySelector(".pbody"), cc = ((pb && pb.querySelector(".dhead .dt")) || {}).textContent || "";
+    const dg = pb && pb.querySelector(":scope > .dg2"), dA = dg ? dg.children[0] : null, dB = dg ? dg.children[1] : null, el = ccArrange(pb, { top: [".dhead", ".dks"], left: [".opdsec", dA], right: [dB], mapTitle: "Sites and impact — " + cc, mapSub: "impact zones, incidents and escalations" });
+    if (dg && !dg.children.length) dg.remove(); if (el){ requestAnimationFrame(ccFit2); setTimeout(() => { ccFit2(); ccMapDraw("so", el, s => s.country === cc && isLive(s)); }, 60); } }
+  }catch(e){ console.warn("command layout", e); } return r; }; })(renderPanelInner);
+window.addEventListener("resize", () => { if (["sh-region", "sh-secops"].includes(UI.mode)) ccFit2(); });
+{ const st = document.createElement("style"); st.textContent = `
+.pbody.cclay .cctop{display:flex;flex-direction:column;gap:12px;margin-bottom:12px}.pbody.cclay .cctop>*{margin:0}
+.pbody.cclay .ccmain{display:grid;grid-template-columns:minmax(300px,.95fr) minmax(0,2.3fr) minmax(330px,1.05fr);gap:12px;height:calc(100vh - var(--ccTop,320px) - 14px);min-height:520px}
+.pbody.cclay .cccol{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0;padding-right:2px}.pbody.cclay .cccol>*{margin:0;flex:none}
+.pbody.cclay .cccol .rgc{border-radius:14px;background:var(--glass,var(--panel));padding:12px}
+.pbody.cclay .ccmapc{display:flex;flex-direction:column;min-height:0;padding:10px;margin:0}.pbody.cclay .ccmapc>.dch{margin:0 0 8px;padding:2px 4px}
+.pbody.cclay .ccmap{flex:1;min-height:0;border-radius:10px;overflow:hidden;background:#1b2028}
+.pbody.cclay .ccl2 .rgbiz .dks{grid-template-columns:repeat(2,minmax(0,1fr))}.pbody.cclay .ccl2 .rgbiz .dg2{grid-template-columns:1fr}
+.pbody.cclay .ccl2 .dg2{grid-template-columns:1fr}
+.pbody.cclay .ccmore{margin:18px 2px 10px;font:700 13px var(--readout,inherit);color:var(--muted)}
+.pbody.cclay .rgks{margin:0}`; document.head.appendChild(st); }
 
 boot();
 

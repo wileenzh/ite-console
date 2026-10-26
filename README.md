@@ -1149,3 +1149,17 @@ Technical identifiers are unchanged, so integrations keep working:
 - the Lenel application id;
 - the player relay check;
 - the repository and app ids.
+
+## Command-centre layout for the APAC director, RSOM and DSOM (26 Oct)
+
+The three leadership dashboards now work like the Visual Command Centre: one screen, with the map in the middle and the
+working lists either side. Each column scrolls on its own.
+
+| Page | Left | Centre | Right |
+|---|---|---|---|
+| APAC director | What matters now, operational decisions | Significant events across APAC | Regions, the last 7 days |
+| Regional (RSOM) | Operational decisions, most important risks, SERV reports, open incidents | The region's sites with impact zones, incidents and escalations | Business impact |
+| Country (DSOM) | Operational decisions, do now | The country's sites with impact zones, incidents and escalations | Risks and SERV releases |
+
+On all three, the status banner and readouts sit across the top, and the detail tables follow below the command screen.
+On screens narrower than 1200 px and on phones, the pages keep their stacked layout.
