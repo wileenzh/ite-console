@@ -2,7 +2,7 @@
   "name": "ite-mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "ITE store app (iOS and Android): the console with a home screen and tabs for each role, built with Capacitor",
+  "description": "TTE store app (iOS and Android): the console with a home screen and tabs for each role, built with Capacitor",
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "sync": "node scripts/build-web.mjs && cap sync",

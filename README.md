@@ -1,4 +1,4 @@
-# ITE — Intelligence to the Edge
+# TTE — To The Edge
 
 A browser-based situational awareness console: hazards and official warnings on a map, typhoon and protest tracking,
 live news and a live TV wall, sentiment analysis, camera monitoring, incident management and executive reporting.
@@ -17,7 +17,7 @@ described in the hosting guide that ships with the full package.
 
 - **Go to… (Ctrl+K, ⌘K on a Mac)**: type any part of a screen, product, site code or action — "protest", "cyber
   brief", "XSG11", "new escalation", "status board" — and press Enter. Recent screens are listed first.
-- **? Guide**: how the PSOC workflow runs in ITE — detect, triage, escalate, respond, report, and the video wall — with
+- **? Guide**: how the PSOC workflow runs in TTE — detect, triage, escalate, respond, report, and the video wall — with
   a button to each place.
 - Toolbars show the main action first; downloads and less-used actions sit under **Download ▾**, **More ▾** and
   **Send options ▾**. A burst of new actions shows as one notice. The top navigation scrolls within itself instead of
@@ -98,7 +98,7 @@ holds it), with every time it was issued and how. "Archive all now" files the cu
 ## Operator console (Visual Command Centre › Operator console)
 
 Modelled on how Everbridge documents its Visual Command Center operator console (support articles and datasheet),
-built on ITE's own data with ITE's own names and look. A full map with a **Feeds** panel — Search; **Alerts**;
+built on TTE's own data with TTE's own names and look. A full map with a **Feeds** panel — Search; **Alerts**;
 **Risk events** (earthquakes, official warnings, global disasters, tropical cyclones, volcanoes, intelligence events,
 protests tracked, located news, access-control alarms, camera analytics, perimeter alarms, operator-entered risk
 events) with a severity filter; **Assets** (datacenters, offices, people, cameras, perimeters as areas); **Context**
@@ -292,7 +292,7 @@ escalations, other alarms at the same site, hazards, internet and power); a corr
 same place into proposed cases; a writer agent prepares the shift report and spot reports that are due; a watchdog
 lists overdue decisions and updates, feeds down and sensors offline. Each agent is Off, Suggest or Prepare drafts;
 none sends, decides, opens or closes anything — a person accepts or rejects every proposal, and every step is logged.
-An agentic-SOC scorecard shows where ITE stands.
+An agentic-SOC scorecard shows where TTE stands.
 
 ## Weeks 2–5 outlook (Intelligence Monitoring)
 
@@ -373,13 +373,13 @@ Administrator › **Security** shows and controls them:
 ## iPhone app
 
 **Install:** open https://wileenzh.github.io/ite-console/app/ in **Safari** on the iPhone, tap **Share**, then
-**Add to Home Screen**. ITE then opens from its own icon, full screen, with a phone layout (Home, Map, Queue,
+**Add to Home Screen**. TTE then opens from its own icon, full screen, with a phone layout (Home, Map, Queue,
 Incidents, More). It is the same console with the same features; on a phone it keeps its own data and settings.
 The app page is rebuilt from the console with `python3 tools/build_app.py`.
 
 ## Desktop app (Windows)
 
-**Download:** [ITE-Setup-1.0.0.exe](https://github.com/wileenzh/ite-console/raw/main/download/ITE-Setup-1.0.0.exe)
+**Download:** [TTE-Setup-1.0.0.exe](https://github.com/wileenzh/ite-console/raw/main/download/TTE-Setup-1.0.0.exe)
 
 The desktop app runs the console with its own built-in server on your computer only, so the video wall,
 channel look-ups and blocked news sources all work without any hosting. The app isn't code-signed, so Windows
@@ -1136,3 +1136,16 @@ keeps the logo, the Detect → Report status lights, search, icon controls, alar
   alerts it sends then appear on this page.
 
 GitHub's public API allows about 10 searches a minute without signing in, so results are cached for an hour.
+
+## Name: To The Edge (TTE) (26 Oct)
+
+The console is now called **To The Edge (TTE)**. The new name appears in:
+- the top bar, the sign-in screen and the browser tab;
+- the phone screens, notifications and reports;
+- the installable app's name, and the store app's name on iOS and Android.
+
+Section names that describe the work, such as Intelligence Monitoring and Threat Intelligence, stay as they are.
+Technical identifiers are unchanged, so integrations keep working:
+- the Lenel application id;
+- the player relay check;
+- the repository and app ids.

@@ -1,10 +1,10 @@
 {
   "appId": "io.github.wileenzh.ite",
-  "appName": "ITE",
+  "appName": "TTE",
   "webDir": "www",
   "backgroundColor": "#0E171C",
   "android": { "allowMixedContent": false },
-  "ios": { "contentInset": "never", "scheme": "ITE" },
+  "ios": { "contentInset": "never", "scheme": "TTE" },
   "plugins": {
     "SplashScreen": { "launchShowDuration": 1500, "launchAutoHide": false, "backgroundColor": "#0E171C", "showSpinner": false },
     "LocalNotifications": { "smallIcon": "ic_stat_ite", "iconColor": "#1F9D8F" },

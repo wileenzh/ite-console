@@ -1,6 +1,6 @@
 {
-  "name": "ITE — Intelligence to the Edge",
-  "short_name": "ITE",
+  "name": "TTE — To The Edge",
+  "short_name": "TTE",
   "description": "PSOC situational awareness: hazards, alerts, incidents and sites.",
   "start_url": "./",
   "scope": "./",

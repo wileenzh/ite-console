@@ -1,6 +1,6 @@
-# ITE mobile app (iOS and Android)
+# TTE mobile app (iOS and Android)
 
-The store app is the ITE console packaged with [Capacitor](https://capacitorjs.com) 8. It uses the same data, sign-in
+The store app is the TTE console packaged with [Capacitor](https://capacitorjs.com) 8. It uses the same data, sign-in
 and settings as the console. On a phone, each role gets its own home screen and bottom tabs:
 
 | Role | Opens on | Tabs |

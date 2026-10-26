@@ -1,4 +1,4 @@
-# Builds the ITE store app on every push that changes the console or the mobile project.
+# Builds the TTE store app on every push that changes the console or the mobile project.
 #  - Android: a debug APK to install on test phones, and (when the signing secrets are set) a signed release
 #    App Bundle (.aab) for Google Play. Both are attached to the run as downloadable artifacts.
 #  - iOS: builds the Xcode project for the simulator to prove it compiles. Signed builds for TestFlight and the

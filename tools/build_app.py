@@ -21,7 +21,7 @@ HEAD = """<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ITE">
+<meta name="apple-mobile-web-app-title" content="TTE">
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -37,8 +37,8 @@ TAIL = """<script>
   var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var seen = false; try{ seen = localStorage.getItem("ite.installhint") === "1"; }catch(e){}
   if (standalone || seen) return;
-  var box = document.createElement("div"); box.id = "installHint"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Install the ITE app");
-  box.innerHTML = '<img src="icons/icon-180.png" alt="" width="52" height="52"><div class="ih"><b>Install ITE on your ' + (ios ? "iPhone" : "phone") + '</b>'
+  var box = document.createElement("div"); box.id = "installHint"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Install the TTE app");
+  box.innerHTML = '<img src="icons/icon-180.png" alt="" width="52" height="52"><div class="ih"><b>Install TTE on your ' + (ios ? "iPhone" : "phone") + '</b>'
     + (ios ? '<span>In Safari, tap <b>Share</b> <svg viewBox="0 0 24 24" width="16" height="16" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4M5 11v9h14v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> then <b>Add to Home Screen</b>. It opens full screen like an app.</span>'
           : '<span>Open your browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</span>')
     + '</div><button type="button" aria-label="Close">Got it</button>';
@@ -65,8 +65,8 @@ app.mkdir(exist_ok=True)
 (app / "index.html").write_text(out, encoding="utf-8")
 
 (app / "manifest.json").write_text("""{
-  "name": "ITE — Intelligence to the Edge",
-  "short_name": "ITE",
+  "name": "TTE — To The Edge",
+  "short_name": "TTE",
   "description": "PSOC situational awareness: hazards, alerts, incidents and sites.",
   "start_url": "./",
   "scope": "./",
@@ -82,7 +82,7 @@ app.mkdir(exist_ok=True)
 }
 """, encoding="utf-8")
 
-(app / "sw.js").write_text("""// ITE app service worker (version %s)
+(app / "sw.js").write_text("""// TTE app service worker (version %s)
 // The app shell and its libraries are kept so the app starts fast and opens without signal.
 // Live data (hazard feeds, news, maps) always comes from the network and is never stored here.
 const SHELL = "ite-shell-%s", LIBS = "ite-libs-v1";
