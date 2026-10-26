@@ -31,8 +31,8 @@ mobile/
   package.json             Capacitor 8 and its plugins (exact versions)
   capacitor.config.json    app id, name, splash and notification settings
   scripts/build-web.mjs    builds www/ from ../index.html (bundles Leaflet)
-  scripts/make-art.cjs     draws the icon, adaptive icon layers, splash and notification icon
-  resources/               the artwork used to generate every icon and splash size
+  scripts/make-icons.py    draws every icon, splash and the notification icon from the PSOC logo
+  resources/brand/         the PSOC logo (light and dark versions, full logo and mark)
   android/                 Android Studio project
   ios/                     Xcode project (Swift Package Manager, no CocoaPods)
 ```
@@ -126,4 +126,4 @@ Most changes are to the console (`index.html`). The app carries a copy of it, so
 build is released through the stores or TestFlight. Live data (hazards, alerts, decisions, shifts) always comes from
 the network and the PSOC server, so it is current without an update.
 
-Change the icon in `scripts/make-art.cjs`, then run `npm run icons`.
+To change the logo, replace the files in `resources/brand/` and run `npm run icons`.

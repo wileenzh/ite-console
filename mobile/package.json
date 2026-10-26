@@ -8,7 +8,7 @@
     "sync": "node scripts/build-web.mjs && cap sync",
     "android": "node scripts/build-web.mjs && cap sync android && cap open android",
     "ios": "node scripts/build-web.mjs && cap sync ios && cap open ios",
-    "icons": "node scripts/make-art.cjs && capacitor-assets generate --android --ios --iconBackgroundColor '#0E171C' --iconBackgroundColorDark '#0E171C' --splashBackgroundColor '#0E171C' --splashBackgroundColorDark '#0E171C'"
+    "icons": "python3 scripts/make-icons.py && capacitor-assets generate --android --ios --iconBackgroundColor '#FFFFFF' --iconBackgroundColorDark '#FFFFFF' --splashBackgroundColor '#0C1626' --splashBackgroundColorDark '#0C1626'"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",

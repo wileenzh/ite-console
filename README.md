@@ -1102,3 +1102,37 @@ The look is one stylesheet layered over the existing screens, so nothing about h
   - icon buttons for guide, sound, test alarm, sites (with the count), settings, integrations and dark/light;
   - your avatar and the clock.
 - **Phone:** unchanged; it keeps its own bottom tabs.
+
+## PSOC logo, full-width layout and the OSINT tool radar (26 Oct)
+
+**PSOC logo.** The PSOC logo (the P with the Asia-Pacific globe) replaces the radar mark everywhere:
+- in the top bar, the sign-in screen and the browser tab, in a light version for dark mode and the original navy for
+  light mode;
+- on the installable web app's icons;
+- on the store app's icon, splash screen and notification icon.
+
+**Full width again.** The left menu is gone. The sections are back as a tab strip under the top bar, and the top bar
+keeps the logo, the Detect → Report status lights, search, icon controls, alarm state, avatar and clock.
+
+**OSINT tool radar** (Threat Intelligence):
+- **Discover:** the newest and most active open-source OSINT tools, live from GitHub and refreshed hourly. The views
+  are **New this month**, **Active this week**, **Most starred** and **Search**. Each tool shows its stars, last
+  update, language, licence and health: maintained, slowing, stale, archived or not found.
+- **Our toolchain:** what the team actually uses. Mark each tool as in use, evaluating, watching or retired, with
+  what it is used for, an owner and notes. Health is re-checked daily, so stale or abandoned tools are flagged under
+  **Need attention**. **Add the starter toolchain** adds tools suited to a security operations centre:
+  - TrendRadar;
+  - changedetection.io;
+  - ArchiveBox;
+  - yt-dlp;
+  - ExifTool;
+  - SpiderFoot;
+  - theHarvester;
+  - Photon.
+
+  **Copy toolchain** gives a text summary.
+- **TrendRadar** (multi-platform trend and public-opinion monitor) is featured. Save the address of your published
+  TrendRadar report to open it from here, and copy the PSOC server address to use as TrendRadar's webhook; the trend
+  alerts it sends then appear on this page.
+
+GitHub's public API allows about 10 searches a minute without signing in, so results are cached for an hour.
