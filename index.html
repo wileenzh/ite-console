@@ -24277,6 +24277,35 @@ document.getElementById("panel").addEventListener("change", e => { if (!DASH_MOD
 .pbody.cclay .cccol>section.dc>.dch,.pbody.cclay .cccol>.rgc>.sec{display:flex;align-items:center;gap:8px;font:700 13px var(--readout,inherit);letter-spacing:.01em;color:var(--text);text-transform:none;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .pbody.cclay .cccol>section.dc>.dch small,.pbody.cclay .cccol>.rgc>.sec small{font:400 11.5px var(--font);color:var(--muted)}
 @media (max-width:700px){.dashed .dlay{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+/* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
+   (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
+   zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */
+const MH = { on: false, key: "", home: null, zoomCtl: null };
+const MH_MODES = ["sh-dir", "sh-region", "sh-secops"];
+function mhSlot(){ const pb = document.querySelector("#panel .pbody.cclay"); if (!pb) return null; return pb.querySelector(".ccmapc #dirMap, .ccmapc .ccmap"); }
+function mhScopeSites(){ if (UI.mode === "sh-dir") return null; if (UI.mode === "sh-region"){ let g = ""; try{ const R = rrRegions(); g = R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){} return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && (() => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } })()); }
+  const cc = ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && s.country === cc); }
+function mhKey(){ if (UI.mode === "sh-dir") return "dir"; if (UI.mode === "sh-region") return "rg:" + (UI.rgRegion || ""); return "so:" + ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); }
+function mhHost(){ if (typeof map === "undefined" || !map || typeof L === "undefined") return false; const slot = mhSlot(); if (!slot) return false; const el = map.getContainer();
+  if (!MH.on){ MH.home = { parent: el.parentNode, next: el.nextSibling, c: map.getCenter(), z: map.getZoom() }; MH.on = true; MH.key = ""; }
+  if (el.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(el); el.classList.add("mhguest"); }
+  const k = mhKey(); setTimeout(() => { try{ map.invalidateSize(false);
+      if (MH.key !== k){ MH.key = k; const S = mhScopeSites(); if (S && S.length) map.fitBounds(L.latLngBounds(S.map(s => [s.lat, s.lon])).pad(S.length > 1 ? .3 : 0), { maxZoom: 11, animate: false }); else if (!S) map.setView([12, 118], 4, { animate: false }); }
+      redrawMap(); }catch(e){ console.warn("map host", e); } }, 60);
+  return true; }
+function mhHome(){ if (!MH.on || typeof map === "undefined" || !map) return; const el = map.getContainer(), H = MH.home; MH.on = false; MH.key = "";
+  try{ if (MH.zoomCtl){ map.removeControl(MH.zoomCtl); MH.zoomCtl = null; } }catch(e){}
+  el.classList.remove("mhguest"); if (H && H.parent){ if (H.next && H.next.parentNode === H.parent) H.parent.insertBefore(el, H.next); else H.parent.appendChild(el); }
+  setTimeout(() => { try{ map.invalidateSize(false); if (H) map.setView(H.c, H.z, { animate: false }); redrawMap(); }catch(e){} }, 60); }
+// the simple maps only draw when the real map can't be hosted
+dirMapDraw = (function(orig){ return function(){ if (MH.on && UI.mode === "sh-dir" && mhSlot()) return; return orig.apply(this, arguments); }; })(dirMapDraw);
+ccMapDraw = (function(orig){ return function(key, el){ if (MH.on && MH_MODES.includes(UI.mode) && mhSlot()) return; return orig.apply(this, arguments); }; })(ccMapDraw);
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{ if (MH_MODES.includes(UI.mode) && !document.body.classList.contains("phone")){ if (!mhHost() && MH.on) mhHome(); } }catch(e){ console.warn("map host", e); } return r; }; })(renderPanelInner);
+{ const _smH = setMode; setMode = function(m){ const r = _smH.apply(this, arguments); try{ if (!MH_MODES.includes(UI.mode) && MH.on) mhHome(); }catch(e){} return r; }; }
+// phone layout or a narrow window: give the map back
+setInterval(() => { if (MH.on && (document.body.classList.contains("phone") || !MH_MODES.includes(UI.mode) || !mhSlot())) mhHome(); }, 1500);
+{ const st = document.createElement("style"); st.textContent = `#map.mhguest{position:absolute!important;inset:0!important;top:0!important;border-radius:10px}
+.pbody.cclay .ccmapc #dirMap,.pbody.cclay .ccmapc .ccmap{position:relative}`; document.head.appendChild(st); }
 
 boot();
 

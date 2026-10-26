@@ -1185,3 +1185,15 @@ each keep their own. It's shared with everyone who opens that dashboard, and rec
 returns to the standard layout.
 
 **Look.** Every panel on these pages now has the same header style.
+
+## Dashboards show the Intelligence map (26 Oct)
+
+The APAC director, RSOM and DSOM command screens now show the console's own Intelligence Monitoring map in the centre.
+It's the same map, so it has:
+- the same base map you chose;
+- city rings with counts, and the hazard and alert symbols;
+- cyclone tracks and cones, official warnings, and site labels.
+
+The map zooms to the region (RSOM) or the country (DSOM) and keeps your own panning and zoom while you stay on the page.
+Leaving the page puts the map back in Intelligence Monitoring where you left it. On phones and narrow windows, the
+dashboards keep their simpler map.
