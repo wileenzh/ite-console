@@ -1197,3 +1197,12 @@ It's the same map, so it has:
 The map zooms to the region (RSOM) or the country (DSOM) and keeps your own panning and zoom while you stay on the page.
 Leaving the page puts the map back in Intelligence Monitoring where you left it. On phones and narrow windows, the
 dashboards keep their simpler map.
+
+## Maps are never blank (26 Oct)
+
+- **Land and sea underneath every map.** Every map in the console (Intelligence Monitoring, the Visual Command Centre
+  and the dashboards) now draws its own coastlines and borders from the outlines the console already carries. The
+  chosen base map is shown on top as soon as it loads; where tile servers are blocked or slow, you still see the
+  land, the sea and every site, hazard and warning instead of an empty grey box. It follows the light and dark themes.
+- **APAC director map opens on APAC.** The director's map now fits all the APAC cities from Japan and India to New
+  Zealand, instead of zooming out to the whole world. Each region and country still opens on its own sites.

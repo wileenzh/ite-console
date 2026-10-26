@@ -24283,15 +24283,15 @@ document.getElementById("panel").addEventListener("change", e => { if (!DASH_MOD
 const MH = { on: false, key: "", home: null, zoomCtl: null };
 const MH_MODES = ["sh-dir", "sh-region", "sh-secops"];
 function mhSlot(){ const pb = document.querySelector("#panel .pbody.cclay"); if (!pb) return null; return pb.querySelector(".ccmapc #dirMap, .ccmapc .ccmap"); }
-function mhScopeSites(){ if (UI.mode === "sh-dir") return null; if (UI.mode === "sh-region"){ let g = ""; try{ const R = rrRegions(); g = R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){} return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && (() => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } })()); }
+function mhScopeSites(){ if (UI.mode === "sh-dir") return CITIES.map(c => ({ lat: c.lat, lon: c.lon })); if (UI.mode === "sh-region"){ let g = ""; try{ const R = rrRegions(); g = R.includes(UI.rgRegion) ? UI.rgRegion : R[0]; }catch(e){} return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && (() => { try{ return rgSiteRegion(s) === g; }catch(e){ return false; } })()); }
   const cc = ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); return SITES.filter(s => isLive(s) && Number.isFinite(s.lat) && s.country === cc); }
 function mhKey(){ if (UI.mode === "sh-dir") return "dir"; if (UI.mode === "sh-region") return "rg:" + (UI.rgRegion || ""); return "so:" + ((document.querySelector("#panel .dhead .dt") || {}).textContent || "").trim(); }
 function mhHost(){ if (typeof map === "undefined" || !map || typeof L === "undefined") return false; const slot = mhSlot(); if (!slot) return false; const el = map.getContainer();
   if (!MH.on){ MH.home = { parent: el.parentNode, next: el.nextSibling, c: map.getCenter(), z: map.getZoom() }; MH.on = true; MH.key = ""; }
   if (el.parentNode !== slot){ slot.innerHTML = ""; slot.appendChild(el); el.classList.add("mhguest"); }
   const k = mhKey(); setTimeout(() => { try{ map.invalidateSize(false);
-      if (MH.key !== k){ MH.key = k; const S = mhScopeSites(); if (S && S.length) map.fitBounds(L.latLngBounds(S.map(s => [s.lat, s.lon])).pad(S.length > 1 ? .3 : 0), { maxZoom: 11, animate: false }); else if (!S) map.setView([12, 118], 4, { animate: false }); }
-      redrawMap(); }catch(e){ console.warn("map host", e); } }, 60);
+      if (MH.key !== k){ MH.key = k; const S = mhScopeSites(); const B = S && S.length ? L.latLngBounds(S.map(s => [s.lat, s.lon])) : null; if (B && UI.mode === "sh-dir") map.setView(B.getCenter(), map.getBoundsZoom(B), { animate: false }); else if (B) map.fitBounds(B.pad(S.length > 1 ? .3 : 0), { maxZoom: 11, animate: false }); else if (!S) map.setView([12, 118], 4, { animate: false }); }
+      redrawMap(); }catch(e){ console.warn("map host", e); } }, 380);
   return true; }
 function mhHome(){ if (!MH.on || typeof map === "undefined" || !map) return; const el = map.getContainer(), H = MH.home; MH.on = false; MH.key = "";
   try{ if (MH.zoomCtl){ map.removeControl(MH.zoomCtl); MH.zoomCtl = null; } }catch(e){}
@@ -24306,6 +24306,19 @@ renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(thi
 setInterval(() => { if (MH.on && (document.body.classList.contains("phone") || !MH_MODES.includes(UI.mode) || !mhSlot())) mhHome(); }, 1500);
 { const st = document.createElement("style"); st.textContent = `#map.mhguest{position:absolute!important;inset:0!important;top:0!important;border-radius:10px}
 .pbody.cclay .ccmapc #dirMap,.pbody.cclay .ccmapc .ccmap{position:relative}`; document.head.appendChild(st); }
+/* ---------- Every map has its own land and sea underneath: the country outlines the console already carries are drawn below the map
+   tiles, so a map is never blank where tile servers are blocked or slow (it shows coastlines and borders; tiles cover it when they load) ---------- */
+// rings that cross the date line are unwrapped so they don't draw a band across the map
+const mcUnwrap = ring => { const lo = ring.map(p => p[0]); return Math.max(...lo) - Math.min(...lo) > 180 ? ring.map(([x, y]) => [x < 0 ? x + 360 : x, y]) : ring; };
+const MC_WORLD = (() => { try{ return { type: "FeatureCollection", features: WORLD.map(f => { const g = f.g, poly = p => p.map(mcUnwrap); return { type: "Feature", properties: { cc: f.cc }, geometry: g.type === "Polygon" ? { type: "Polygon", coordinates: poly(g.coordinates) } : g.type === "MultiPolygon" ? { type: "MultiPolygon", coordinates: g.coordinates.map(poly) } : g }; }) }; }catch(e){ return null; } })();
+function mcOffBase(m){ if (!MC_WORLD || !m || m._mcOff) return; m._mcOff = true; try{ const pane = m.createPane("offbase"); pane.style.zIndex = 150; pane.style.pointerEvents = "none";
+    L.geoJSON(MC_WORLD, { pane: "offbase", interactive: false, style: { weight: .8, fillOpacity: 1, opacity: 1 }, renderer: L.svg({ pane: "offbase" }) }).addTo(m); m.getContainer().classList.add("mcoff"); }catch(e){ console.warn("offline base", e); } }
+if (typeof L !== "undefined" && L.Map && L.Map.addInitHook) L.Map.addInitHook(function(){ mcOffBase(this); });
+try{ if (typeof map !== "undefined" && map) mcOffBase(map); }catch(e){}
+{ const st = document.createElement("style"); st.textContent = `
+.leaflet-container.mcoff,#map.mcoff{background:#0A1524}
+.leaflet-offbase-pane path{fill:#1D2A3A;stroke:#36495F}
+body.light .leaflet-container.mcoff,body.light #map.mcoff{background:#CFDCE8}body.light .leaflet-offbase-pane path{fill:#EEF2F5;stroke:#A9B8C8}`; document.head.appendChild(st); }
 
 boot();
 
