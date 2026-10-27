@@ -1400,3 +1400,6 @@ and the store app (`mobile/scripts/build-web.mjs`) are built from the mobile ver
 
 The guard's **Alerts** tab now also shows the site's Virtual guard warnings: overstays, watch-list matches, overdue
 keys, unusual activity and ships lingering near the site.
+
+**Feed links.** `web.html#addfeeds=<list>` opens My feeds with the import window filled in, for adding a whole feed list
+in one click. The list is compressed after the `#`, so it is never sent to the server or stored on the site.

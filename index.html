@@ -24931,7 +24931,7 @@ function mfOpml(text){ text = String(text || ""); const i = text.search(/<\?xml|
       out.push({ url: dec(u), title: dec(o.getAttribute("title") || o.getAttribute("text") || ""), folder }); }); }
   else text.split(/<outline\b/i).slice(1).forEach(ch => { const u = /xmlUrl\s*=\s*"([^"]+)"/i.exec(ch); if (!u) return; const t = /\btitle\s*=\s*"([\s\S]*?)"\s+(?:type|xmlUrl|htmlUrl|text)\s*=/i.exec(ch) || /\btext\s*=\s*"([\s\S]*?)"\s+(?:title|type|xmlUrl|htmlUrl)\s*=/i.exec(ch); out.push({ url: dec(u[1]), title: dec(t ? t[1] : ""), folder: "" }); });
   const seen = new Set(); return out.filter(x => /^https?:\/\//i.test(x.url) && !seen.has(x.url) && seen.add(x.url)); }
-function mfImport(){ openModal(head("Import feeds (OPML)") + `<div class="bd mfimp">
+function mfImport(preset){ openModal(head("Import feeds (OPML)") + `<div class="bd mfimp">
     <p class="help" style="margin-top:0">In Inoreader: <b>Preferences › Import/Export › Export OPML</b> (or any reader's OPML export). Choose the file, or paste its contents.</p>
     <div class="fgrid"><label class="fld">OPML file<input type="file" id="mfFile" accept=".opml,.xml,.txt,text/xml,text/x-opml"></label></div>
     <label class="fld">…or paste it<textarea id="mfTxt" rows="4" placeholder="<opml version=&quot;1.0&quot;> …"></textarea></label>
@@ -24945,6 +24945,7 @@ function mfImport(){ openModal(head("Import feeds (OPML)") + `<div class="bd mfi
       <div class="mfil">${Object.entries(groups).map(([g, xs]) => `<div class="mfig">${esc(g)} <small>${xs.length}</small></div>${xs.map(([x, i]) => `<label class="mfir${have.has(x.url) ? " dup" : ""}"><input type="checkbox" data-mfi="${i}"${have.has(x.url) ? " disabled" : " checked"}><span><b>${esc(x.title || mfName(x.url))}</b>${have.has(x.url) ? " — already added" : ""}<small>${esc(x.url)}</small></span></label>`).join("")}`).join("")}</div>`; count(); };
   $("#mfFile").addEventListener("change", async e => { const f = e.target.files[0]; if (f && live()) show(await f.text()); });
   $("#mfTxt").addEventListener("input", e => { if (live()) show(e.target.value); });
+  if (preset){ $("#mfTxt").value = preset; show(preset); }
   box.addEventListener("change", e => { if (live() && e.target.matches("[data-mfi]")) count(); });
   box.addEventListener("click", e => { if (!live()) return; const b = e.target.closest("[data-mfsel]"); if (!b) return; const re = /secur|cyber|threat|hacker|data ?cent|dcd|asia|pacific|singapore|malaysia|indonesia|india|china|hong kong|taipei|japan|korea|australia|zealand|straits|channel ?news|bbc|reuters|guardian|diplomat|nikkei/i;
     box.querySelectorAll("[data-mfi]:not(:disabled)").forEach(c => { const x = L[+c.dataset.mfi]; c.checked = b.dataset.mfsel === "all" || (b.dataset.mfsel === "sec" && re.test(x.title + " " + x.url)); }); count(); });
@@ -24952,6 +24953,13 @@ function mfImport(){ openModal(head("Import feeds (OPML)") + `<div class="bd mfi
     const room = 150 - mfUrls().length; if (pick.length > room) toast("Feed limit", `Added the first ${room}; TTE reads up to 150 feeds.`, "var(--amber)");
     mfSetUrls(mfUrls().concat(pick.slice(0, Math.max(0, room)).map(x => x.url))); audit("Feeds imported", pick.length + " feeds", "OPML"); closeModal(); renderPanel(); toast("Feeds added", `${Math.min(pick.length, room)} feeds are loading`, "var(--teal)"); }; }
 try{ const s = INTEL_SECTIONS.find(x => x[0] === "nw"); if (s && !s[2].some(x => x[0] === "myfeeds")) s[2].push(["myfeeds", "My feeds"]); }catch(e){}
+
+/* ---- a link that adds a list of feeds: …web.html#addfeeds=<list> (the list never reaches a server: it stays after the #) ---- */
+async function mfFromLink(code){ const b = code.replace(/-/g, "+").replace(/_/g, "/"), bytes = Uint8Array.from(atob(b + "===".slice((b.length + 3) % 4)), c => c.charCodeAt(0));
+  let txt; try{ txt = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text(); }catch(e){ txt = new TextDecoder().decode(bytes); }
+  const L = JSON.parse(txt); return `<opml version="1.0"><body>${L.map(([u, t]) => `<outline type="rss" title="${esc(t || "")}" xmlUrl="${esc(u)}"/>`).join("")}</body></opml>`; }
+{ const m = /#addfeeds=([A-Za-z0-9_-]+)/.exec(location.hash); if (m){ const code = m[1]; let n = 0; const t = setInterval(async () => { n++; if (n > 240) return clearInterval(t); if (!ME || document.getElementById("gate") && document.getElementById("gate").offsetParent) return; clearInterval(t);
+    try{ history.replaceState(null, "", location.pathname + location.search); const opml = await mfFromLink(code); setMode("myfeeds"); setTimeout(() => mfImport(opml), 300); }catch(e){ toast("That feed link could not be read", e.message, "var(--amber)"); } }, 500); } }
 /* ---------- Virtual guard: running sites remotely from the PSOC — scheduled virtual patrols through each site's cameras, a
    self-learning check that spots events that are unusual for that site at that hour, visitor and contractor management with
    remote door release, intercom calls and talk-down announcements, mobile camera units and security robots, key control,
