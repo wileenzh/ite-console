@@ -1414,3 +1414,25 @@ directly. My feeds › **How feeds are fetched** offers three choices:
 Each feed remembers which way worked. A personal copy of the app can carry its owner's feed list
 (`window.TTE_PRESET`), applied once on first open. Such copies are made for one person and are not kept in this
 repository.
+
+## My feeds, analysed and on the map (27 Oct)
+
+My feeds is still its own tab (Intelligence › News › My feeds), but the console now analyses everything in it and puts
+the results on the map:
+- **Placed:** each story is tied to one of our cities, an APAC country, or a country or region elsewhere (about 50,
+  such as the Middle East, Ukraine and Russia, the South China Sea and the Red Sea).
+- **Labelled by topic:** the hazard categories, plus cyber, data centres and cloud, geopolitics and conflict, economy
+  and markets, and AI and technology.
+- **Grouped into developing stories:** reports of the same thing from different sources, within 48 hours, become one
+  story. It shows how many reports and sources it has, and when it was first and last seen.
+- **Scored 0–10** for how much it matters to us: number of sources, a security topic, our sites in that city, and
+  how recent it is.
+- **On the main map:** a new **My feeds** layer (quick-bar chip and layer panel) puts one marker per place. Hovering
+  lists the developing stories; clicking opens them in My feeds. The tab now keeps the map beside the list.
+- **"What your feeds are saying"** at the top of the tab: stories by topic and by region (our cities, the rest of APAC,
+  the rest of the world), the top developing stories with links to each source, **Map**, **Send to Action queue**
+  and Decision-1's "affects us" score (automatic for stories scoring 5 or more).
+- **Write a brief:** a short written brief of the top 15 stories, produced by the PSOC server's language model.
+
+Stories about a hazard in one of our cities also feed the news count on the city cards, the news layer and the
+dashboards, as before.
