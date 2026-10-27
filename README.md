@@ -1403,3 +1403,14 @@ keys, unusual activity and ships lingering near the site.
 
 **Feed links.** `web.html#addfeeds=<list>` opens My feeds with the import window filled in, for adding a whole feed list
 in one click. The list is compressed after the `#`, so it is never sent to the server or stored on the site.
+
+**When a site blocks the browser.** Many news sites, and sometimes Inoreader, don't allow a web page to read their feeds
+directly. My feeds › **How feeds are fetched** offers three choices:
+- **Directly** (then the PSOC server, when it is set up);
+- **Through a public relay:** corsproxy.io, falling back to allorigins.win and codetabs.com. These services see the
+  feed addresses only;
+- **Through my own relay:** any address with `{url}` in it, for example a small Cloudflare Worker.
+
+Each feed remembers which way worked. A personal copy of the app can carry its owner's feed list
+(`window.TTE_PRESET`), applied once on first open. Such copies are made for one person and are not kept in this
+repository.

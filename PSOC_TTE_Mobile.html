@@ -24855,8 +24855,20 @@ function mfParse(text, feedUrl){ const out = [], feed = mfName(feedUrl), add = o
     [...x.getElementsByTagName("entry")].forEach(n => { const l = [...n.getElementsByTagName("link")].find(e => (e.getAttribute("rel") || "alternate") === "alternate") || n.getElementsByTagName("link")[0]; add({ url: l ? l.getAttribute("href") || l.textContent : "", title: T(n, "title"), desc: T(n, "summary") || T(n, "content"), t: T(n, "published") || T(n, "updated"), source: T(n, "name") }); }); }
   try{ if (!CFG.news.feedNames[feedUrl] && !/inoreader\.com/.test(feedUrl)){ let ttl = ""; if (j) ttl = j.title || ""; else { const x2 = new DOMParser().parseFromString(text, "text/xml"), ch = x2.querySelector("channel > title, feed > title"); ttl = ch ? ch.textContent.trim() : ""; } if (ttl){ CFG.news.feedNames[feedUrl] = mfStrip(ttl).slice(0, 80); MF.named = 1; } } }catch(e){}
   return out.slice(0, 40); }
+CFG.news.feedRelay = CFG.news.feedRelay || "";
+const MF_PUBLIC = ["https://corsproxy.io/?url={url}", "https://api.allorigins.win/raw?url={url}", "https://api.codetabs.com/v1/proxy/?quest={url}"];
+try{ ["corsproxy.io", "api.allorigins.win", "api.codetabs.com"].forEach(h => { if (!SG_KNOWN.includes(h)) SG_KNOWN.push(h); }); }catch(e){}
+const mfRelays = () => CFG.news.feedRelay === "public" ? MF_PUBLIC : /\{url\}/.test(CFG.news.feedRelay) ? [CFG.news.feedRelay] : [];
+const mfLooksFeed = t => /<(rss|feed|rdf:RDF|channel)\b/i.test(t.slice(0, 3000)) || /^\s*\{[\s\S]*"(items|entries)"/.test(t.slice(0, 3000));
+async function mfFetch(u){ const st = MF.st[u] || {}, tries = [];
+  const direct = async () => { const r = await fetchText(u, {}, 12000); if (!r.ok) throw new Error("HTTP " + r.status); return r.text; };
+  const relay = tpl => async () => { const r = await fetchText(tpl.replace("{url}", encodeURIComponent(u)), {}, 20000); if (!r.ok) throw new Error("relay HTTP " + r.status); if (!mfLooksFeed(r.text)) throw new Error("relay did not return the feed"); return r.text; };
+  const R = mfRelays(), order = [["direct", direct]].concat(R.map(t => [t, relay(t)])); if (st.via && st.via !== "direct"){ const i = order.findIndex(x => x[0] === st.via); if (i > 0) order.unshift(order.splice(i, 1)[0]); }
+  let err = null; for (const [via, f] of order){ try{ const t = await f(); if (via !== "direct" || mfLooksFeed(t) || /^\s*[\[{]/.test(t)){ MF.via = MF.via || {}; MF.via[u] = via; return t; } }catch(e){ err = e; } }
+  if (serverBase() || CFG.relayUrl){ const t = await fetchVia(u, {}, 25000); MF.via = MF.via || {}; MF.via[u] = "psoc"; return t; }
+  throw new Error(err && /Failed to fetch|NetworkError|Load failed|TypeError/i.test(err.message + err.name) ? "the site blocks reading its feed from a browser — choose a relay below" : (err ? err.message : "no answer")); }
 async function mfLoad(force){ if (MF.busy) return; const urls = mfUrls(); if (!urls.length){ MF.items = []; mfSave(); return; } if (!force && Date.now() - MF.at < 5 * 60e3) return; MF.busy = true; mfRefresh();
-  const all = [], one = async u => { try{ const items = mfParse(await fetchVia(u, {}, 25000), u); MF.st[u] = { ok: true, n: items.length, at: Date.now(), err: "" }; all.push(...items); }
+  const all = [], one = async u => { try{ const items = mfParse(await mfFetch(u), u); MF.st[u] = { ok: true, n: items.length, at: Date.now(), err: "", via: (MF.via || {})[u] || "direct" }; all.push(...items); }
     catch(e){ MF.st[u] = Object.assign({}, MF.st[u] || {}, { ok: false, at: Date.now(), err: e.message }); all.push(...MF.items.filter(i => i.feedUrl === u)); } };
   // six at a time, so a long list of feeds doesn't flood the network
   const q = urls.slice(); await Promise.all(Array.from({ length: Math.min(6, q.length) }, async () => { while (q.length) await one(q.shift()); }));
@@ -24891,6 +24903,9 @@ function mfPanel(){ const urls = mfUrls(), f = UI.mfF || "all", sel = UI.mfFeed 
       <aside class="dc mfside"><div class="dch">Feeds <small>${urls.length}</small><span class="sp"></span><button class="tab-mini" data-mfopml>Import OPML</button></div>
         ${urls.length ? (() => { const okN = urls.filter(u => (MF.st[u] || {}).ok).length, bad = urls.filter(u => (MF.st[u] || {}).err).length; return `<div class="mfsum"><span><b>${okN}</b> working</span>${bad ? `<span style="color:#FF5468"><b>${bad}</b> failing</span><button class="tab-mini" data-mfdelbad>Remove failing</button>` : ""}</div>`; })() : ""}
         <div class="mffds">${urls.map(u => { const s = MF.st[u] || {}; return `<div class="mffd"><span class="dpled" style="--c:${s.ok ? "#3DDC97" : s.err ? "#FF5468" : "#8B948F"}"></span><div><b>${esc(mfName(u))}</b><small class="s">${s.ok ? `${s.n} stories · ${esc(ago(s.at))}` : s.err ? esc(trunc(s.err, 140)) : "not loaded yet"}</small></div><button class="tab-mini" data-mfdel="${esc(u)}" aria-label="Remove ${esc(mfName(u))}">✕</button></div>`; }).join("") || `<p class="s">No feeds yet.</p>`}</div>
+        <div class="mfrel"><label class="fld">How feeds are fetched<select id="mfRel"><option value=""${!CFG.news.feedRelay ? " selected" : ""}>Directly${serverBase() ? ", then the PSOC server" : ""}</option><option value="public"${CFG.news.feedRelay === "public" ? " selected" : ""}>Through a public relay when a site blocks the browser</option><option value="custom"${/\{url\}/.test(CFG.news.feedRelay) ? " selected" : ""}>Through my own relay</option></select></label>
+          ${/\{url\}/.test(CFG.news.feedRelay) || UI.mfRelC ? `<label class="fld">Relay address (use {url} for the feed)<input id="mfRelU" value="${esc(/\{url\}/.test(CFG.news.feedRelay) ? CFG.news.feedRelay : "")}" placeholder="https://feeds.example.workers.dev/?url={url}"></label>` : ""}
+          ${CFG.news.feedRelay === "public" ? `<p class="help">Feeds a site won't let the browser read go through corsproxy.io (then allorigins.win or codetabs.com if it's busy). Those services see the feed addresses, not your sign-in or anything else.</p>` : ""}</div>
         <form class="mfadd" data-mfadd><label class="fld">Add a feed<input id="mfNew" type="url" placeholder="https://www.inoreader.com/stream/user/…/tag/…" required></label><button class="pill primary">Add</button></form>
         <p class="help">In Inoreader: hover a folder or tag (or <b>Starred</b>) › <b>⋯</b> › <b>Export as RSS</b>, and paste the link. Any RSS, Atom or JSON feed works too. Links are kept in this browser; anyone who has an Inoreader output link can read that folder, so share only folders that are fine to read.</p>
         <p class="help">Stories about a hazard in one of our cities also appear in the main news feed and on the map.</p></aside></div></div>`; }
@@ -24909,8 +24924,10 @@ renderPanelInner = (function(orig){ return function(p){ if (UI.mode === "myfeeds
     if (/inoreader\.com\/(dashboard|all_articles|folder|article)/i.test(u)){ toast("That's an Inoreader page, not a feed", "In Inoreader use ⋯ › Export as RSS on a folder or tag, and paste that link.", "var(--amber)"); return; }
     u = u.replace(/\/view\/html\/?$/, ""); mfSetUrls(mfUrls().concat(u)); audit("Feed added", mfName(u), ""); renderPanel(); });
   P.addEventListener("input", e => { if (UI.mode !== "myfeeds" || e.target.id !== "mfQ") return; clearTimeout(MF.qT); MF.qT = setTimeout(() => { UI.mfQ = e.target.value; const pos = e.target.selectionStart; renderPanel(); const q = $("#mfQ"); if (q){ q.focus(); try{ q.setSelectionRange(pos, pos); }catch(x){} } }, 300); });
+  P.addEventListener("change", e => { if (UI.mode !== "myfeeds") return; if (e.target.id === "mfRel"){ const v = e.target.value; if (v === "custom"){ UI.mfRelC = 1; renderPanel(); return; } UI.mfRelC = 0; CFG.news.feedRelay = v; saveCfg(); MF.at = 0; mfLoad(true); renderPanel(); return; }
+    if (e.target.id === "mfRelU"){ const v = e.target.value.trim(); if (/^https:\/\/.+\{url\}/.test(v)){ CFG.news.feedRelay = v; saveCfg(); MF.at = 0; mfLoad(true); renderPanel(); } else toast("Relay address needs https:// and {url}", "", "var(--amber)"); return; } }, true);
   P.addEventListener("change", e => { if (UI.mode !== "myfeeds" || e.target.id !== "mfFeed") return; UI.mfFeed = e.target.value; saveUI(); renderPanel(); }); }
-setInterval(() => { if (ME && mfUrls().length && Date.now() - MF.at > 10 * 60e3) mfLoad(true); }, 60e3);
+setInterval(() => { if (ME && mfUrls().length && Date.now() - MF.at > (CFG.news.feedRelay === "public" ? 15 : 10) * 60e3) mfLoad(true); }, 60e3);
 { const st = document.createElement("style"); st.textContent = `
 .mfgrid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}.mfside{position:sticky;top:0;padding:12px}
 .mfit{display:flex;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--glass,var(--panel))}.mfit.hot{border-left:4px solid #FFB547}
@@ -24920,6 +24937,7 @@ setInterval(() => { if (ME && mfUrls().length && Date.now() - MF.at > 10 * 60e3)
 .mftags{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.mftag{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--c,var(--muted)) 50%,var(--line));color:var(--c,var(--muted))}.mftag.city{--c:var(--teal)}
 .mfside .dch{display:flex;align-items:center;gap:6px}.mfside .dch .sp{flex:1}.mfsum{display:flex;align-items:center;gap:10px;font-size:12px;margin:2px 0 6px}.mfsum button{margin-left:auto}.mffds{max-height:46vh;overflow:auto;padding-right:4px}
 .mfimp .mfil{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin-top:8px}.mfimp .mfir{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:12.5px}.mfimp .mfir small{display:block;color:var(--muted);word-break:break-all}.mfimp .mfir.dup{opacity:.5}.mfimp .mfig{font:700 12px var(--readout,inherit);color:var(--muted);margin:8px 0 2px}
+.mfrel{margin-top:10px}.mfrel .fld{margin-bottom:6px}
 .mffd{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.mffd>div{flex:1;min-width:0;display:flex;flex-direction:column}.mffd small{font-size:11px;word-break:break-word}
 .mfadd{display:flex;gap:8px;align-items:flex-end;margin-top:12px}.mfadd .fld{flex:1;margin:0}
 body.phone .mfgrid{grid-template-columns:1fr}body.phone .mfside{position:static;order:-1}body.phone .mfit img{width:84px;height:60px}
@@ -24961,6 +24979,9 @@ async function mfFromLink(code){ const b = code.replace(/-/g, "+").replace(/_/g,
   const L = JSON.parse(txt); return `<opml version="1.0"><body>${L.map(([u, t]) => `<outline type="rss" title="${esc(t || "")}" xmlUrl="${esc(u)}"/>`).join("")}</body></opml>`; }
 { const m = /#addfeeds=([A-Za-z0-9_-]+)/.exec(location.hash); if (m){ const code = m[1]; let n = 0; const t = setInterval(async () => { n++; if (n > 240) return clearInterval(t); if (!ME || document.getElementById("gate") && document.getElementById("gate").offsetParent) return; clearInterval(t);
     try{ history.replaceState(null, "", location.pathname + location.search); const opml = await mfFromLink(code); setMode("myfeeds"); setTimeout(() => mfImport(opml), 300); }catch(e){ toast("That feed link could not be read", e.message, "var(--amber)"); } }, 500); } }
+
+{ const P0 = window.TTE_PRESET; if (P0 && Array.isArray(P0.feeds) && !lsGet("psoc.uni.presetdone.v1", 0)){ try{ (P0.feeds || []).forEach(([u, t]) => { if (t) CFG.news.feedNames[u] = t; });
+    CFG.news.inoreaderFeeds = [...new Set(mfUrls().concat(P0.feeds.map(f => f[0])))].join("\n"); if (P0.relay != null && !CFG.news.feedRelay) CFG.news.feedRelay = P0.relay; saveCfg(); lsSet("psoc.uni.presetdone.v1", 1); }catch(e){ console.warn("preset", e); } } }
 /* ---------- Virtual guard: running sites remotely from the PSOC — scheduled virtual patrols through each site's cameras, a
    self-learning check that spots events that are unusual for that site at that hour, visitor and contractor management with
    remote door release, intercom calls and talk-down announcements, mobile camera units and security robots, key control,
