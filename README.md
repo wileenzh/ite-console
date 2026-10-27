@@ -1310,3 +1310,19 @@ probabilities for any situation you type, and the page keeps a log of recent rec
 **Demo mode** (Sources › "Show demo notices and ships") fills both pages with clearly marked made-up examples until the
 real feeds are connected. Keys for the FAA, aisstream.io and OpenRouter stay in the browser. Feeds a browser can't reach
 directly go through the PSOC server relay.
+
+## My feeds: Inoreader and any RSS (27 Oct)
+
+Intelligence Monitoring › **My feeds** shows the team's own reading in full, newest first:
+- Inoreader folders, tags or **Starred** items (as output feeds), or any RSS, Atom or JSON feed.
+- Each story is tagged with the security topic and the cities it mentions.
+- Filters: **Everything**, **Our cities** and **Security topics**, plus a search box and a choice of feed.
+- **Send to Action queue** works on any story, and **⚡ Does it affect us?** asks Decision-1 when it's set up.
+
+**To add an Inoreader feed:** in Inoreader, hover over a folder, tag or **Starred** › **⋯** › **Export as RSS**. Paste
+the link into **Add a feed** on the page, or under Integrations › More news. The address of the Inoreader dashboard
+itself is refused, because it is a web page that needs signing in, not a feed.
+
+Stories about a hazard in one of our cities also go into the main news feed and onto the map. Feed links are kept in the
+browser. Anyone who has an Inoreader output link can read that folder, so only export folders that are fine to share.
+Feeds the browser can't fetch directly are retried through the PSOC server relay.
