@@ -1326,3 +1326,14 @@ itself is refused, because it is a web page that needs signing in, not a feed.
 Stories about a hazard in one of our cities also go into the main news feed and onto the map. Feed links are kept in the
 browser. Anyone who has an Inoreader output link can read that folder, so only export folders that are fine to share.
 Feeds the browser can't fetch directly are retried through the PSOC server relay.
+
+**Importing a whole subscription list (OPML).** My feeds › **Import OPML** reads an OPML export, either chosen as a
+file or pasted. In Inoreader it is under Preferences › Import/Export › Export OPML.
+- The import lists every feed, grouped by folder, with duplicates removed and feeds already added greyed out.
+- **Only security, data centres and Asia news** picks the relevant ones; you can also select all or none.
+- Up to 150 feeds are read, six at a time, each keeping its own name. The side panel shows how many work and how many
+  fail, and **Remove failing** clears the dead ones.
+- The main news feed reuses what My feeds has fetched, rather than downloading the feeds a second time.
+- Many news sites don't let a browser read their feeds directly; those come through the PSOC server relay. With a paid
+  Inoreader plan, a lighter alternative is to group the subscriptions into a few Inoreader folders and add each
+  folder's **Export as RSS** link. Inoreader then does the fetching, and the console reads 3–5 links.

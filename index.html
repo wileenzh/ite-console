@@ -24837,8 +24837,9 @@ body.phone .nscols,body.phone .nssea{grid-template-columns:1fr}body.phone .nspg 
    hazard in one of our cities; here nothing is dropped, and each story is tagged with the topic and places it mentions, so the
    relevant ones stand out. Feeds a browser can't read directly come through the PSOC server relay. ---------- */
 const MF = { items: lsGet("psoc.uni.myfeeds.v1", []), st: lsGet("psoc.uni.myfeedst.v1", {}), busy: false, at: 0 };
-const mfUrls = () => [...new Set(String((CFG.news && CFG.news.inoreaderFeeds) || "").split(/[\s,]+/).filter(x => /^https?:\/\//.test(x)))].slice(0, 20);
-function mfName(u){ const m = /inoreader\.com\/stream\/user\/\d+\/(tag|label)\/([^/?#]+)/i.exec(u); if (m){ const t = decodeURIComponent(m[2]); return t === "user-favorites" ? "Inoreader · starred" : t === "user-broadcasted" ? "Inoreader · shared" : "Inoreader · " + t.replace(/^user-/, ""); }
+const mfUrls = () => [...new Set(String((CFG.news && CFG.news.inoreaderFeeds) || "").split(/[\s,]+/).filter(x => /^https?:\/\//.test(x)))].slice(0, 150);
+CFG.news.feedNames = CFG.news.feedNames || {};
+function mfName(u){ if (CFG.news.feedNames && CFG.news.feedNames[u]) return CFG.news.feedNames[u]; const m = /inoreader\.com\/stream\/user\/\d+\/(tag|label)\/([^/?#]+)/i.exec(u); if (m){ const t = decodeURIComponent(m[2]); return t === "user-favorites" ? "Inoreader · starred" : t === "user-broadcasted" ? "Inoreader · shared" : "Inoreader · " + t.replace(/^user-/, ""); }
   const f = /inoreader\.com\/stream\/feed\/([^?#]+)/i.exec(u); if (f) return "Inoreader · " + decodeURIComponent(f[1]).replace(/^https?:\/\//, "").split("/")[0]; try{ return new URL(u).hostname.replace(/^www\./, ""); }catch(e){ return u.slice(0, 40); } }
 const mfStrip = h => String(h || "").replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 function mfParse(text, feedUrl){ const out = [], feed = mfName(feedUrl), add = o => { if (!o.title && !o.desc) return; const t = Date.parse(o.t) || (typeof o.t === "number" ? o.t : null);
@@ -24850,18 +24851,24 @@ function mfParse(text, feedUrl){ const out = [], feed = mfName(feedUrl), add = o
     const T = (n, s) => { const e = n.getElementsByTagName(s)[0]; return e ? e.textContent.trim() : ""; };
     [...x.getElementsByTagName("item")].forEach(n => { const enc = n.getElementsByTagName("enclosure")[0]; add({ url: T(n, "link"), title: T(n, "title"), desc: T(n, "description") || T(n, "content:encoded"), t: T(n, "pubDate") || T(n, "dc:date"), source: T(n, "source") || T(n, "dc:creator"), img: enc && /image/.test(enc.getAttribute("type") || "") ? enc.getAttribute("url") : "" }); });
     [...x.getElementsByTagName("entry")].forEach(n => { const l = [...n.getElementsByTagName("link")].find(e => (e.getAttribute("rel") || "alternate") === "alternate") || n.getElementsByTagName("link")[0]; add({ url: l ? l.getAttribute("href") || l.textContent : "", title: T(n, "title"), desc: T(n, "summary") || T(n, "content"), t: T(n, "published") || T(n, "updated"), source: T(n, "name") }); }); }
-  return out; }
+  try{ if (!CFG.news.feedNames[feedUrl] && !/inoreader\.com/.test(feedUrl)){ let ttl = ""; if (j) ttl = j.title || ""; else { const x2 = new DOMParser().parseFromString(text, "text/xml"), ch = x2.querySelector("channel > title, feed > title"); ttl = ch ? ch.textContent.trim() : ""; } if (ttl){ CFG.news.feedNames[feedUrl] = mfStrip(ttl).slice(0, 80); MF.named = 1; } } }catch(e){}
+  return out.slice(0, 40); }
 async function mfLoad(force){ if (MF.busy) return; const urls = mfUrls(); if (!urls.length){ MF.items = []; mfSave(); return; } if (!force && Date.now() - MF.at < 5 * 60e3) return; MF.busy = true; mfRefresh();
-  const all = []; await Promise.all(urls.map(async u => { try{ const items = mfParse(await fetchVia(u, {}, 25000), u); MF.st[u] = { ok: true, n: items.length, at: Date.now(), err: "" }; all.push(...items); }
-    catch(e){ MF.st[u] = Object.assign({}, MF.st[u] || {}, { ok: false, at: Date.now(), err: e.message }); all.push(...MF.items.filter(i => i.feedUrl === u)); } }));
-  const seen = new Set(); MF.items = all.filter(i => !seen.has(i.id) && seen.add(i.id)).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 600); MF.at = Date.now(); MF.busy = false; mfSave(); mfRefresh(); }
+  const all = [], one = async u => { try{ const items = mfParse(await fetchVia(u, {}, 25000), u); MF.st[u] = { ok: true, n: items.length, at: Date.now(), err: "" }; all.push(...items); }
+    catch(e){ MF.st[u] = Object.assign({}, MF.st[u] || {}, { ok: false, at: Date.now(), err: e.message }); all.push(...MF.items.filter(i => i.feedUrl === u)); } };
+  // six at a time, so a long list of feeds doesn't flood the network
+  const q = urls.slice(); await Promise.all(Array.from({ length: Math.min(6, q.length) }, async () => { while (q.length) await one(q.shift()); }));
+  if (MF.named){ MF.named = 0; saveCfg(); }
+  const seen = new Set(), seenT = new Set(); MF.items = all.filter(i => !seen.has(i.id) && seen.add(i.id) && (!i.title || !seenT.has(normTitle(i.title)) && seenT.add(normTitle(i.title)))).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 900); MF.at = Date.now(); MF.busy = false; mfSave(); mfRefresh(); }
 function mfSave(){ lsSet("psoc.uni.myfeeds.v1", MF.items); Object.keys(MF.st).forEach(u => { if (!mfUrls().includes(u)) delete MF.st[u]; }); lsSet("psoc.uni.myfeedst.v1", MF.st); }
 function mfRefresh(){ if (UI.mode === "myfeeds"){ const p = document.getElementById("panel"), y = p ? p.scrollTop : 0; renderPanel(); if (p) p.scrollTop = y; } }
 function mfSetUrls(list){ CFG.news.inoreaderFeeds = [...new Set(list)].join("\n"); saveCfg(); MF.at = 0; mfLoad(true); try{ loadAllNews(); }catch(e){} }
 // the security news feed reads the same links: try directly, then through the relay
 loadInoreader = (function(orig){ return async function(){ const out = [], errs = [];
   if (CFG.news.inoreaderApi && serverBase()){ try{ const r = await fetch(serverBase() + "/api/news/inoreader"); const j = await r.json(); if (!r.ok) throw new Error(j.error || "HTTP " + r.status); j.forEach(i => { const it = newsItem("Inoreader", i); if (it) out.push(it); }); }catch(e){ errs.push("API: " + e.message); } }
-  for (const u of mfUrls().slice(0, 10)){ try{ parseFeed(await fetchVia(u, {}, 25000), "Inoreader").forEach(i => out.push(i)); }catch(e){ errs.push(mfName(u) + ": " + e.message); } }
+  if (mfUrls().length){ if (Date.now() - MF.at > 12 * 60e3) await mfLoad(true);
+    MF.items.forEach(i => { const it = newsItem("Inoreader", { url: i.url, title: i.title, desc: i.desc, t: i.t, source: i.source || i.feed }); if (it) out.push(it); });
+    const bad = mfUrls().filter(u => MF.st[u] && MF.st[u].err); if (!MF.items.length && bad.length) errs.push(bad.length + " feeds failed, e.g. " + mfName(bad[0]) + ": " + MF.st[bad[0]].err); }
   if (!out.length && errs.length) throw new Error(errs.join("; ")); return out; }; })(loadInoreader);
 { const i = NEWS_PROVIDERS.findIndex(p => p[0] === "inoreader"); if (i >= 0) NEWS_PROVIDERS[i][2] = loadInoreader; }
 /* ---- Intelligence Monitoring › My feeds ---- */
@@ -24879,8 +24886,9 @@ function mfPanel(){ const urls = mfUrls(), f = UI.mfF || "all", sel = UI.mfFeed 
       <select id="mfFeed"><option value="">All feeds (${urls.length})</option>${urls.map(u => `<option value="${esc(u)}"${sel === u ? " selected" : ""}>${esc(mfName(u))}</option>`).join("")}</select>
       ${["all", "ours", "sec"].map(k => `<button class="tab-mini" data-mff="${k}" aria-pressed="${f === k}">${{ all: "Everything", ours: `Our cities (${ours})`, sec: `Security topics (${sec})` }[k]}</button>`).join("")}<span class="sp"></span><button class="tab-mini" data-mfre>${MF.busy ? "Loading…" : "Refresh"}</button></div>
     <div class="pbody mfpg"><div class="mfgrid"><div class="mflist">${L.length ? L.slice(0, 200).map(card).join("") : `<div class="empty">${urls.length ? (MF.busy ? "Loading your feeds…" : "No stories match.") : "Add a feed on the right to start."}</div>`}</div>
-      <aside class="dc mfside"><div class="dch">Feeds <small>${urls.length}</small></div>
-        ${urls.map(u => { const s = MF.st[u] || {}; return `<div class="mffd"><span class="dpled" style="--c:${s.ok ? "#3DDC97" : s.err ? "#FF5468" : "#8B948F"}"></span><div><b>${esc(mfName(u))}</b><small class="s">${s.ok ? `${s.n} stories · ${esc(ago(s.at))}` : s.err ? esc(trunc(s.err, 140)) : "not loaded yet"}</small></div><button class="tab-mini" data-mfdel="${esc(u)}" aria-label="Remove ${esc(mfName(u))}">✕</button></div>`; }).join("") || `<p class="s">No feeds yet.</p>`}
+      <aside class="dc mfside"><div class="dch">Feeds <small>${urls.length}</small><span class="sp"></span><button class="tab-mini" data-mfopml>Import OPML</button></div>
+        ${urls.length ? (() => { const okN = urls.filter(u => (MF.st[u] || {}).ok).length, bad = urls.filter(u => (MF.st[u] || {}).err).length; return `<div class="mfsum"><span><b>${okN}</b> working</span>${bad ? `<span style="color:#FF5468"><b>${bad}</b> failing</span><button class="tab-mini" data-mfdelbad>Remove failing</button>` : ""}</div>`; })() : ""}
+        <div class="mffds">${urls.map(u => { const s = MF.st[u] || {}; return `<div class="mffd"><span class="dpled" style="--c:${s.ok ? "#3DDC97" : s.err ? "#FF5468" : "#8B948F"}"></span><div><b>${esc(mfName(u))}</b><small class="s">${s.ok ? `${s.n} stories · ${esc(ago(s.at))}` : s.err ? esc(trunc(s.err, 140)) : "not loaded yet"}</small></div><button class="tab-mini" data-mfdel="${esc(u)}" aria-label="Remove ${esc(mfName(u))}">✕</button></div>`; }).join("") || `<p class="s">No feeds yet.</p>`}</div>
         <form class="mfadd" data-mfadd><label class="fld">Add a feed<input id="mfNew" type="url" placeholder="https://www.inoreader.com/stream/user/…/tag/…" required></label><button class="pill primary">Add</button></form>
         <p class="help">In Inoreader: hover a folder or tag (or <b>Starred</b>) › <b>⋯</b> › <b>Export as RSS</b>, and paste the link. Any RSS, Atom or JSON feed works too. Links are kept in this browser; anyone who has an Inoreader output link can read that folder, so share only folders that are fine to read.</p>
         <p class="help">Stories about a hazard in one of our cities also appear in the main news feed and on the map.</p></aside></div></div>`; }
@@ -24889,7 +24897,8 @@ renderPanelInner = (function(orig){ return function(p){ if (UI.mode === "myfeeds
 { const _smM = setMode; setMode = function(m){ const r = _smM.apply(this, arguments); try{ if (UI.mode === "myfeeds"){ setLayout("panel"); mfLoad(); } }catch(e){} return r; }; }
 { const P = document.getElementById("panel");
   P.addEventListener("error", e => { if (e.target && e.target.tagName === "IMG" && e.target.closest(".mfit")) e.target.remove(); }, true);
-  P.addEventListener("click", e => { if (UI.mode !== "myfeeds") return; const t = e.target.closest("[data-mff],[data-mfre],[data-mfdel],[data-mfq],[data-mfd1]"); if (!t) return; e.stopPropagation(); const d = t.dataset;
+  P.addEventListener("click", e => { if (UI.mode !== "myfeeds") return; const t = e.target.closest("[data-mff],[data-mfre],[data-mfdel],[data-mfq],[data-mfd1],[data-mfopml],[data-mfdelbad]"); if (!t) return; e.stopPropagation(); const d = t.dataset;
+    if (d.mfopml != null){ mfImport(); return; } if (d.mfdelbad != null){ const bad = new Set(mfUrls().filter(u => (MF.st[u] || {}).err)); MF.items = MF.items.filter(i => !bad.has(i.feedUrl)); mfSetUrls(mfUrls().filter(u => !bad.has(u))); renderPanel(); return; }
     if (d.mff){ UI.mfF = d.mff; saveUI(); renderPanel(); return; } if (d.mfre != null){ mfLoad(true); return; } if (d.mfdel){ if (UI.mfFeed === d.mfdel) UI.mfFeed = ""; MF.items = MF.items.filter(i => i.feedUrl !== d.mfdel); mfSetUrls(mfUrls().filter(u => u !== d.mfdel)); renderPanel(); return; }
     const i = MF.items.find(x => x.id === (d.mfq || d.mfd1)); if (!i) return;
     if (d.mfq){ const city = i.cities[0], site = city ? SITES.find(s => isLive(s) && (metroOf(s) || s.city) === city) : null; enqueueAction({ srcKey: "mf:" + i.id, source: i.feed, pri: i.cat ? "P3" : "P4", title: trunc(i.title, 140), detail: (i.desc ? trunc(i.desc, 400) + " " : "") + (i.url || ""), city: city || "", site: site ? site.code : "", suggested: ["intel", "monitor", "dismiss"] }); t.textContent = "In the queue"; t.disabled = true; return; }
@@ -24907,10 +24916,40 @@ setInterval(() => { if (ME && mfUrls().length && Date.now() - MF.at > 10 * 60e3)
 .mfmeta{display:flex;align-items:center;gap:8px;font-size:11.5px}.mfmeta .sp,.mftags .sp{flex:1}.mffeed{color:var(--teal);font-weight:700}
 .mfit h4{margin:5px 0 4px;font-size:14px;line-height:1.35}.mfit h4 a{color:var(--text);text-decoration:none}.mfit h4 a:hover{text-decoration:underline}.mfit p{margin:0 0 6px;font-size:12.5px;color:var(--muted);line-height:1.45}
 .mftags{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.mftag{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--c,var(--muted)) 50%,var(--line));color:var(--c,var(--muted))}.mftag.city{--c:var(--teal)}
+.mfside .dch{display:flex;align-items:center;gap:6px}.mfside .dch .sp{flex:1}.mfsum{display:flex;align-items:center;gap:10px;font-size:12px;margin:2px 0 6px}.mfsum button{margin-left:auto}.mffds{max-height:46vh;overflow:auto;padding-right:4px}
+.mfimp .mfil{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin-top:8px}.mfimp .mfir{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:12.5px}.mfimp .mfir small{display:block;color:var(--muted);word-break:break-all}.mfimp .mfir.dup{opacity:.5}.mfimp .mfig{font:700 12px var(--readout,inherit);color:var(--muted);margin:8px 0 2px}
 .mffd{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.mffd>div{flex:1;min-width:0;display:flex;flex-direction:column}.mffd small{font-size:11px;word-break:break-word}
 .mfadd{display:flex;gap:8px;align-items:flex-end;margin-top:12px}.mfadd .fld{flex:1;margin:0}
 body.phone .mfgrid{grid-template-columns:1fr}body.phone .mfside{position:static;order:-1}body.phone .mfit img{width:84px;height:60px}
 @media (max-width:1000px){.mfgrid{grid-template-columns:1fr}.mfside{position:static}}`; document.head.appendChild(st); }
+
+/* ---- import an OPML list of subscriptions (Inoreader: Preferences › Import/Export › Export OPML) ---- */
+function mfOpml(text){ text = String(text || ""); const i = text.search(/<\?xml|<opml/i); if (i > 0) text = text.slice(i); const out = [], dec = v => String(v || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+  const d = new DOMParser().parseFromString(text, "text/xml");
+  if (!d.getElementsByTagName("parsererror").length && d.getElementsByTagName("outline").length){ [...d.getElementsByTagName("outline")].forEach(o => { const u = o.getAttribute("xmlUrl"); if (!u) return; const par = o.parentElement, folder = par && par.tagName.toLowerCase() === "outline" && !par.getAttribute("xmlUrl") ? (par.getAttribute("title") || par.getAttribute("text") || "") : "";
+      out.push({ url: dec(u), title: dec(o.getAttribute("title") || o.getAttribute("text") || ""), folder }); }); }
+  else text.split(/<outline\b/i).slice(1).forEach(ch => { const u = /xmlUrl\s*=\s*"([^"]+)"/i.exec(ch); if (!u) return; const t = /\btitle\s*=\s*"([\s\S]*?)"\s+(?:type|xmlUrl|htmlUrl|text)\s*=/i.exec(ch) || /\btext\s*=\s*"([\s\S]*?)"\s+(?:title|type|xmlUrl|htmlUrl)\s*=/i.exec(ch); out.push({ url: dec(u[1]), title: dec(t ? t[1] : ""), folder: "" }); });
+  const seen = new Set(); return out.filter(x => /^https?:\/\//i.test(x.url) && !seen.has(x.url) && seen.add(x.url)); }
+function mfImport(){ openModal(head("Import feeds (OPML)") + `<div class="bd mfimp">
+    <p class="help" style="margin-top:0">In Inoreader: <b>Preferences › Import/Export › Export OPML</b> (or any reader's OPML export). Choose the file, or paste its contents.</p>
+    <div class="fgrid"><label class="fld">OPML file<input type="file" id="mfFile" accept=".opml,.xml,.txt,text/xml,text/x-opml"></label></div>
+    <label class="fld">…or paste it<textarea id="mfTxt" rows="4" placeholder="<opml version=&quot;1.0&quot;> …"></textarea></label>
+    <div id="mfList"></div></div><div class="ft"><span class="s" id="mfCount"></span><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="mfGo" disabled>Add selected</button></div>`, true);
+  const box = $("#box"), gen = box._dgen = (box._dgen || 0) + 1, live = () => box._dgen === gen && box.isConnected; let L = [];
+  const have = new Set(mfUrls()), count = () => { const n = box.querySelectorAll("[data-mfi]:checked").length; $("#mfCount").textContent = L.length ? `${n} of ${L.length} selected` : ""; $("#mfGo").disabled = !n; };
+  const show = txt => { L = mfOpml(txt); const el = $("#mfList"); if (!L.length){ el.innerHTML = txt.trim() ? `<div class="banner bad">No feeds found. Check it is an OPML export.</div>` : ""; count(); return; }
+    const groups = {}; L.forEach((x, i) => (groups[x.folder || "Feeds"] = groups[x.folder || "Feeds"] || []).push([x, i])); const ino = L.some(x => /inoreader/i.test(x.title)) || /inoreader/i.test(txt.slice(0, 400));
+    el.innerHTML = `<div class="banner warn"><b>${L.length} feeds.</b> Each one is fetched by this browser, and many news sites block that; those load through the PSOC server relay once it is set up. ${ino ? `With your Inoreader plan there is a lighter way: group these subscriptions into a few folders in Inoreader and add each folder's <b>Export as RSS</b> link instead — Inoreader does the fetching, and you add 3–5 links, not ${L.length}.` : ""}</div>
+      <div class="wfbtns"><button class="tab-mini" data-mfsel="all">Select all</button><button class="tab-mini" data-mfsel="none">Select none</button><button class="tab-mini" data-mfsel="sec">Only security, data centres and Asia news</button></div>
+      <div class="mfil">${Object.entries(groups).map(([g, xs]) => `<div class="mfig">${esc(g)} <small>${xs.length}</small></div>${xs.map(([x, i]) => `<label class="mfir${have.has(x.url) ? " dup" : ""}"><input type="checkbox" data-mfi="${i}"${have.has(x.url) ? " disabled" : " checked"}><span><b>${esc(x.title || mfName(x.url))}</b>${have.has(x.url) ? " — already added" : ""}<small>${esc(x.url)}</small></span></label>`).join("")}`).join("")}</div>`; count(); };
+  $("#mfFile").addEventListener("change", async e => { const f = e.target.files[0]; if (f && live()) show(await f.text()); });
+  $("#mfTxt").addEventListener("input", e => { if (live()) show(e.target.value); });
+  box.addEventListener("change", e => { if (live() && e.target.matches("[data-mfi]")) count(); });
+  box.addEventListener("click", e => { if (!live()) return; const b = e.target.closest("[data-mfsel]"); if (!b) return; const re = /secur|cyber|threat|hacker|data ?cent|dcd|asia|pacific|singapore|malaysia|indonesia|india|china|hong kong|taipei|japan|korea|australia|zealand|straits|channel ?news|bbc|reuters|guardian|diplomat|nikkei/i;
+    box.querySelectorAll("[data-mfi]:not(:disabled)").forEach(c => { const x = L[+c.dataset.mfi]; c.checked = b.dataset.mfsel === "all" || (b.dataset.mfsel === "sec" && re.test(x.title + " " + x.url)); }); count(); });
+  $("#mfGo").onclick = () => { const pick = [...box.querySelectorAll("[data-mfi]:checked")].map(c => L[+c.dataset.mfi]); pick.forEach(x => { if (x.title) CFG.news.feedNames[x.url] = x.title.slice(0, 80); });
+    const room = 150 - mfUrls().length; if (pick.length > room) toast("Feed limit", `Added the first ${room}; TTE reads up to 150 feeds.`, "var(--amber)");
+    mfSetUrls(mfUrls().concat(pick.slice(0, Math.max(0, room)).map(x => x.url))); audit("Feeds imported", pick.length + " feeds", "OPML"); closeModal(); renderPanel(); toast("Feeds added", `${Math.min(pick.length, room)} feeds are loading`, "var(--teal)"); }; }
 /* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
    (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
    zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */
