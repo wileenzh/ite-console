@@ -24215,7 +24215,7 @@ function dashSites(sc){ return SITES.filter(s => isLive(s) && !isOffice(s) && (s
 function dashRisks(sc){ if (sc.kind === "apac"){ try{ return rrRows("APAC"); }catch(e){ return []; } } const cities = [...new Set(dashSites(sc).map(s => metroOf(s)).filter(Boolean))], best = {};
   cities.forEach(c => { try{ rrRows(c).forEach(x => { if (!best[x.r.id] || x.cur > best[x.r.id].cur) best[x.r.id] = Object.assign({ city: c }, x); }); }catch(e){} }); return Object.values(best); }
 /* ---- the "What matters to us" panel ---- */
-function dashPrioHtml(sc, cfg){ const P = (cfg && cfg.prio) || {}, notes = (P.notes || []).filter(n => !n.deleted), rk = P.risks || [], st = P.sites || [], wd = P.words || [], now = Date.now();
+function dashPrioHtml(sc, cfg, onlyRows){ const P = (cfg && cfg.prio) || {}, notes = (P.notes || []).filter(n => !n.deleted), rk = P.risks || [], st = P.sites || [], wd = P.words || [], now = Date.now();
   const empty = !notes.length && !rk.length && !st.length && !wd.length; let rows = "";
   if (notes.length) rows += `<div class="dpsub">Priorities</div>` + notes.map(n => `<label class="dpnote${n.done ? " done" : ""}"><input type="checkbox" data-dashdone="${esc(n.id)}"${n.done ? " checked" : ""}><span>${esc(n.t)}</span>${n.who ? `<small>${esc(n.who)}</small>` : ""}</label>`).join("");
   if (rk.length){ const R = Object.fromEntries(dashRisks(sc).map(x => [x.r.id, x])); rows += `<div class="dpsub">Risks we watch</div>` + rk.map(id => { const x = R[id], b = RISK.base.find(r => r.id === id); if (!b) return ""; return `<div class="dprow"><span class="rrpri" style="--c:${x ? RR_PRI[x.pri][2] : "#8394B0"}">${x ? x.pri : "—"}</span><b>${esc(b.name)}</b><span class="sp"></span><span class="dpnum">${x ? x.cur.toFixed(1) : "—"}</span>${x && x.live && x.live.tier ? `<span class="wfchip" style="--c:#FFB547">live signal</span>` : ""}</div>`; }).join(""); }
@@ -24226,6 +24226,7 @@ function dashPrioHtml(sc, cfg){ const P = (cfg && cfg.prio) || {}, notes = (P.no
   if (wd.length){ const N = (DATA.news || []).filter(a => now - a.t < 864e5), AL = DATA.alerts || [];
     rows += `<div class="dpsub">Topics we watch <small>news and warnings, last 24 h</small></div>` + wd.map(w => { const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), hits = N.filter(a => re.test(a.title || "")), al = AL.filter(a => re.test((a.title || "") + " " + (a.area || "")));
       return `<div class="dprow"><span class="dpled" style="--c:${hits.length + al.length ? "#FFB547" : "#3E4B5E"}"></span><b>${esc(w)}</b><span class="sp"></span><span class="dpnum">${hits.length + al.length}</span></div>${hits.slice(0, 2).map(a => `<div class="dphead">${esc(trunc(a.title, 110))} <span class="s">${esc(ago(a.t))}</span></div>`).join("")}`; }).join(""); }
+  if (onlyRows) return rows;
   return `<section class="dc dprio" data-wid="priorities"><div class="dch">What matters to ${esc(sc.name)} <small>${cfg && cfg.by ? "set by " + esc(cfg.by) : "set by the " + esc(sc.role)}</small><span class="sp"></span><button class="tab-mini" data-dashcust>Customise</button></div>
     ${empty ? `<div class="dpempty">Choose the priorities, risks, sites and topics that matter to ${esc(sc.name)}. They stay at the top of this dashboard for everyone who opens it.<div class="wfbtns"><button class="pill primary" data-dashcust>Choose what matters</button></div></div>` : rows}</section>`; }
 /* ---- apply the entity's layout after the page is drawn ---- */
@@ -24414,6 +24415,70 @@ function dlEditorWire(box, live){ live = live || (() => true); box.addEventListe
 BASES["mc-outline"] = { label: "Outline only — works offline" };
 { const _sbo = setBase; setBase = async function(id){ if (id !== "mc-outline") return _sbo.apply(this, arguments); UI.ly.base = id; saveUI();
     if (baseTiles){ map.removeLayer(baseTiles); baseTiles = null; } map.getContainer().classList.remove("dim"); map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>'); }; }
+/* ---------- "What matters" on every tab: each page of the console (BAU, Security Operations, the Visual Command Centre,
+   Intelligence Monitoring, Threat Intelligence, Response, Administration…) carries a slim bar at the top with that team's
+   priorities and the risks, sites and topics it watches, live. It opens to show the detail and folds to one line; each
+   person's open or folded choice is remembered. The APAC director, RSOM and DSOM dashboards keep their own panel. ---------- */
+const WM = { open: lsGet("psoc.uni.wmopen.v1", {}) };
+function wmScope(){ if (DASH_MODES.includes(UI.mode)) return dashScope(); const g = groupOf(UI.mode), t = (g.tabs.find(x => x[0] === UI.mode) || [, UI.mode])[1];
+  return { key: "tab:" + UI.mode, name: t, role: g.label, kind: "apac", tab: true }; }
+function wmHtml(sc){ const cfg = dashCfg(sc.key), P = (cfg && cfg.prio) || {}, notes = (P.notes || []).filter(n => !n.deleted), open = notes.filter(n => !n.done);
+  const n = { p: notes.length, r: (P.risks || []).length, s: (P.sites || []).length, w: (P.words || []).length }, empty = !n.p && !n.r && !n.s && !n.w;
+  if (empty) return `<section class="wmstrip empty" data-wmkey="${esc(sc.key)}"><div class="wmhd"><span class="wmic" aria-hidden="true">◆</span><b>What matters</b><span class="s">on ${esc(sc.name)}: nothing chosen yet</span><span class="sp"></span><button class="tab-mini" data-wmcust>Choose what matters</button></div></section>`;
+  let rows = ""; try{ rows = dashPrioHtml(sc, cfg, true); }catch(e){ console.warn("what matters", e); }
+  const hot = (rows.match(/--c:#FF5468/g) || []).length, warm = (rows.match(/--c:#FFB547/g) || []).length, isOpen = WM.open[sc.key] !== false;
+  const sum = [n.p ? `${open.length} of ${n.p} priorit${n.p === 1 ? "y" : "ies"} open` : "", n.r ? `${n.r} risk${n.r === 1 ? "" : "s"}` : "", n.s ? `${n.s} site${n.s === 1 ? "" : "s"}` : "", n.w ? `${n.w} topic${n.w === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+  return `<section class="wmstrip${isOpen ? " open" : ""}" data-wmkey="${esc(sc.key)}"><div class="wmhd"><button class="wmtog" data-wmtog aria-expanded="${isOpen}"><span class="wmcar" aria-hidden="true">▸</span><span class="wmic" aria-hidden="true">◆</span><b>What matters</b><span class="s">on ${esc(sc.name)}</span></button>
+    ${hot ? `<span class="wmflag" style="--c:#FF5468">${hot} need${hot === 1 ? "s" : ""} attention</span>` : warm ? `<span class="wmflag" style="--c:#FFB547">${warm} to watch</span>` : ""}
+    <span class="wmsum">${esc(sum)}${!isOpen && open[0] ? ` — <i>${esc(trunc(open[0].t, 80))}</i>` : ""}</span><span class="sp"></span><small class="s">${cfg && cfg.by ? "set by " + esc(cfg.by) : ""}</small><button class="tab-mini" data-wmcust>Change</button></div>
+    <div class="wmbd">${rows}</div></section>`; }
+function wmInsert(p){ p = p || document.getElementById("panel"); if (!p || DASH_MODES.includes(UI.mode) || !p.offsetParent) return; const sc = wmScope();
+  p.querySelectorAll(".wmstrip").forEach(x => x.remove()); const host = p.querySelector(":scope > .pbody") || [...p.children].find(c => !c.classList.contains("ptools")); if (!host) return;
+  const d = document.createElement("div"); d.innerHTML = wmHtml(sc); const el = d.firstElementChild;
+  if (host.classList.contains("pbody")) host.insertBefore(el, host.firstChild); else p.insertBefore(el, host); }
+renderPanelInner = (function(orig){ return function(p){ const r = orig.apply(this, arguments); try{ wmInsert(p); }catch(e){ console.warn("what matters", e); } return r; }; })(renderPanelInner);
+// some pages (and the phone home screens) redraw part of themselves after the panel: put the bar back if it went
+const wmEnsure = () => { try{ const p = document.getElementById("panel"); if (p && !DASH_MODES.includes(UI.mode) && p.offsetParent && !p.querySelector(".wmstrip")) wmInsert(p); }catch(e){} };
+{ const _smW = setMode; setMode = function(){ const r = _smW.apply(this, arguments); setTimeout(wmEnsure, 30); return r; }; }
+setInterval(() => { try{ const p = document.getElementById("panel"); if (p && !DASH_MODES.includes(UI.mode) && p.offsetParent && !p.querySelector(".wmstrip") && !document.querySelector("#ov.show")) wmInsert(p); }catch(e){} }, 2000);
+/* ---- choosing what matters for a tab ---- */
+function wmEditor(){ const sc = wmScope(); if (DASH_MODES.includes(UI.mode)) return dashEditor("all");
+  const cfg = dashCfg(sc.key) || {}, P = JSON.parse(JSON.stringify(cfg.prio || {})), rk = new Set(P.risks || []), st = new Set(P.sites || []), sites = dashSites(sc).sort((a, b) => a.code.localeCompare(b.code));
+  openModal(head(`What matters — ${sc.name}`) + `<div class="bd dashed">
+    <p class="help" style="margin-top:0">What the ${esc(sc.role)} team keeps in view on <b>${esc(sc.name)}</b>. It shows at the top of this tab for everyone who opens it.</p>
+    <label class="fld">Our priorities (one per line; add “ | owner” for who leads it)<textarea id="wmN" rows="4" placeholder="e.g. Clear the camera outage backlog before Friday | Duty manager&#10;Typhoon season readiness at coastal sites">${esc((P.notes || []).filter(n => !n.deleted).map(n => n.t + (n.who ? " | " + n.who : "")).join("\n"))}</textarea></label>
+    <div class="fld">Risks we watch</div><div class="dchips">${RISK.base.map(r => `<label class="dchip"><input type="checkbox" data-wmrisk="${r.id}"${rk.has(r.id) ? " checked" : ""}> ${esc(r.name)}</label>`).join("")}</div>
+    <div class="fld" style="margin-top:10px">Sites we watch <small>${sites.length} sites</small></div><input id="wmSq" type="search" placeholder="Filter sites by code or city" style="margin:4px 0 6px"><div class="dchips dsites">${sites.map(s => `<label class="dchip" data-wmsite-l="${esc((s.code + " " + (metroOf(s) || s.city || "") + " " + (s.country || "")).toLowerCase())}"><input type="checkbox" data-wmsite="${esc(s.code)}"${st.has(s.code) ? " checked" : ""}> ${esc(s.code)} <small>${esc(metroOf(s) || s.city || "")}</small></label>`).join("")}</div>
+    <label class="fld" style="margin-top:10px">Topics we watch in news and warnings (comma separated)<input id="wmW" value="${esc((P.words || []).join(", "))}" placeholder="e.g. typhoon, power outage, protest, ransomware"></label></div>
+    <div class="ft">${dashCfg(sc.key) ? `<button class="pill" id="wmClr">Clear</button>` : ""}<span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="wmGo">Save</button></div>`, true);
+  const box = $("#box"), gen = box._dgen = (box._dgen || 0) + 1, live = () => box._dgen === gen && box.isConnected;
+  $("#wmSq").addEventListener("input", e => { if (!live()) return; const q = e.target.value.trim().toLowerCase(); box.querySelectorAll("[data-wmsite-l]").forEach(x => x.hidden = !!q && !x.dataset.wmsiteL.includes(q)); });
+  $("#wmGo").onclick = () => { const old = Object.fromEntries(((cfg.prio || {}).notes || []).map(n => [n.t, n]));
+    const notes = $("#wmN").value.split("\n").map(x => x.trim()).filter(Boolean).map(line => { const [t, who] = line.split("|").map(x => x.trim()); const o = old[t]; return { id: o ? o.id : "n" + Math.random().toString(36).slice(2, 8), t, who: who || "", done: o ? !!o.done : false, at: o ? o.at : Date.now() }; });
+    const rec = Object.assign({}, dashCfg(sc.key) || { id: sc.key }, { id: sc.key, scope: sc.name, role: sc.role, deleted: false, by: ME ? ME.name : "",
+      prio: { notes, risks: [...box.querySelectorAll("[data-wmrisk]:checked")].map(c => c.dataset.wmrisk), sites: [...box.querySelectorAll("[data-wmsite]:checked")].map(c => c.dataset.wmsite), words: $("#wmW").value.split(",").map(x => x.trim()).filter(Boolean).slice(0, 12) } });
+    putShared("dashcfg", rec); WM.open[sc.key] = true; lsSet("psoc.uni.wmopen.v1", WM.open); audit("What matters set", sc.role + " · " + sc.name, ""); closeModal(); renderPanel(); toast("Saved", `What matters on ${sc.name} is shared with the team`, "var(--teal)"); };
+  if ($("#wmClr")) $("#wmClr").onclick = () => { const c = dashCfg(sc.key); if (c){ c.deleted = true; putShared("dashcfg", c); } closeModal(); renderPanel(); }; }
+{ const P = document.getElementById("panel");
+  P.addEventListener("click", e => { const s = e.target.closest(".wmstrip"); if (!s) return; const c = e.target.closest("[data-wmcust]"), t = e.target.closest("[data-wmtog]");
+    if (c){ e.stopPropagation(); wmEditor(); return; }
+    if (t){ e.stopPropagation(); const k = s.dataset.wmkey, open = !s.classList.contains("open"); WM.open[k] = open; lsSet("psoc.uni.wmopen.v1", WM.open); const d = document.createElement("div"); d.innerHTML = wmHtml(wmScope()); s.replaceWith(d.firstElementChild); return; }
+    if (!e.target.closest("[data-dashdone]")) e.stopPropagation(); }, true);
+  P.addEventListener("change", e => { const c = e.target.closest(".wmstrip [data-dashdone]"); if (!c) return; e.stopPropagation(); const sc = wmScope(), cfg = dashCfg(sc.key); if (!cfg) return; const n = ((cfg.prio || {}).notes || []).find(x => x.id === c.dataset.dashdone); if (!n) return;
+    n.done = c.checked; putShared("dashcfg", cfg); wmInsert(); }, true); }
+{ const st = document.createElement("style"); st.textContent = `
+.wmstrip{margin:0 0 12px;border:1px solid color-mix(in srgb,var(--teal) 30%,var(--line));border-radius:12px;background:linear-gradient(90deg,color-mix(in srgb,var(--teal) 8%,transparent),transparent 60%),var(--glass,var(--panel));flex:none}
+#panel>.wmstrip{margin:8px 12px}
+.wmstrip.empty{border-style:dashed;background:transparent}
+.wmhd{display:flex;align-items:center;gap:8px;padding:6px 10px;min-height:36px;font-size:12.5px;min-width:0;flex-wrap:wrap}.wmhd .sp{flex:1}.wmhd .s{color:var(--muted)}
+.wmtog{display:inline-flex;align-items:center;gap:7px;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:2px 0}
+.wmcar{display:inline-block;transition:transform .15s;color:var(--muted);font-size:11px}.wmstrip.open .wmcar{transform:rotate(90deg)}
+.wmic{color:var(--teal);font-size:11px}.wmhd b{font:700 13px var(--readout,inherit)}
+.wmsum{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:60%}.wmsum i{color:var(--text);font-style:normal}
+.wmflag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--c)}.wmflag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+.wmbd{display:none;padding:0 14px 10px;columns:2 340px;column-gap:28px}.wmstrip.open .wmbd{display:block}
+.wmbd .dpsub,.wmbd .dprow,.wmbd .dpnote,.wmbd .dphead{break-inside:avoid}.wmbd .dpsub:first-child{margin-top:2px}
+body.phone .wmsum{max-width:100%;flex-basis:100%;order:5}body.phone .wmbd{columns:1}`; document.head.appendChild(st); }
 /* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
    (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
    zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */

@@ -1229,3 +1229,17 @@ On the APAC director, Regional (RSOM) and Country (DSOM) dashboards:
   A person's own layout for a dashboard wins, then their layout for all dashboards, then the team layout, then the
   standard one. **Back to the team layout** removes a person's own layout. Layouts are shared through the PSOC server
   like the other team records.
+
+## "What matters" on every tab (27 Oct)
+
+Every tab in the console now has a **What matters** bar at the top: BAU, Security Operations, the Visual Command Centre,
+Intelligence Monitoring, Threat Intelligence, Response, Sentiment, Travel, Repositories, the Stakeholder pages, RFI,
+the Chatbot and Administration. The APAC director, RSOM and DSOM dashboards keep their larger "What matters" panel.
+
+- **Choose what matters** sets, for that tab, the team's priorities (with owners), the risks, sites and news/warning
+  topics it watches. It is shared with everyone who opens the tab and records who set it.
+- When open, the bar shows the detail live: each risk's current score, each site's impact, incidents and guards on post,
+  and topic hits in the last 24 hours. Priorities can be ticked off.
+- Fold it with the arrow to a single line that shows the counts, the next open priority and anything that needs
+  attention. Each person's open or folded choice is remembered per tab.
+- Until something is chosen, the bar is a slim dashed line with a **Choose what matters** button.
