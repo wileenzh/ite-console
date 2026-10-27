@@ -1,11 +1,12 @@
-// Build the web part of the store app (mobile/www) from the console (../index.html).
+// Build the web part of the store app (mobile/www) from the mobile version of the console (../mobile.html,
+// made by tools/build_editions.py; falls back to ../index.html).
 //   node scripts/build-web.mjs
 // The app is the same console with its phone layout; in the store app it detects Capacitor and uses the phone's
 // features (reminders, haptics, back button, push). Leaflet is bundled so the map starts without the network;
 // other libraries still load on demand from their pinned CDN copies.
 import fs from "node:fs"; import path from "node:path"; import crypto from "node:crypto"; import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url)), root = path.resolve(here, ".."), repo = path.resolve(root, ".."), www = path.join(root, "www");
-const src = path.join(repo, "index.html"); let html = fs.readFileSync(src, "utf8");
+const src = fs.existsSync(path.join(repo, "mobile.html")) ? path.join(repo, "mobile.html") : path.join(repo, "index.html"); let html = fs.readFileSync(src, "utf8");
 if (!html.includes("<title>") || !html.includes("</body>")) throw new Error("unexpected console file");
 fs.rmSync(www, { recursive: true, force: true }); fs.mkdirSync(path.join(www, "lib/leaflet"), { recursive: true });
 // Leaflet from node_modules (same bytes as the pinned CDN file, so the integrity hashes still match)
@@ -27,4 +28,4 @@ fs.writeFileSync(path.join(www, "index.html"), html);
 fs.cpSync(path.join(repo, "app/icons"), path.join(www, "icons"), { recursive: true });
 const ver = crypto.createHash("sha256").update(html).digest("hex").slice(0, 10);
 fs.writeFileSync(path.join(www, "version.json"), JSON.stringify({ version: ver, built: new Date().toISOString() }) + "\n");
-console.log(`www/ built from index.html (${Math.round(html.length / 1024)} KB, ${n} library links bundled, version ${ver})`);
+console.log(`www/ built from ${path.basename(src)} (${Math.round(html.length / 1024)} KB, ${n} library links bundled, version ${ver})`);

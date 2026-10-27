@@ -1369,3 +1369,34 @@ Security Operations › Patrol & response › **Virtual guard** brings remote-gu
   talk-downs, keys and units. It can be downloaded as CSV.
 
 Also moved: **My feeds** now sits under Intelligence › News, and **Air & sea notices** under Intelligence › Security.
+
+## Web version and mobile version (27 Oct)
+
+The console now comes as two separate HTML files, both built from the same code:
+
+| File | What it is | Use it on |
+|---|---|---|
+| `web.html` (wileenzh.github.io/ite-console/web.html) | The full desktop console: every screen, set-up, analysis, the dashboards and the command screens. It never switches to the phone layout; on a tablet or phone it opens as the desktop page. | Computers, PSOC workstations, video walls |
+| `mobile.html` (and the installable app at `/app/`, and the store app) | The phone layout only. Each role gets its own tabs, and **More** lists only the screens meant for a phone. On a computer it is shown as a phone in the middle of the screen. Screens that are web-only open the role's first tab instead. | Phones (guards, site security managers, DSOM, RSOM, the director, PSOC officers on the move) |
+
+`index.html` stays adaptive (desktop on a computer, phone layout on a phone), so existing links keep working.
+`tools/build_editions.py` makes both files from `index.html`. The installable app (`tools/build_app.py mobile.html`)
+and the store app (`mobile/scripts/build-web.mjs`) are built from the mobile version.
+
+**Screens in the mobile version:**
+- **Role tabs:** Shift, Patrol, Desk, Report and Alerts (guard); Site, Roster, Desk, Risk and Cameras (site security
+  manager); Country, Decisions, Workforce and Sites (DSOM); Region, Decisions, Risk and Workforce (RSOM); APAC,
+  Decisions, Risk & value and Campuses (director); Home, Map, Queue and Incidents (PSOC officer).
+- **Also under More:** the live map and cities, the Action queue, incidents, alerts, the to-do list, the live alert
+  stream, news and My feeds, typhoons, earthquakes, weather, the 48-hour forecast, air quality, official warnings,
+  protests, intelligence events, travel, escalation timers, welfare checks, comms, the chatbot, RFI query, live
+  operations and the video and camera walls.
+
+**New on the phone: the Site desk** (Desk tab for guards and site security managers):
+- the day's visitors for your site, with **Arrived**, **Release door** and **Check out**;
+- watch-list and overstay warnings;
+- logging an intercom call and speaking the talk-down announcements;
+- keys out at your site, with **Returned**.
+
+The guard's **Alerts** tab now also shows the site's Virtual guard warnings: overstays, watch-list matches, overdue
+keys, unusual activity and ships lingering near the site.

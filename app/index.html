@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script data-ite-lib="edition">window.TTE_EDITION = "mobile";</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#060B14">
@@ -12,7 +13,7 @@
 <meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<title>TTE — To The Edge</title>
+<title>TTE — To The Edge (Mobile)</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- libraries load only if they match their pinned SHA-384 fingerprint (jsDelivr, then unpkg: the same npm files) -->
@@ -24502,7 +24503,7 @@ function paHelp(){ const url = paUrl(), qr = url === PA_URL, phone = document.bo
     <ul class="paget"><li>TTE on the home screen with the PSOC icon, opening full screen without the browser bars.</li><li>Your role's own screens and tabs: guard, site security manager, DSOM, RSOM, APAC director or PSOC officer (choose under <b>More › My role in the app</b>).</li>
       <li>It opens without signal on the last version you loaded; live alerts, maps and news load when you're back online.</li><li>Always up to date: each time it opens with signal it picks up the newest version.</li>
       <li>On Android, press and hold the icon for shortcuts: <b>My duties</b>, <b>Site alerts</b>, <b>Decisions</b> and <b>Map</b>.</li></ul>
-    <p class="help">Sign in on the phone the same way as on the desktop. Keys and imported data stay on each device.</p></div>
+    <p class="help">This is the <b>mobile version</b>: phone screens and each role's tabs. On a computer, use the <b>web version</b> (<code>web.html</code>) for set-up, analysis and the command screens. Sign in on the phone the same way as on the desktop. Keys and imported data stay on each device.</p></div>
     <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Close</button></div>`, true);
   if ($("#paGo")) $("#paGo").onclick = paInstall;
   if ($("#paCopy")) $("#paCopy").onclick = () => { try{ navigator.clipboard.writeText(url).then(() => toast("Link copied", url, "var(--teal)")); }catch(e){} }; }
@@ -25026,7 +25027,7 @@ setInterval(() => { if (ME) vgAnomalyTick(); }, 60e3);
 /* ---- visitors, calls, fleet, keys ---- */
 const vgWatch = () => String(CFG.vg.watch || "").split(/[\n,;]+/).map(x => x.trim().toLowerCase()).filter(x => x.length > 2);
 const vgOnWatch = v => vgWatch().find(w => (v.name || "").toLowerCase().includes(w) || (v.plate || "").toLowerCase().replace(/\s/g, "") === w.replace(/\s/g, "") || (v.company || "").toLowerCase().includes(w));
-function vgVisitEdit(id){ const v = vgL("vgvisit").find(x => x.id === id) || { type: "Visitor", inAt: Date.now() + 3600e3, outAt: Date.now() + 4 * 3600e3 };
+function vgVisitEdit(id, pre){ const v = vgL("vgvisit").find(x => x.id === id) || Object.assign({ type: "Visitor", inAt: Date.now() + 3600e3, outAt: Date.now() + 4 * 3600e3 }, pre || {});
   openModal(head(id ? "Visitor" : "Expect a visitor") + `<div class="bd"><div class="fgrid"><label class="fld">Name<input id="vvN" value="${esc(v.name || "")}"></label><label class="fld">Company<input id="vvC" value="${esc(v.company || "")}"></label></div>
     <div class="fgrid"><label class="fld">Type<select id="vvT">${["Visitor", "Contractor", "Delivery", "Vendor engineer", "Auditor"].map(o => `<option${o === v.type ? " selected" : ""}>${o}</option>`).join("")}</select></label><label class="fld">Site<select id="vvS">${vgSiteOpts(v.site)}</select></label><label class="fld">Host<input id="vvH" value="${esc(v.host || "")}"></label></div>
     <div class="fgrid"><label class="fld">Expected in<input id="vvI" type="datetime-local" value="${vgDT(v.inAt)}"></label><label class="fld">Expected out<input id="vvO" type="datetime-local" value="${vgDT(v.outAt)}"></label><label class="fld">Vehicle plate<input id="vvP" value="${esc(v.plate || "")}"></label></div>
@@ -25060,7 +25061,7 @@ function vgFleetEdit(id){ const f = vgL("vgfleet").find(x => x.id === id) || { k
 // live status from the PSOC server, when it relays the vendors' platforms: [{id|ext, power, beat|t, lat, lon}]
 setInterval(async () => { if (!ME || !CFG.vg.fleetPoll || !serverBase() || !vgL("vgfleet").length) return; try{ const j = await getJSON(serverBase() + "/api/fleet", 15000); (Array.isArray(j) ? j : j.units || []).forEach(u => { const f = vgL("vgfleet").find(x => x.ext && (x.ext === u.ext || x.ext === u.id)); if (!f) return;
   f.power = u.power != null ? +u.power : f.power; f.beat = Date.parse(u.beat || u.t) || Date.now(); putShared("vgfleet", f); }); if (UI.mode === "vguard") renderPanel(); }catch(e){} }, 60e3);
-function vgKeyEdit(){ openModal(head("Issue a key") + `<div class="bd"><div class="fgrid"><label class="fld">Key or key set<input id="vkK" placeholder="Plant room master"></label><label class="fld">Site<select id="vkS">${vgSiteOpts("")}</select></label></div>
+function vgKeyEdit(site){ openModal(head("Issue a key") + `<div class="bd"><div class="fgrid"><label class="fld">Key or key set<input id="vkK" placeholder="Plant room master"></label><label class="fld">Site<select id="vkS">${vgSiteOpts(site || "")}</select></label></div>
     <div class="fgrid"><label class="fld">Issued to<input id="vkH"></label><label class="fld">Company<input id="vkC"></label><label class="fld">Due back<input id="vkD" type="datetime-local" value="${vgDT(Date.now() + 4 * 3600e3)}"></label></div></div>
     <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Cancel</button><button class="pill primary" id="vkGo">Issue</button></div>`);
   $("#vkGo").onclick = () => { if (!$("#vkK").value.trim() || !$("#vkH").value.trim() || !$("#vkS").value){ toast("Key, site and holder are needed", "", "var(--amber)"); return; } putShared("vgkeys", { id: nid("vk"), key: $("#vkK").value.trim(), site: $("#vkS").value, holder: $("#vkH").value.trim(), company: $("#vkC").value.trim(), out: Date.now(), due: Date.parse($("#vkD").value) || null, by: ME ? ME.name : "" }); closeModal(); renderPanel(); }; }
@@ -25149,6 +25150,67 @@ document.getElementById("panel").addEventListener("change", e => { if (UI.mode !
 body.phone .vgpg .vgks{grid-template-columns:repeat(2,minmax(0,1fr))}body.phone .vgcols{grid-template-columns:1fr}body.phone .vgtbl{display:block;overflow-x:auto}
 @media (max-width:1000px){.vgcols{grid-template-columns:1fr}}`; document.head.appendChild(st); }
 try{ const s = GROUP_SECTIONS.secops.find(x => x[0] === "patrol"); if (s && !s[2].some(x => x[0] === "vguard")) s[2].push(["vguard", "Virtual guard"]); }catch(e){}
+/* ---------- Two editions from one console: the WEB version (web.html: the full desktop console, never the phone layout) and the
+   MOBILE version (mobile.html, the installable app and the store app: always the phone layout, each role's own tabs, and only the
+   screens that are meant for a phone). index.html stays adaptive. Plus the phone's Site desk: visitors, door release, intercom,
+   talk-down and keys for the user's own site, and Virtual guard alerts in the guard's Alerts tab. ---------- */
+const TTE_ED = window.TTE_EDITION === "web" || window.TTE_EDITION === "mobile" ? window.TTE_EDITION : "";
+// what the mobile version shows: each role's tabs, plus the screens that work on a phone
+const ED_MOBILE = new Set(["wf-duty", "patrol", "m-alerts", "m-desk", "sh-ssm", "wf-man", "siterisk", "siteplan", "sh-secops", "m-dec", "sh-region", "risk", "sh-dir", "sh-campus",
+  "overview", "actions", "incidents", "alerts", "myreq", "todo", "alertstream", "livenews", "news", "myfeeds", "typhoon", "quake", "weather", "forecast", "air", "disasters", "protests", "intelev",
+  "travel", "escalations", "welfare", "comms", "ai", "query", "so-live", "bau-live", "videowall", "camwall"]);
+const edMobileOk = m => ED_MOBILE.has(m);
+if (TTE_ED){ document.documentElement.classList.add("ed" + TTE_ED); try{ PH.mq = { matches: TTE_ED === "mobile", addEventListener(){}, removeEventListener(){}, addListener(){} }; }catch(e){}
+  if (TTE_ED === "mobile" && UI.phoneView === "full"){ UI.phoneView = "auto"; saveUI(); } }
+// mobile: the menu lists only phone screens, and there is no "full console" switch
+phMore = (function(orig){ return function(open){ const r = orig.apply(this, arguments); try{ if (open && TTE_ED === "mobile"){ const el = $("#pmore");
+    el.querySelectorAll("[data-pmgo]").forEach(b => { if (!edMobileOk(b.dataset.pmgo)) b.remove(); }); el.querySelectorAll("[data-pmg]").forEach(g => { if (!g.querySelector("[data-pmgo]")) g.remove(); });
+    el.querySelectorAll('[data-pmc="full"]').forEach(b => b.remove());
+    if (!el.querySelector(".edweb-link")) el.querySelector(".pmb").insertAdjacentHTML("beforeend", `<p class="help edweb-link" style="padding:0 4px">Set-up, analysis and the command screens are in the web version on a computer.</p>`); } }catch(e){ console.warn("edition", e); } return r; }; })(phMore);
+// mobile: a screen that isn't for phones opens its nearest phone screen instead
+{ const _smE = setMode; setMode = function(m){ if (TTE_ED === "mobile" && ME && !edMobileOk(m) && !/^adm-/.test(m)){ m = (MOB_PROFILES[mobProfile()] || [])[2] ? MOB_PROFILES[mobProfile()][2][0][1] : "overview"; if (m[0] === "@") m = "overview"; } return _smE.call(this, m); }; }
+// web: a phone opens it as the desktop console (zoomable), not squeezed
+if (TTE_ED === "web" && matchMedia("(pointer:coarse)").matches){ const v = document.querySelector('meta[name="viewport"]'); if (v) v.content = "width=1280"; }
+/* ---- the phone's Site desk ---- */
+MOB_IC.desk = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 9h4M7 12h7"/>';
+[["guard", 2], ["ssm", 2]].forEach(([p, at]) => { const T = MOB_PROFILES[p] && MOB_PROFILES[p][2]; if (T && !T.some(t => t[1] === "m-desk")) T.splice(at, 0, ["Desk", "m-desk", "desk"]); });
+{ const g = G("secops"); if (g && !g.tabs.some(t => t[0] === "m-desk")) g.tabs.push(["m-desk", "Site desk"]); }
+NON_CITY_MODES.push("m-desk"); KEYS["m-desk"] = ["SITE DESK", [], "Visitors, door release, intercom, talk-down and keys for your site"];
+function mdPanel(){ const s = mobSite(); if (!s) return `<div class="pbody"><p class="s">No site recorded for you yet. Open Shift to choose your site.</p></div>`; const now = Date.now(), code = s.code;
+  const vis = vgL("vgvisit").filter(v => v.site === code && v.status !== "out" && v.inAt < now + 86400e3).sort((a, b) => (a.status === "in") - (b.status === "in") || a.inAt - b.inAt), keys = vgL("vgkeys").filter(k => k.site === code && !k.back);
+  return `<div class="ptools"><span class="label">Site desk</span><span class="s">${esc(code)} · ${esc(metroOf(s) || s.city || "")}</span></div><div class="pbody mdpg">
+    <section class="dc"><div class="dch">Visitors today <small>${vis.length}</small><span class="sp"></span><button class="tab-mini" data-mdnew>+ Expect</button></div>
+      ${vis.length ? vis.map(v => { const w = vgOnWatch(v), over = v.status === "in" && v.outAt && now > v.outAt; return `<div class="mdv${w ? " watch" : ""}"><div><b>${esc(v.name)}</b><small class="s">${esc(v.company || v.type)}${v.host ? " · for " + esc(v.host) : ""}${v.plate ? " · " + esc(v.plate) : ""}</small>${w ? `<small style="color:#FF5468">Watch list: ${esc(w)} — check before letting in</small>` : ""}<small class="s">${v.status === "in" ? (over ? `<b style="color:#FFB547">Overstay</b> · was due out ${esc(ago(v.outAt))}` : "On site since " + esc(ago(v.arrived || v.inAt))) : "Expected " + esc(sgt(v.inAt))}</small></div>
+        <div class="mdb">${v.status === "expected" ? `<button class="pill" data-mdin="${v.id}">Arrived</button><button class="pill primary" data-mdrel="${v.id}">Release door</button>` : `<button class="pill" data-mdout="${v.id}">Check out</button>`}</div></div>`; }).join("") : `<p class="s">No visitors expected today.</p>`}</section>
+    <section class="dc"><div class="dch">Intercom & talk-down</div><button class="pill wfbig" data-mdcall>Log an intercom call</button>
+      ${CFG.vg.scripts.slice(0, 4).map((t, i) => `<div class="mdtalk"><p>${esc(t)}</p><button class="pill" data-mdsay="${i}">▶ Speak</button></div>`).join("")}</section>
+    <section class="dc"><div class="dch">Keys out <small>${keys.length}</small><span class="sp"></span><button class="tab-mini" data-mdkey>Issue</button></div>
+      ${keys.length ? keys.map(k => `<div class="mdv"><div><b>${esc(k.key)}</b><small class="s">${esc(k.holder)}${k.company ? " · " + esc(k.company) : ""} · ${k.due ? (now > k.due ? `<b style="color:#FFB547">overdue</b> since ${esc(ago(k.due))}` : "due " + esc(sgt(k.due))) : "no due time"}</small></div><div class="mdb"><button class="pill" data-mdkback="${k.id}">Returned</button></div></div>`).join("") : `<p class="s">All keys are in.</p>`}</section></div>`; }
+renderPanelInner = (function(orig){ return function(p){ if (UI.mode === "m-desk"){ p.innerHTML = mdPanel(); try{ wmInsert(p); }catch(e){} return; } return orig.apply(this, arguments); }; })(renderPanelInner);
+document.getElementById("panel").addEventListener("click", e => { if (UI.mode !== "m-desk") return; const t = e.target.closest("button"); if (!t) return; const d = t.dataset, s = mobSite(), V = id => vgL("vgvisit").find(x => x.id === id); if (!s) return;
+  const go = () => { e.stopPropagation(); try{ if (typeof mobHaptic === "function") mobHaptic(); }catch(x){} };
+  if (d.mdnew != null){ go(); return vgVisitEdit(null, { site: s.code }); } if (d.mdcall != null){ go(); return vgCallLog({ site: s.code }); } if (d.mdkey != null){ go(); return vgKeyEdit(s.code); }
+  if (d.mdsay){ go(); const tx = CFG.vg.scripts[+d.mdsay]; if (!vgSpeak(tx)) toast("This phone can't speak it", "Read it out yourself.", "var(--amber)"); putShared("vgcall", { id: nid("vc"), at: Date.now(), site: s.code, point: "Talk-down", caller: "Unknown person", outcome: "Talk-down announcement given", note: tx.slice(0, 80), by: ME ? ME.name : "" }); toast("Talk-down logged", "", "var(--teal)"); return; }
+  if (d.mdin || d.mdrel){ go(); const v = V(d.mdin || d.mdrel); if (!v) return; const w = vgOnWatch(v); if (w && !confirm(`${v.name} matches the watch list ("${w}"). Let them in anyway?`)) return; v.status = "in"; v.arrived = Date.now();
+    if (d.mdrel){ v.released = true; putShared("vgcall", { id: nid("vc"), at: Date.now(), site: v.site, point: "Door release", caller: v.type, outcome: "Door / gate released remotely", note: v.name, visitor: v.id, by: ME ? ME.name : "" }); audit("Door released remotely", v.site, v.name); } putShared("vgvisit", v); renderPanel(); return; }
+  if (d.mdout){ go(); const v = V(d.mdout); if (v){ v.status = "out"; v.left = Date.now(); putShared("vgvisit", v); renderPanel(); } return; }
+  if (d.mdkback){ go(); const k = vgL("vgkeys").find(x => x.id === d.mdkback); if (k){ k.back = Date.now(); putShared("vgkeys", k); renderPanel(); } } }, true);
+// the guard's Alerts tab also carries the site's Virtual guard alerts
+MOB_AK.vg = ["Site watch", "#F2994A"];
+mobAlerts = (function(orig){ return function(){ const r = orig.apply(this, arguments); try{ if (!r.s) return r; const code = r.s.code, now = Date.now(), add = (hot, t, s) => r.items.push({ k: "vg", hot, t, s, go: "m-desk" });
+    vgL("vgvisit").filter(v => v.site === code && v.status !== "out").forEach(v => { if (vgOnWatch(v)) add(true, `Watch list: ${v.name}`, v.status === "in" ? "on site now" : "expected " + sgt(v.inAt)); else if (v.status === "in" && v.outAt && now > v.outAt + 30 * 60e3) add(false, `Overstay: ${v.name}`, `was due out ${ago(v.outAt)}`); });
+    vgL("vgkeys").filter(k => k.site === code && !k.back && k.due && now > k.due).forEach(k => add(false, `Key overdue: ${k.key}`, `with ${k.holder}`));
+    try{ vgLearn().unusual.filter(u => u.site === code).forEach(u => r.items.push({ k: "vg", hot: u.pr === "high", t: `Unusual: ${u.type}`, s: u.why })); }catch(x){}
+    try{ NS.ships.forEach(sh => { if (nsLoiter(sh) && sh.near.code === code) r.items.push({ k: "vg", hot: true, t: `Ship lingering ${sh.near.d < 1 ? Math.round(sh.near.d * 1000) + " m" : sh.near.d.toFixed(1) + " km"} from the site`, s: `${sh.name || "MMSI " + sh.mmsi} · ${fmtAge(now - sh.nearSince)}` }); }); }catch(x){}
+    r.n = r.items.length; r.hot = r.items.some(i => i.hot); }catch(e){ console.warn("site watch", e); } return r; }; })(mobAlerts);
+{ const st = document.createElement("style"); st.textContent = `
+.mdpg .dc{padding:12px;margin-bottom:12px}.mdpg .dch{display:flex;align-items:center;gap:8px}.mdpg .dch .sp{flex:1}
+.mdv{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.mdv>div:first-child{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.mdv small{font-size:12px}.mdv.watch{background:color-mix(in srgb,#FF5468 8%,transparent);border-radius:10px;padding:10px}
+.mdb{display:flex;flex-direction:column;gap:6px}.mdb .pill{min-height:40px}.mdtalk{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.mdtalk p{flex:1;margin:0;font-size:13px}.mdpg .wfbig{width:100%;margin-bottom:6px}
+/* the mobile version on a computer: shown as a phone, centred */
+@media (min-width:700px){html.edmobile{background:#02050B}html.edmobile body{width:430px;max-width:430px;height:100vh;margin:0 auto;transform:translateZ(0);overflow:hidden;box-shadow:0 0 0 1px #1C2533,0 24px 80px rgba(0,0,0,.6)}
+  html.edmobile body #gate{position:absolute}}
+html.edweb .phonebadge,html.edweb #pback{display:none!important}`; document.head.appendChild(st); }
 /* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
    (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
    zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */
