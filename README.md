@@ -1337,3 +1337,35 @@ file or pasted. In Inoreader it is under Preferences › Import/Export › Expor
 - Many news sites don't let a browser read their feeds directly; those come through the PSOC server relay. With a paid
   Inoreader plan, a lighter alternative is to group the subscriptions into a few Inoreader folders and add each
   folder's **Export as RSS** link. Inoreader then does the fetching, and the console reads 3–5 links.
+
+## Virtual guard: running sites remotely (27 Oct)
+
+Security Operations › Patrol & response › **Virtual guard** brings remote-guarding functions into the console:
+- **Now:** one list of what needs attention: virtual patrols that are due or overdue, unusual activity, overstays,
+  watch-list matches, mobile units on low power or out of signal, and keys not returned.
+- **Virtual patrols:** a scheduled round of a site's cameras, for example every hour from 22:00 to 06:00.
+  - The operator steps through each camera and records **All clear**, **Issue** (with a note) or **Camera not
+    available**. The camera's last analytics frame is shown when there is one.
+  - Issues and unavailable cameras go to the Action queue, and every patrol is recorded with who did it and how long it
+    took.
+- **Unusual activity (self-learning):** no rules to write.
+  - The console keeps 60 days of camera alarms, access-control alarms, incidents and intercom calls, and learns how
+    often each kind happens at each site at each hour of the week.
+  - It flags activity that is far above normal for that hour (more than three standard deviations), at a time of day
+    it has never happened at that site, or new to the site. Similar events are grouped into one.
+  - Each kind of event can be set to High, Normal or Ignore. Unusual activity can go to the Action queue, where
+    Decision-1 recommends what to do.
+- **Visitors and contractors:** register them ahead of time, then check them in, **release the door remotely**
+  (logged) and check them out. Overstays are flagged, and a watch list of names, companies and plates flags matches.
+  Records are kept for 90 days.
+- **Intercom and talk-down:** log intercom calls and their outcomes. Calls that end in dispatching an officer or calling
+  the police go to the Action queue. Standard talk-down announcements, which can be edited, are spoken through the
+  computer's speakers for routing to the site's speaker, and logged.
+- **Mobile units and robots:** mobile camera towers, patrol and concierge robots and drone docks. The register records
+  site, location, power, link, the analytics running on each unit and the end of its deployment. Warnings cover low
+  power, lost signal and deployments about to end. Live status can be read from the PSOC server (`GET /api/fleet`).
+- **Keys:** issue, due back, returned, and overdue keys.
+- **Monthly report:** per site, covering patrols and issues, unusual activity, visitors and overstays, calls and
+  talk-downs, keys and units. It can be downloaded as CSV.
+
+Also moved: **My feeds** now sits under Intelligence › News, and **Air & sea notices** under Intelligence › Security.
