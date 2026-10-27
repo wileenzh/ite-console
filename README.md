@@ -1267,3 +1267,46 @@ Fixed on the way:
   hint never started; the script is now marked as the console's own;
 - on real phones the sign-in screen opened zoomed in and cut off, because the desktop header made the page wider than
   the screen before the phone layout started; touch screens can no longer be widened.
+
+## Fast decisions (Microsoft-Decision-1), NOTAMs, notices to mariners and AIS (27 Oct)
+
+### Fast decisions — Response › Fast decisions
+[Microsoft-Decision-1](https://openrouter.ai/microsoft) is Microsoft's decision model (October 2026). It answers fixed
+questions with a probability for each option instead of writing text, in a fraction of a second, for about US$0.04 per
+million input tokens. In TTE it:
+- puts a **recommendation on every pending item in the Action queue**: the next step (the queue's own choices), the
+  priority (P1–P4) and whether to alert the duty manager. **Use** opens the decide window with the recommendation marked;
+  the watch officer still chooses and records the reason;
+- judges whether each **NOTAM and navigational warning affects us**, and whether a **ship lingering near a site** needs
+  a check.
+
+Set it up under Response › Fast decisions. TTE can reach it three ways:
+- **OpenRouter:** the Decisions API (`POST https://openrouter.ai/api/alpha/decisions`, model
+  `microsoft/microsoft-decision-1`). The key stays in this browser.
+- **PSOC server:** `POST /api/decisions` with the same body. The server forwards it to Microsoft Foundry or OpenRouter
+  with the organisation's key.
+- **Your own gateway:** any address that accepts the same body, with an optional header.
+
+Site codes and names are replaced with neutral labels ("Site A") before anything is sent. A test bench shows the
+probabilities for any situation you type, and the page keeps a log of recent recommendations with timing and cost.
+
+### Air & sea notices — Intelligence Monitoring › Air & sea notices
+- **NOTAMs** for the main airport of every city with our sites (31 airports; more can be added by ICAO code). They come
+  from the FAA NOTAM API (worldwide, free client ID and secret) or the PSOC server (`GET /api/notams?icao=WSSS,VHHH,…`,
+  returning the FAA GeoJSON or a list). Each is sorted by kind: airport closures, airspace restrictions and exercises,
+  volcanic ash, GPS interference, drones, runways, navigation aids and obstacles.
+- **Navigational warnings and notices to mariners:** NGA Maritime Safety Information broadcast warnings (HYDROPAC by
+  default), plus your port authority's notices as an RSS or Atom feed. Positions in the text (for example
+  `01-10.00N 103-55.00E`) are read to give the distance to the nearest city with our sites.
+- **Send to Action queue** puts any notice in the queue, where Decision-1 recommends what to do.
+
+### Sea traffic (AIS) — Visual Command Centre › Sea traffic (AIS)
+- Ship positions around every coastal city with our sites, on a map and in a list, from aisstream.io (free key; it may
+  refuse connections from a browser) or the PSOC server (`GET /api/ais?boxes=…`, returning `[{mmsi, name, lat, lon,
+  sog, cog, heading, status, t}]`).
+- A ship is flagged as **lingering** when it stays within 3 km of a site, slower than 1 knot, for 20 minutes or more.
+  Both values can be changed. It can be sent to the Action queue as a site check.
+
+**Demo mode** (Sources › "Show demo notices and ships") fills both pages with clearly marked made-up examples until the
+real feeds are connected. Keys for the FAA, aisstream.io and OpenRouter stay in the browser. Feeds a browser can't reach
+directly go through the PSOC server relay.
