@@ -1243,3 +1243,27 @@ the Chatbot and Administration. The APAC director, RSOM and DSOM dashboards keep
 - Fold it with the arrow to a single line that shows the counts, the next open priority and anything that needs
   attention. Each person's open or folded choice is remembered per tab.
 - Until something is chosen, the bar is a slim dashed line with a **Choose what matters** button.
+
+## TTE on your phone: the installable app (27 Oct)
+
+Open **https://wileenzh.github.io/ite-console/app/** on the phone and add it to the home screen:
+- **iPhone / iPad:** in Safari, tap **Share** › **Add to Home Screen** › **Add**.
+- **Android:** in Chrome, tap **⋮** › **Install app** (or **Add to Home screen**). Where Chrome offers it, the app's own
+  **Install** button does it in one tap.
+
+On the desktop, the new **phone button** in the header shows a QR code to scan and the same steps. On a phone,
+**More › Install this app on your phone** shows them too.
+
+What the installed app does:
+- opens full screen from the home screen with the PSOC icon, on each person's role screens (guard, site security
+  manager, DSOM, RSOM, APAC director, PSOC officer);
+- opens without signal on the last version loaded (live data loads when back online) and picks up the newest version
+  each time it opens with signal;
+- on Android, pressing and holding the icon gives shortcuts to **My duties**, **Site alerts**, **Decisions** and
+  **Map** (`app/?go=<tab>` opens that tab after sign-in).
+
+Fixed on the way:
+- the security gateway's page guard was removing the app's own start-up script, so the offline copy and the install
+  hint never started; the script is now marked as the console's own;
+- on real phones the sign-in screen opened zoomed in and cut off, because the desktop header made the page wider than
+  the screen before the phone layout started; touch screens can no longer be widened.

@@ -17,7 +17,7 @@ html = src.read_text(encoding="utf-8")
 version = hashlib.sha256(html.encode()).hexdigest()[:10]
 
 HEAD = """<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0E171C">
+<meta name="theme-color" content="#060B14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -27,7 +27,9 @@ HEAD = """<link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 """
 
-TAIL = """<script>
+# data-ite-lib marks this script as the console's own: the security gateway's page guard removes any other
+# script that appears after it starts, which would stop the service worker and the install hint.
+TAIL = """<script data-ite-lib="app">
 /* ---------- installable app: service worker and the iPhone install hint ---------- */
 (function(){
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost"))
@@ -37,17 +39,21 @@ TAIL = """<script>
   var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var seen = false; try{ seen = localStorage.getItem("ite.installhint") === "1"; }catch(e){}
   if (standalone || seen) return;
-  var box = document.createElement("div"); box.id = "installHint"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Install the TTE app");
+  var box = document.createElement("div"); box.id = "installHint"; box.setAttribute("role", "region"); box.setAttribute("aria-label", "Install the TTE app");
   box.innerHTML = '<img src="icons/icon-180.png" alt="" width="52" height="52"><div class="ih"><b>Install TTE on your ' + (ios ? "iPhone" : "phone") + '</b>'
     + (ios ? '<span>In Safari, tap <b>Share</b> <svg viewBox="0 0 24 24" width="16" height="16" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4M5 11v9h14v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> then <b>Add to Home Screen</b>. It opens full screen like an app.</span>'
           : '<span>Open your browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</span>')
-    + '</div><button type="button" aria-label="Close">Got it</button>';
+    + '</div><button type="button" class="ihgo" hidden>Install</button><button type="button" class="ihx" aria-label="Close">Got it</button>';
   function close(){ box.remove(); try{ localStorage.setItem("ite.installhint", "1"); }catch(e){} }
-  box.querySelector("button").onclick = close;
+  box.querySelector(".ihx").onclick = close;
+  // Android/Chrome: a one-tap Install when the browser offers it
+  function offer(){ if (!window.__teBip) return; var g = box.querySelector(".ihgo"); g.hidden = false; box.querySelector(".ihx").textContent = "Later";
+    g.onclick = function(){ window.__teBip.prompt(); close(); }; }
+  offer(); document.addEventListener("te-installable", offer);
   var st = document.createElement("style");
-  st.textContent = "#installHint{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:3100;display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;background:#16242B;color:#EEF3F5;border:1px solid #2C3D45;box-shadow:0 10px 30px rgba(0,0,0,.45);font:14px/1.4 -apple-system,system-ui,sans-serif;max-width:520px;margin:0 auto}"
-    + "#installHint img{border-radius:12px;flex:none}#installHint .ih{flex:1;display:flex;flex-direction:column;gap:3px}#installHint svg{vertical-align:-3px}"
-    + "#installHint button{flex:none;border:0;border-radius:10px;padding:9px 12px;background:#2F7BD9;color:#fff;font:700 14px -apple-system,system-ui,sans-serif}"
+  st.textContent = "#installHint{position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:2147483000;display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;background:#16242B;color:#EEF3F5;border:1px solid #2C3D45;box-shadow:0 10px 30px rgba(0,0,0,.45);font:14px/1.4 -apple-system,system-ui,sans-serif;max-width:520px;margin:0 auto}"
+    + "#installHint img{width:52px!important;height:52px!important;max-width:none;border-radius:12px;flex:none}#installHint .ih{flex:1;display:flex;flex-direction:column;gap:3px}#installHint svg{vertical-align:-3px}"
+    + "#installHint button{flex:none;border:0;border-radius:10px;padding:9px 12px;background:#1E8C86;color:#fff;font:700 14px -apple-system,system-ui,sans-serif}#installHint .ihx{background:#2A3A44}#installHint button[hidden]{display:none}"
     + "@media (min-width:761px){#installHint{display:none}}";
   document.head.appendChild(st);
   setTimeout(function(){ document.body.appendChild(box); }, 1200);
@@ -68,16 +74,25 @@ app.mkdir(exist_ok=True)
   "name": "TTE — To The Edge",
   "short_name": "TTE",
   "description": "PSOC situational awareness: hazards, alerts, incidents and sites.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0E171C",
-  "theme_color": "#0E171C",
+  "background_color": "#060B14",
+  "theme_color": "#060B14",
+  "lang": "en",
+  "categories": ["business", "productivity"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "My duties", "short_name": "Duties", "url": "./?go=wf-duty", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Site alerts", "short_name": "Alerts", "url": "./?go=m-alerts", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Decisions", "short_name": "Decisions", "url": "./?go=m-dec", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Map", "short_name": "Map", "url": "./?go=overview", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
 """, encoding="utf-8")

@@ -24470,6 +24470,53 @@ function wmEditor(){ const sc = wmScope(); if (DASH_MODES.includes(UI.mode)) ret
 .wmbd{display:none;padding:0 14px 10px;columns:2 340px;column-gap:28px}.wmstrip.open .wmbd{display:block}
 .wmbd .dpsub,.wmbd .dprow,.wmbd .dpnote,.wmbd .dphead{break-inside:avoid}.wmbd .dpsub:first-child{margin-top:2px}
 body.phone .wmsum{max-width:100%;flex-basis:100%;order:5}body.phone .wmbd{columns:1}`; document.head.appendChild(st); }
+/* ---------- TTE on your phone: the installable web app (Add to Home Screen). A "Phone app" button on the desktop shows a QR code
+   and the steps; on a phone, More › Install this app does the same, with a one-tap Install where the browser allows it (Android).
+   Home-screen shortcuts open a tab directly (…/app/?go=<tab>). ---------- */
+const PA_URL = "https://wileenzh.github.io/ite-console/app/";
+const PA_QR = '<svg viewBox="0 0 195 195" class="paqr" role="img" aria-label="QR code for the TTE phone app"><g transform="scale(5)"><path fill="#fff" d="M0 0h39v39h-39z"/><path class="qrline" stroke="#0a1524" d="M3 3.5h7m1 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m2 0h7m-33 1h1m5 0h1m1 0h1m2 0h1m3 0h2m1 0h2m1 0h4m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m3 0h2m3 0h2m1 0h1m1 0h1m3 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m3 0h4m1 0h2m3 0h2m2 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m1 0h1m4 0h1m2 0h1m1 0h1m1 0h4m2 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m2 0h1m4 0h2m1 0h3m2 0h3m1 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-25 1h1m1 0h2m2 0h2m1 0h3m1 0h1m2 0h1m-24 1h2m1 0h1m1 0h2m3 0h2m2 0h3m2 0h2m1 0h2m1 0h1m1 0h5m-33 1h1m1 0h1m7 0h1m2 0h1m3 0h1m2 0h3m1 0h4m3 0h2m-30 1h2m1 0h1m2 0h1m1 0h1m1 0h2m3 0h1m1 0h1m4 0h1m1 0h1m2 0h3m-32 1h1m1 0h1m1 0h1m2 0h1m2 0h2m1 0h1m2 0h8m3 0h1m-29 1h1m1 0h1m1 0h4m2 0h2m1 0h1m2 0h1m1 0h1m1 0h3m1 0h3m2 0h1m-29 1h2m2 0h1m1 0h1m3 0h2m5 0h2m4 0h4m2 0h1m1 0h1m-33 1h2m1 0h1m1 0h2m2 0h3m6 0h1m2 0h2m2 0h1m1 0h3m1 0h2m-31 1h1m1 0h1m2 0h4m3 0h2m1 0h2m1 0h2m4 0h1m2 0h1m1 0h1m-31 1h2m1 0h3m2 0h1m2 0h1m1 0h3m2 0h1m1 0h1m2 0h3m-26 1h1m1 0h3m2 0h7m5 0h1m3 0h1m1 0h2m3 0h2m-33 1h1m3 0h4m1 0h1m2 0h1m2 0h1m1 0h2m2 0h1m2 0h1m1 0h1m3 0h3m-30 1h1m4 0h1m1 0h5m1 0h4m1 0h4m1 0h3m2 0h2m-32 1h4m1 0h1m2 0h1m1 0h2m1 0h2m1 0h1m1 0h3m1 0h1m1 0h2m2 0h1m1 0h1m-30 1h3m3 0h3m1 0h2m1 0h1m1 0h1m6 0h3m3 0h3m-33 1h1m1 0h1m2 0h2m2 0h1m1 0h3m1 0h1m1 0h2m1 0h1m1 0h1m1 0h3m1 0h2m1 0h2m-32 1h2m1 0h1m3 0h1m3 0h1m2 0h1m3 0h1m1 0h1m2 0h1m1 0h1m5 0h1m-33 1h1m1 0h2m2 0h1m1 0h3m1 0h2m1 0h2m1 0h1m1 0h9m-21 1h1m1 0h3m1 0h3m1 0h1m1 0h2m1 0h2m3 0h2m1 0h2m-33 1h7m1 0h2m1 0h1m3 0h2m5 0h3m1 0h1m1 0h1m1 0h1m1 0h1m-33 1h1m5 0h1m2 0h1m2 0h3m2 0h1m2 0h3m1 0h1m3 0h1m2 0h2m-33 1h1m1 0h3m1 0h1m1 0h1m4 0h2m1 0h1m4 0h1m2 0h6m2 0h1m-33 1h1m1 0h3m1 0h1m4 0h3m3 0h2m1 0h1m1 0h1m5 0h5m-33 1h1m1 0h3m1 0h1m1 0h5m1 0h3m1 0h1m1 0h2m6 0h3m1 0h1m-33 1h1m5 0h1m1 0h2m3 0h3m3 0h1m1 0h1m1 0h2m1 0h1m1 0h1m2 0h1m-32 1h7m2 0h3m1 0h1m2 0h3m1 0h2m1 0h3m2 0h2m1 0h2"/></g></svg>';
+const PA = { bip: null, standalone: (() => { try{ return navigator.standalone === true || matchMedia("(display-mode: standalone)").matches; }catch(e){ return false; } })(),
+  ios: /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) };
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); PA.bip = e; window.__teBip = e; document.dispatchEvent(new Event("te-installable")); });
+window.addEventListener("appinstalled", () => { PA.bip = null; window.__teBip = null; try{ toast("TTE installed", "Open it from your home screen.", "var(--teal)"); }catch(e){} });
+function paUrl(){ if (/^https?:$/.test(location.protocol) && location.hostname !== "wileenzh.github.io"){ const p = location.pathname; return new URL(/\/app\//.test(p) ? p.replace(/\/app\/.*$/, "/app/") : p.replace(/[^/]*$/, "") + "app/", location.origin).href; } return PA_URL; }
+async function paInstall(){ if (!PA.bip) return false; PA.bip.prompt(); try{ const c = await PA.bip.userChoice; if (c && c.outcome === "accepted"){ PA.bip = null; closeModal(); } }catch(e){} return true; }
+function paHelp(){ const url = paUrl(), qr = url === PA_URL, phone = document.body.classList.contains("phone");
+  const iosSteps = `<ol class="pasteps"><li>Open the link in <b>Safari</b>.</li><li>Tap <b>Share</b> <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M5 11v9h14v-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> at the bottom.</li><li>Scroll and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>`;
+  const andSteps = `<ol class="pasteps"><li>Open the link in <b>Chrome</b>.</li><li>Tap <b>⋮</b> at the top right.</li><li>Tap <b>Install app</b> (or <b>Add to Home screen</b>), then <b>Install</b>.</li></ol>`;
+  openModal(head("TTE on your phone") + `<div class="bd pahelp">
+    ${PA.standalone ? `<div class="banner ok"><b>You're using the installed app.</b> It opens from your home screen like any other app.</div>` : ""}
+    ${PA.bip ? `<div class="painst"><button class="pill primary" id="paGo">Install TTE on this ${phone ? "phone" : "device"}</button><span class="s">One tap — your browser asks to confirm.</span></div>` : ""}
+    <div class="pagrid">${!phone ? `<div class="paqrbox">${qr ? PA_QR : `<div class="paqrno">Open this link on the phone:</div>`}<div class="paurl"><code>${esc(url)}</code><button class="tab-mini" id="paCopy">Copy link</button></div>${qr ? `<small class="s">Point the phone's camera at the code and tap the link.</small>` : ""}</div>` : ""}
+      <div class="pacols"><div><div class="pah"><b>iPhone / iPad</b></div>${iosSteps}</div><div><div class="pah"><b>Android</b></div>${andSteps}</div></div></div>
+    <div class="dpsub" style="margin-top:14px">What you get</div>
+    <ul class="paget"><li>TTE on the home screen with the PSOC icon, opening full screen without the browser bars.</li><li>Your role's own screens and tabs: guard, site security manager, DSOM, RSOM, APAC director or PSOC officer (choose under <b>More › My role in the app</b>).</li>
+      <li>It opens without signal on the last version you loaded; live alerts, maps and news load when you're back online.</li><li>Always up to date: each time it opens with signal it picks up the newest version.</li>
+      <li>On Android, press and hold the icon for shortcuts: <b>My duties</b>, <b>Site alerts</b>, <b>Decisions</b> and <b>Map</b>.</li></ul>
+    <p class="help">Sign in on the phone the same way as on the desktop. Keys and imported data stay on each device.</p></div>
+    <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Close</button></div>`, true);
+  if ($("#paGo")) $("#paGo").onclick = paInstall;
+  if ($("#paCopy")) $("#paCopy").onclick = () => { try{ navigator.clipboard.writeText(url).then(() => toast("Link copied", url, "var(--teal)")); }catch(e){} }; }
+// the desktop header button
+MC_HI.phoneAppBtn = '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>';
+{ const s = document.getElementById("setBtn"); if (s && !document.getElementById("phoneAppBtn")){ const b = document.createElement("button"); b.id = "phoneAppBtn"; b.type = "button"; b.className = s.className; b.textContent = "Phone app"; b.onclick = paHelp; s.parentNode.insertBefore(b, s); } }
+// the phone's More menu
+phMore = (function(orig){ return function(open){ const r = orig.apply(this, arguments); try{ const m = $("#pmore .pmb"); if (open && m && !m.querySelector(".pamore")) m.insertAdjacentHTML("beforeend", `<div class="pamore"><div class="phsec">The app</div><button class="pmt" data-paopen>${PA.standalone ? "About the installed app" : "Install this app on your phone"}</button></div>`); }catch(e){ console.warn("phone app", e); } return r; }; })(phMore);
+document.addEventListener("click", e => { if (e.target.closest("[data-paopen]")){ e.preventDefault(); try{ phMore(false); }catch(x){} paHelp(); } });
+// home-screen shortcuts: …/app/?go=<tab> opens that tab once signed in
+{ const go = new URLSearchParams(location.search).get("go"); if (go){ let n = 0; const t = setInterval(() => { n++; try{ if (ME && typeof goVis === "function" && document.getElementById("panel") && document.body.dataset.booted !== "0"){ clearInterval(t); setTimeout(() => { try{ if (goVis(go)) setMode(go); history.replaceState(null, "", location.pathname); }catch(e){} }, 600); } }catch(e){} if (n > 80) clearInterval(t); }, 500); } }
+// on a phone the sign-in screen showed before the phone layout starts, and the desktop header made the page wider than the
+// screen, so phones opened it zoomed and cut off: nothing may widen the page on a touch screen
+{ const st = document.createElement("style"); st.textContent = `@media (pointer:coarse){html,body{overflow-x:hidden;overflow-x:clip}}`; document.head.appendChild(st); }
+{ const st = document.createElement("style"); st.textContent = `
+.pahelp .pagrid{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:start}body.phone .pahelp .pagrid{grid-template-columns:1fr}
+.paqrbox{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:240px}.paqr{width:200px;height:200px;border-radius:12px;background:#fff;padding:4px}
+.paurl{display:flex;flex-direction:column;align-items:center;gap:6px}.paurl code{font-size:11.5px;word-break:break-all;text-align:center}
+.pacols{display:grid;grid-template-columns:1fr 1fr;gap:16px}body.phone .pacols{grid-template-columns:1fr}.pah{margin-bottom:4px}
+.pasteps{margin:0;padding-left:20px;font-size:13px;line-height:1.7}.pasteps svg{vertical-align:-3px}
+.paget{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--text)}
+.painst{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.pamore{margin-top:10px}`; document.head.appendChild(st); }
 /* ---------- The dashboards show the real intelligence map: on the APAC director, RSOM and DSOM command screens the console's own map
    (same base map, hazard symbols, cyclone tracks, warnings, sites and labels as Intelligence Monitoring) moves into the centre panel,
    zoomed to the entity's area; it goes back when you leave. If that map isn't available, the simple map is drawn instead. ---------- */
