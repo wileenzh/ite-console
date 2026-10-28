@@ -1436,3 +1436,9 @@ the results on the map:
 
 Stories about a hazard in one of our cities also feed the news count on the city cards, the news layer and the
 dashboards, as before.
+
+**In the Visual Command Centre** (Command view):
+- the command map shows the developing stories from the team's feeds (score 3 and up) as markers with a story count,
+  pulsing when a story scores 7 or more. Hovering lists them; clicking opens them in My feeds;
+- a **Feed stories that matter** readout (score 5 and up) sits with the other readouts;
+- the right-hand column lists the top five **developing stories** under Live news. Clicking one moves the map there.

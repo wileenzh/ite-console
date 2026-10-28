@@ -1,7 +1,7 @@
-// TTE app service worker (version 4006e4dd47)
+// TTE app service worker (version 05a59c447b)
 // The app shell and its libraries are kept so the app starts fast and opens without signal.
 // Live data (hazard feeds, news, maps) always comes from the network and is never stored here.
-const SHELL = "ite-shell-4006e4dd47", LIBS = "ite-libs-v1";
+const SHELL = "ite-shell-05a59c447b", LIBS = "ite-libs-v1";
 const SHELL_FILES = ["./", "./index.html", "./manifest.json", "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/favicon-32.png"];
 const LIB_HOSTS = ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)).then(() => self.skipWaiting())); });
