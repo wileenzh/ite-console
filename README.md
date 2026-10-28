@@ -1442,3 +1442,29 @@ dashboards, as before.
   pulsing when a story scores 7 or more. Hovering lists them; clicking opens them in My feeds;
 - a **Feed stories that matter** readout (score 5 and up) sits with the other readouts;
 - the right-hand column lists the top five **developing stories** under Live news. Clicking one moves the map there.
+
+### Damage assessment (HASTE)
+
+*Intelligence Monitoring › Overview › Damage assessment.* Web, and on the phone in the mobile version under More.
+
+HASTE (High-speed Assessment and Satellite Tracking for Emergencies, open source from Microsoft) compares satellite images from
+before and after a typhoon, flood, earthquake, fire or blast, and marks each building damaged or intact. The console:
+
+- **Reads the results.** It can take them from the team's own HASTE deployment: set the API address, the key, and how the key is
+  sent (Function key header, API Management header, `?code=` or none). It reads the projects, the latest finished model for each
+  image layer, the assessment report (the damaged-building estimate with its 95% range) and the predicted-damage GeoPackage.
+  Alternatively, import a file exported from HASTE: the GeoPackage (read in the browser, including UTM projections), the
+  validation GeoJSON, or a published STAC item.
+- **Works out what it means for us.** For each site it counts the damaged buildings within 1 km (adjustable) and within 3 km, and
+  finds the nearest damaged building. It then grades the site Severe, High, Moderate or Watch. The worst-hit blocks become impact
+  zones, so they also appear in Operational impact, "What matters" (sites we watch) and the dashboards.
+- **Shows it everywhere it matters.**
+  - On the page: a map with each building as a dot (red damaged, grey intact, purple cloud) and rings around the sites, plus an
+    optional satellite base and the post-event imagery through HASTE's tile server.
+  - A "Satellite damage (HASTE)" layer and quick-bar chip on the main map, with building dots once zoomed in.
+  - A readout and the assessed areas in the Visual Command Centre.
+  - Decision-1 ("does it affect us?") for each affected site.
+  - High and Severe sites go to the Action queue automatically (P1 for Severe; this can be turned off).
+  - A "Satellite damage" item in the guard's phone Alerts tab.
+- **Keeps keys and data local.** The key and the building data stay in the browser. Only the counts for each site are shared with
+  the team. A clearly marked demo shows the page before HASTE is connected.
