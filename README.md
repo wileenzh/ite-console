@@ -1468,3 +1468,22 @@ before and after a typhoon, flood, earthquake, fire or blast, and marks each bui
   - A "Satellite damage" item in the guard's phone Alerts tab.
 - **Keeps keys and data local.** The key and the building data stay in the browser. Only the counts for each site are shared with
   the team. A clearly marked demo shows the page before HASTE is connected.
+
+### Cite and write from My feeds
+
+*Intelligence Monitoring › News › My feeds and Articles.* Web and Mobile.
+
+- **Cite:** every story in My feeds has a **Cite** button. It shows the citation in APA 7, Harvard, Chicago, MLA 9 and numbered
+  style, ready to copy (formatted or plain).
+- **+ Article:** collects stories as the sources for an article. **Write about this** on a developing story adds every report of it.
+- **Articles:** turns the sources into an intelligence brief, situation report, news article, blog or LinkedIn post, executive
+  summary or newsletter digest. You set the length, tone, audience, headline and angle.
+  - **✦ Write with AI** uses the PSOC server's language model, or OpenRouter with the team's key (Decision-1's key is reused if set).
+    The model is told to write only from the numbered sources and to cite every factual sentence.
+  - **Draft without AI** builds an attributed digest from the sources' own words.
+  - **Read full articles** fetches the full text behind each link where the site allows it; otherwise the feed summary is used.
+- **Citations are checked as you write:** numbers that point to no source, sentences without a citation, quotes that are not in
+  any source, and sources not yet cited. Removing a source renumbers the citations.
+- **Reference list and export:** the reference list is built in the chosen style. Author–date styles turn `[1]` into
+  (Publisher, Year) in the text. Export as Word, Markdown (footnotes for numbered styles), HTML or PDF, or copy with formatting.
+  Drafts are saved and shared with the team.
