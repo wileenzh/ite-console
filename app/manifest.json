@@ -1,7 +1,7 @@
 {
-  "name": "TTE — To The Edge",
+  "name": "TTE Mobile",
   "short_name": "TTE",
-  "description": "PSOC situational awareness: hazards, alerts, incidents and sites.",
+  "description": "Security on the move: what needs you now, report to the PSOC, shift and patrol, decisions and briefs.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -17,9 +17,9 @@
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "My duties", "short_name": "Duties", "url": "./?go=wf-duty", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Site alerts", "short_name": "Alerts", "url": "./?go=m-alerts", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Decisions", "short_name": "Decisions", "url": "./?go=m-dec", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Map", "short_name": "Map", "url": "./?go=overview", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Report to the PSOC", "short_name": "Report", "url": "./?go=report", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "What needs me now", "short_name": "Now", "url": "./?go=now", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My shift", "short_name": "Shift", "url": "./?go=shift", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Decisions", "short_name": "Decide", "url": "./?go=decide", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

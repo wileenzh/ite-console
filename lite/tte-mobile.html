@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>TTE Mobile</title>
+<style>
+:root{--bg:#060B14;--card:#0E1624;--card2:#142033;--line:#1F2C40;--text:#E8EEF7;--muted:#8A97AB;--teal:#34D8C0;--red:#FF5468;--amber:#FFB547;--green:#3DDC97;--blue:#5B9BD5;--violet:#B07CFF;--tab:72px;--safe:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root{--bg:#F3F5F9;--card:#FFFFFF;--card2:#EEF2F7;--line:#D9E0EA;--text:#0E1624;--muted:#5B6678;--teal:#0E9F8B;--red:#D92D45;--amber:#B26A00;--green:#1B8A57;--blue:#2F6FB0;--violet:#7A4CD9}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%}
+body{min-height:100vh;min-height:100dvh}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--teal)}
+#top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+#top .brand{font-weight:800;letter-spacing:.04em}#top .scope{display:flex;flex-direction:column;min-width:0;flex:1}#top .scope small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 10px}.sync i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--muted))}
+.me{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card2);font-weight:700}
+main{padding:14px 16px calc(var(--tab) + var(--safe) + 20px);max-width:640px;margin:0 auto}
+h1{font-size:22px;margin:4px 0 12px}h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.card.hot{border-color:color-mix(in srgb,var(--red) 60%,var(--line));box-shadow:0 0 0 1px color-mix(in srgb,var(--red) 30%,transparent)}
+.card.seen{opacity:.55}
+.row{display:flex;align-items:center;gap:8px}.row .sp{flex:1}
+.chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:999px;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:color-mix(in srgb,var(--c) 12%,transparent)}
+.t{font-weight:700;font-size:15.5px;margin:6px 0 2px}.s{color:var(--muted);font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:600}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#04201B}.btn.red{background:var(--red);border-color:var(--red);color:#fff}.btn.ghost{background:none}
+.btn.big{width:100%;min-height:56px;font-size:17px;border-radius:14px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.btns .btn{flex:1 1 auto}
+.empty{text-align:center;padding:28px 12px;color:var(--muted)}.empty b{display:block;color:var(--text);font-size:17px;margin-bottom:4px}
+.ok{--c:var(--green)}
+label.f{display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)}
+input.i,select.i,textarea.i{width:100%;min-height:48px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:16px}
+textarea.i{min-height:96px;resize:vertical}
+.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.choices.one{grid-template-columns:1fr}
+.choice{min-height:52px;border-radius:12px;border:1px solid var(--line);background:var(--card);padding:10px 12px;text-align:left;font-weight:600}
+.choice small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.choice[aria-pressed="true"]{border-color:var(--c,var(--teal));background:color-mix(in srgb,var(--c,var(--teal)) 14%,var(--card));box-shadow:inset 0 0 0 1px var(--c,var(--teal))}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:12px}.seg button{flex:1;min-height:38px;border:0;background:none;border-radius:9px;font-weight:600;color:var(--muted)}.seg button[aria-pressed="true"]{background:var(--card2);color:var(--text)}
+#tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding-bottom:var(--safe)}
+#tabs button{flex:1;height:var(--tab);border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:11.5px;font-weight:600;position:relative}
+#tabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#tabs button[aria-current="page"]{color:var(--teal)}
+#tabs button.rep{color:#fff}#tabs button.rep span.ic{width:48px;height:48px;border-radius:50%;background:var(--red);display:grid;place-items:center;margin-top:-18px;box-shadow:0 6px 18px color-mix(in srgb,var(--red) 45%,transparent)}#tabs button.rep span.lb{color:var(--muted)}#tabs button.rep[aria-current="page"] span.lb{color:var(--red)}
+#tabs .bd{position:absolute;top:8px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;line-height:18px}
+#sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center}#sheet[hidden]{display:none}
+#sheet .in{width:100%;max-width:640px;max-height:92vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;border:1px solid var(--line);padding:18px 16px calc(18px + var(--safe))}
+#sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:-6px auto 12px}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(var(--tab) + var(--safe) + 12px);z-index:30;display:flex;justify-content:center;pointer-events:none}
+#toast div{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.35);max-width:520px;pointer-events:auto}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin:8px 0}.kv dt{color:var(--muted)}.kv dd{margin:0}
+.step{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}.step input{width:22px;height:22px;margin-top:2px}
+.big2{font-size:24px;font-weight:800}.shift{border-left:5px solid var(--c)}
+.photo{max-width:100%;border-radius:12px;margin-top:8px}
+.art{font:16px/1.65 Georgia,"Times New Roman",serif}.art h1{font-size:23px;line-height:1.3}.art h2{font-family:inherit;text-transform:none;letter-spacing:0;color:var(--text);font-size:17px}.art sup a{text-decoration:none}.art .refs{font:13px/1.5 -apple-system,"Segoe UI",sans-serif;color:var(--muted)}.art .refs li{margin:6px 0;word-break:break-word}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--c)}
+.note{font-size:12.5px;color:var(--muted);margin-top:10px}
+.offline{background:color-mix(in srgb,var(--amber) 14%,var(--card));border:1px solid color-mix(in srgb,var(--amber) 50%,var(--line));border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+@media (prefers-reduced-motion:no-preference){.card,.choice,.btn{transition:transform .08s}.btn:active,.choice:active{transform:scale(.98)}}
+</style>
+</head>
+<body>
+<header id="top"></header>
+<main id="view" aria-live="polite"></main>
+<nav id="tabs" aria-label="Sections"></nav>
+<div id="sheet" hidden role="dialog" aria-modal="true"><div class="in" id="sheetIn"></div></div>
+<div id="toast" aria-live="assertive"></div>
+<script>window.TTE_SITES = /*SITES*/[];</script>
+<script>
+/* TTE Mobile: the light phone app. It shares the console's data (the same stores, through the PSOC server, or this browser's
+   storage when the console is open on the same device) and does only what a phone is for: what needs me now, reporting to the
+   PSOC, shift and patrol, decisions, and reading briefs. Everything else is in the web console. */
+"use strict";
+const $ = (s, r) => (r || document).querySelector(s), $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ls = (k, d) => { try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } };
+const lss = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } };
+const nid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const ago = t => { if (!t) return ""; const m = Math.round((Date.now() - t) / 60e3); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago"; };
+const fmt = (t, tz) => { try{ return new Intl.DateTimeFormat("en-GB", { timeZone: tz || undefined, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t); }catch(e){ return new Date(t).toLocaleString(); } };
+const hm = (t, tz) => { try{ return new Intl.DateTimeFormat("en-GB", { timeZone: tz || undefined, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t); }catch(e){ return ""; } };
+const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+/* ---------- the shared stores ---------- */
+const KEY = t => "psoc.uni." + t + ".v1", OUTK = "psoc.lite.outbox.v1";
+const TYPES = ["actions", "incidents", "patrolrel", "patrolfb", "opdec", "shifts", "guards", "hsimpact", "articles", "cvalerts", "vgvisit", "vgkeys", "mobdigest", "users"];
+const DB = {}; let OUT = ls(OUTK, []) || [];
+const SYNC = { ok: null, at: 0, err: "" };
+function load(){ TYPES.forEach(t => { const v = ls(KEY(t), []); DB[t] = Array.isArray(v) ? v : []; }); }
+const live = t => (DB[t] || []).filter(x => x && !x.deleted);
+const CFG = () => Object.assign({ server: "", hotline: "", notify: false }, ls("psoc.lite.cfg.v1", {}));
+function server(){ if (window.__PSOC_SERVER && /^https?:$/.test(location.protocol)) return location.origin; const c = CFG(); if (c.server) return c.server.replace(/\/+$/, ""); const k = ls("psoc.uni.settings.v1", {}) || {}; return String(k.serverUrl || "").replace(/\/+$/, ""); }
+function put(t, rec){ rec.updatedAt = Date.now(); if (!rec.createdAt) rec.createdAt = rec.updatedAt; const L = ls(KEY(t), []) || [], i = L.findIndex(x => x.id === rec.id); if (i >= 0) L[i] = rec; else L.unshift(rec);
+  if (!lss(KEY(t), L)) lss(KEY(t), L.slice(0, 300)); DB[t] = L; OUT.push({ t, rec }); lss(OUTK, OUT); flush(); }
+let flushing = false;
+async function flush(){ const base = server(); if (!base || flushing || !OUT.length){ status(); return; } flushing = true;
+  while (OUT.length){ const o = OUT[0]; try{ const r = await fetch(base + "/api/items/" + o.t, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o.rec) }); if (!r.ok) throw new Error("HTTP " + r.status); OUT.shift(); lss(OUTK, OUT); SYNC.ok = true; SYNC.at = Date.now(); }
+    catch(e){ SYNC.ok = false; SYNC.err = e.message; break; } } flushing = false; status(); }
+let pulling = false;
+async function pull(){ const base = server(); if (!base){ load(); render(); return; } if (pulling) return; pulling = true; let ok = 0;
+  await Promise.all(TYPES.map(async t => { try{ const r = await fetch(base + "/api/items/" + t, { cache: "no-store" }); if (!r.ok) return; const remote = await r.json(); if (!Array.isArray(remote)) return;
+      const m = new Map((ls(KEY(t), []) || []).map(x => [x.id, x])); remote.forEach(x => { if (!x || !x.id) return; const l = m.get(x.id); if (!l || (x.updatedAt || 0) > (l.updatedAt || 0)) m.set(x.id, x); });
+      const L = [...m.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 1500); if (!lss(KEY(t), L)) lss(KEY(t), L.slice(0, 300)); ok++; }catch(e){} }));
+  pulling = false; SYNC.ok = ok > 0; SYNC.at = ok ? Date.now() : SYNC.at; if (!ok) SYNC.err = "the PSOC server did not answer"; load(); render(); alertNew(); flush(); }
+/* ---------- sites and scope ---------- */
+const TZ = { Japan: "Asia/Tokyo", "South Korea": "Asia/Seoul", Korea: "Asia/Seoul", China: "Asia/Shanghai", "Hong Kong": "Asia/Hong_Kong", Taiwan: "Asia/Taipei", Singapore: "Asia/Singapore", Malaysia: "Asia/Kuala_Lumpur", Indonesia: "Asia/Jakarta", Thailand: "Asia/Bangkok", Philippines: "Asia/Manila", Vietnam: "Asia/Ho_Chi_Minh", India: "Asia/Kolkata", Australia: "Australia/Sydney", "New Zealand": "Pacific/Auckland" };
+const digest = () => (live("mobdigest").find(x => x.id === "digest")) || null;
+function sites(){ const d = digest(); if (d && Array.isArray(d.sites) && d.sites.length) return d.sites.map(a => ({ code: a[0], city: a[1], country: a[2], region: a[3], lat: a[4], lon: a[5], office: !!a[6], tz: a[7] || TZ[a[2]] }));
+  const loc = ls("psoc.uni.sites.v1", null), L = Array.isArray(loc) && loc.length ? loc : (window.TTE_SITES || []);
+  return L.filter(s => s && s.code && !/closed|decom/i.test(s.status || "")).map(s => ({ code: s.code, city: s.city, country: s.country, region: s.region, lat: s.lat, lon: s.lon, office: /office/i.test((s.src || "") + (s.cls || "")), tz: TZ[s.country] || "Asia/Singapore" })); }
+const site = code => sites().find(s => s.code === code) || null;
+let ME = ls("psoc.uni.me.v1", null), PROF = ls("psoc.lite.prof.v1", null);
+const ROLES = { guard: ["Security guard", "Your shift, patrol taskings and your site"], ssm: ["Site security manager", "Your site: alerts, people on post, decisions"], dsom: ["Country (DSOM)", "Your country's sites and decisions"], rsom: ["Region (RSOM)", "Your region's sites and decisions"], dir: ["APAC director", "Decisions needed and what matters across APAC"], psoc: ["PSOC officer", "The action queue and every site, on the go"] };
+function allowedRoles(){ const u = ME && live("users").find(x => x.id === "u:" + String(ME.name).toLowerCase()), r = u ? u.role : ""; if (r === "patrol") return ["guard"]; if (r === "leader") return ["dir"]; return Object.keys(ROLES); }
+function scopeSites(){ const p = PROF || {}, S = sites(); if (p.role === "guard" || p.role === "ssm") return S.filter(s => s.code === p.site); if (p.role === "dsom") return S.filter(s => s.country === p.country); if (p.role === "rsom") return S.filter(s => s.region === p.region); return S; }
+const wide = () => PROF && (PROF.role === "dir" || PROF.role === "psoc");
+function inScope(code, city, country){ if (wide()) return true; const S = scopeSites(); return S.some(s => s.code === code || (city && s.city === city) || (!code && !city && country && s.country === country)); }
+function scopeLabel(){ const p = PROF || {}; return p.role === "guard" || p.role === "ssm" ? (p.site || "") + (site(p.site) ? " · " + site(p.site).city : "") : p.role === "dsom" ? p.country : p.role === "rsom" ? p.region : "All of APAC"; }
+/* ---------- what needs me now ---------- */
+const ACKS = () => ls("psoc.lite.ack.v1", {});
+const KIND = { task: ["Tasking", "var(--red)"], action: ["Action", "var(--amber)"], ask: ["Decision needed", "var(--blue)"], inc: ["Incident", "var(--red)"], warn: ["Warning", "var(--amber)"], impact: ["Impact", "var(--amber)"], dmg: ["Satellite damage", "var(--red)"], cam: ["Camera", "var(--violet)"], posture: ["Site posture", "var(--blue)"] };
+const LV = ["Watch", "Moderate", "High", "Severe"];
+function nowItems(){ const out = [], me = ME ? ME.name : "", role = PROF ? PROF.role : "", now = Date.now(), add = o => out.push(o);
+  live("patrolrel").filter(r => r.status === "open" && (r.officers || []).includes(me)).forEach(r => { const acked = live("patrolfb").some(f => f.relId === r.id && f.kind === "ack" && f.officer === me);
+    add({ key: "task:" + r.id, k: "task", hot: !acked, t: r.title || "Tasking from the PSOC", s: (r.msg || "") + " · " + ago(r.createdAt), at: r.createdAt, open: () => taskSheet(r.id), done: acked }); });
+  if (role !== "guard") live("actions").filter(a => a.status === "pending" && (role === "psoc" || wide() || inScope(a.site, a.city))).forEach(a => add({ key: "act:" + a.id, k: "action", hot: a.pri === "P1" || a.pri === "P2", pri: a.pri, t: a.title, s: [a.source, a.site, ago(a.createdAt)].filter(Boolean).join(" · "), at: a.createdAt, open: () => actionSheet(a.id), done: !!a.claimedBy && a.claimedBy === me }));
+  if (role !== "guard") opdOpen().forEach(({ r, a }) => add({ key: "ask:" + r.id + ":" + a.id, k: "ask", hot: true, t: a.text, s: r.title + (r.country ? " · " + r.country : ""), at: r.lastAt || r.createdAt, open: () => go("decide") }));
+  live("incidents").filter(x => x.status !== "resolved" && x.site && inScope(x.site)).forEach(x => add({ key: "inc:" + x.id, k: "inc", hot: /^[12]$/.test(String(x.sev)), t: (x.id ? x.id + " " : "") + (x.title || "Incident"), s: `SEV ${x.sev || "?"} · ${x.status || "open"} · ${ago(x.createdAt)}`, at: x.lastAt || x.createdAt, open: () => incSheet(x.id) }));
+  const d = digest(); if (d){ (d.warn || []).filter(w => (!w.end || w.end > now) && (wide() ? /extreme|severe/i.test(w.sev || "") : (w.cities || []).some(c => scopeSites().some(s => s.city === c)))).slice(0, 12).forEach(w => add({ key: "warn:" + (w.id || w.t), k: "warn", hot: /extreme/i.test(w.sev || ""), t: w.t, s: [w.area, w.src, w.end ? "until " + fmt(w.end) : ""].filter(Boolean).join(" · "), at: w.at || d.at }));
+    (d.impact || []).filter(x => x.level >= (wide() ? 3 : role === "dsom" || role === "rsom" ? 2 : 1) && inScope(x.code)).slice(0, 15).forEach(x => add({ key: "imp:" + x.code + ":" + x.level + ":" + x.why, k: "impact", hot: x.level >= 3, t: `${LV[x.level]} impact at ${x.code}`, s: x.why, at: d.at })); }
+  live("hsimpact").forEach(S => (S.sites || []).filter(x => x.level >= (wide() ? 2 : 1) && inScope(x.code)).forEach(x => add({ key: "dmg:" + S.id + ":" + x.code + ":" + x.d1, k: "dmg", hot: x.level >= 2, t: `${LV[x.level]} damage around ${x.code}`, s: `${x.d1} buildings damaged within ${S.km || 1} km · ${S.event || S.name}`, at: S.at, open: () => damageSheet(S.id) })));
+  if (role === "guard" || role === "ssm" || role === "psoc") live("cvalerts").filter(a => a.status === "new" && !a.test && !a.practice && inScope(a.site)).slice(0, 8).forEach(a => add({ key: "cam:" + a.id, k: "cam", hot: true, t: (a.title || a.type || "Camera alarm") + (a.camName ? " · " + a.camName : ""), s: [a.site, a.detail, ago(a.createdAt)].filter(Boolean).join(" · "), at: a.createdAt, img: a.snap }));
+  if (role === "guard" || role === "ssm") live("opdec").filter(r => r.status !== "closed" && scopeSites().some(s => s.country === r.country)).forEach(r => { const mine = (r.posture || []).filter(p => !(p.sites || []).length || (p.sites || []).some(c => inScope(c))); if (mine.length) add({ key: "pos:" + r.id + ":" + (r.lastAt || 0), k: "posture", t: r.title, s: mine.map(p => `${p.area}: ${p.text || p.state}`).join(" · "), at: r.lastAt || r.createdAt }); });
+  const A = ACKS(); out.forEach(o => { o.seen = !!A[o.key] || o.done; });
+  return out.sort((a, b) => (a.seen - b.seen) || (b.hot - a.hot) || (b.at || 0) - (a.at || 0)); }
+function opdOpen(){ const me = ME ? ME.name : ""; return live("opdec").filter(r => r.status !== "closed" && (wide() || scopeSites().some(s => s.country === r.country))).flatMap(r => (r.asks || []).filter(a => !(a.answers || []).some(x => x.final) && !(a.answers || []).some(x => x.by === me)).map(a => ({ r, a }))); }
+/* ---------- screens ---------- */
+let TAB = "now", SEG = ls("psoc.lite.seg.v1", {}) || {};
+const IC = { now: '<path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6z"/><path d="M10 19a2 2 0 0 0 4 0"/>', report: '<path d="M12 5v14M5 12h14"/>', shift: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>', decide: '<path d="M9 11l3 3 7-7"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>', read: '<path d="M4 5h6a3 3 0 0 1 3 3v11a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a3 3 0 0 0-3 3v11a2 2 0 0 1 2-2h7z"/>' };
+const tabsFor = () => PROF && PROF.role === "guard" ? ["now", "shift", "report", "read"] : ["now", "decide", "report", "shift", "read"];
+const LABEL = { now: "Now", report: "Report", shift: "Shift", decide: "Decide", read: "Read" };
+function go(t){ TAB = t; render(); window.scrollTo(0, 0); try{ history.replaceState(null, "", "#" + t); }catch(e){} }
+function status(){ const base = server(), el = $("#top .sync"); if (!el) return; const n = OUT.length, c = !base ? "var(--muted)" : !navigator.onLine || SYNC.ok === false ? "var(--amber)" : "var(--green)";
+  el.style.setProperty("--c", c); $("span", el).textContent = !base ? "This phone only" : !navigator.onLine ? `Offline${n ? " · " + n + " to send" : ""}` : SYNC.ok === false ? `Not synced${n ? " · " + n + " to send" : ""}` : n ? `Sending ${n}…` : SYNC.at ? "Synced " + ago(SYNC.at) : "Syncing…"; }
+let EDITING = false;
+function render(){ if (!ME || !PROF || !PROF.role || EDITING){ if (!$("#suName")) setup(); return; } if (!tabsFor().includes(TAB)) TAB = "now";
+  $("#top").innerHTML = `<div class="brand">TTE</div><div class="scope"><b>${esc(ROLES[PROF.role][0])}</b><small>${esc(scopeLabel())}</small></div><button class="sync" data-go="settings"><i></i><span></span></button><button class="me" data-go="settings" aria-label="Settings">${esc((ME.name || "?").trim()[0].toUpperCase())}</button>`; status();
+  const items = nowItems(), badge = { now: items.filter(i => !i.seen).length, decide: opdOpen().length };
+  $("#tabs").innerHTML = tabsFor().map(t => t === "report" ? `<button class="rep" data-tab="report"${TAB === t ? ' aria-current="page"' : ""}><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true">${IC.report}</svg></span><span class="lb">Report</span></button>`
+    : `<button data-tab="${t}"${TAB === t ? ' aria-current="page"' : ""}><svg viewBox="0 0 24 24" aria-hidden="true">${IC[t]}</svg><span>${LABEL[t]}</span>${badge[t] ? `<i class="bd">${badge[t] > 99 ? "99+" : badge[t]}</i>` : ""}</button>`).join("");
+  const v = $("#view"), keep = document.activeElement && v.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (keep && TAB === "report") return;
+  v.innerHTML = { now: viewNow, report: viewReport, shift: viewShift, decide: viewDecide, read: viewRead }[TAB](items); }
+const offlineNote = () => !server() ? `<div class="offline"><b>Not connected to the PSOC.</b> What you do is kept on this phone. Add the PSOC server address in <button class="btn ghost" data-go="settings" style="min-height:30px;padding:0 8px">Settings</button> to send it and see the team's alerts.</div>` : "";
+function card(i){ const [lab, col] = KIND[i.k]; return `<div class="card${i.hot && !i.seen ? " hot" : ""}${i.seen ? " seen" : ""}" style="--c:${col}"${i.open ? ` data-open="${esc(i.key)}" role="button" tabindex="0"` : ""}><div class="row"><span class="chip" style="--c:${col}">${lab}${i.pri ? " · " + esc(i.pri) : ""}</span><span class="sp"></span><span class="s">${esc(i.at ? ago(i.at) : "")}</span></div>
+  <div class="t">${esc(i.t)}</div><div class="s">${esc(trunc(i.s, 220))}</div>${i.img ? `<img class="photo" src="${esc(i.img)}" alt="Camera snapshot">` : ""}
+  <div class="btns">${i.open ? `<button class="btn${i.hot && !i.seen ? " pri" : ""}" data-open="${esc(i.key)}">${i.k === "action" ? "Decide" : i.k === "task" ? "Open tasking" : i.k === "ask" ? "Answer" : "Details"}</button>` : ""}${!i.seen ? `<button class="btn ghost" data-ack="${esc(i.key)}">Seen</button>` : ""}</div></div>`; }
+let NOWI = [];
+function viewNow(items){ NOWI = items; const fresh = items.filter(i => !i.seen), old = items.filter(i => i.seen);
+  return offlineNote() + `<h1>${fresh.length ? fresh.length + " need" + (fresh.length === 1 ? "s" : "") + " you" : "All clear"}</h1>` + (fresh.length ? fresh.map(card).join("") : `<div class="card ok"><div class="empty"><b>Nothing needs you right now.</b>${esc(scopeLabel())} has no new taskings, actions, warnings or incidents.${digest() ? ` <br>Console picture from ${esc(ago(digest().at))}.` : ""}</div></div>`)
+    + (old.length ? `<h2>Seen</h2>` + old.slice(0, 25).map(card).join("") : "") + `<div class="btns"><button class="btn big red" data-tab="report">Report something to the PSOC</button></div>`; }
+/* ---- report ---- */
+const THREATS = ["Suspicious person", "Suspicious vehicle", "Unattended item", "Crowd / protest", "Damage / forced entry", "Fire or smoke", "Injury / medical", "Other"];
+const URG = [["life", "Life-threatening", "1", "var(--red)"], ["serious", "Serious — needs urgent action", "2", "var(--amber)"], ["suspicious", "Suspicious — check it", "3", "var(--blue)"]];
+let REP = { urg: "suspicious", threat: "", site: "", desc: "", photo: "", geo: true };
+function repSites(){ const S = scopeSites(); return (S.length ? S : sites()).slice().sort((a, b) => a.code.localeCompare(b.code)); }
+function viewReport(){ if (!REP.site) REP.site = (PROF.site && site(PROF.site)) ? PROF.site : (repSites()[0] || {}).code || ""; const hot = cfgHotline();
+  return `<h1>Report to the PSOC</h1><p class="s">If anyone is in danger, call local emergency services first.</p>
+    <label class="f">How urgent?</label><div class="choices one">${URG.map(([k, l, , c]) => `<button class="choice" style="--c:${c}" data-urg="${k}" aria-pressed="${REP.urg === k}">${l}</button>`).join("")}</div>
+    <label class="f">What is it?</label><div class="choices">${THREATS.map(t => `<button class="choice" data-thr="${esc(t)}" aria-pressed="${REP.threat === t}">${esc(t)}</button>`).join("")}</div>
+    <label class="f" for="rpSite">Where</label><select class="i" id="rpSite">${repSites().map(s => `<option value="${esc(s.code)}"${REP.site === s.code ? " selected" : ""}>${esc(s.code)} · ${esc(s.city || "")}</option>`).join("")}</select>
+    <label class="f" for="rpDesc">What you see</label><textarea class="i" id="rpDesc" placeholder="Exactly where, how many people or vehicles, which way they went">${esc(REP.desc)}</textarea>
+    <label class="f" for="rpPhoto">Photo (optional)</label><input class="i" id="rpPhoto" type="file" accept="image/*" capture="environment">${REP.photo ? `<img class="photo" src="${REP.photo}" alt="Photo to send">` : ""}
+    <label class="row" style="margin-top:12px"><input type="checkbox" id="rpGeo"${REP.geo ? " checked" : ""} style="width:22px;height:22px"> <span>Send my location</span></label>
+    <div class="btns"><button class="btn big red" data-send>Send to the PSOC</button></div>
+    <div class="btns">${hot ? `<a class="btn" href="tel:${esc(hot.replace(/[^\d+]/g, ""))}">Call the PSOC</a>` : ""}<button class="btn" data-callme>Ask the PSOC to call me</button></div>
+    <p class="note">Life-threatening and serious reports alert the PSOC at once and open an incident.</p>`; }
+const cfgHotline = () => CFG().hotline || (digest() || {}).hotline || "";
+async function photoData(f){ if (!f) return ""; const url = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); }); const img = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = url; }); if (!img) return "";
+  const s = Math.min(1, 1000 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", .72); }
+const myLocation = () => new Promise(ok => { if (!navigator.geolocation) return ok(null); navigator.geolocation.getCurrentPosition(p => ok({ lat: +p.coords.latitude.toFixed(6), lon: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }), () => ok(null), { timeout: 8000, maximumAge: 60000, enableHighAccuracy: true }); });
+async function sendReport(btn){ if (!REP.threat){ toast("Choose what it is"); return; } if (!REP.site){ toast("Choose where"); return; } btn.disabled = true; btn.textContent = "Sending…";
+  const u = URG.find(x => x[0] === REP.urg), geo = REP.geo ? await myLocation() : null;
+  put("patrolfb", { id: nid("pf"), at: Date.now(), kind: "flag", officer: ME.name, urgency: REP.urg, sev: u[2], threat: REP.threat, site: REP.site, desc: REP.desc.trim(), photo: REP.photo, geo, via: "phone" });
+  REP = { urg: "suspicious", threat: "", site: REP.site, desc: "", photo: "", geo: REP.geo };
+  sheet(`<h1>${server() ? (navigator.onLine ? "Sent to the PSOC" : "Saved — it will send when you are back online") : "Saved on this phone"}</h1><p>${server() ? "The PSOC sees it now and will contact you. Stay safe." : "This phone is not connected to the PSOC, so it was not sent. Call the PSOC, or add the server address in Settings."}</p>
+    <div class="btns">${cfgHotline() ? `<a class="btn pri" href="tel:${esc(cfgHotline().replace(/[^\d+]/g, ""))}">Call the PSOC</a>` : ""}<button class="btn" data-close>Done</button></div>`); render(); }
+/* ---- shift and patrol ---- */
+const SH = { D: ["Day", 7], N: ["Night", 19] };
+function tzOff(tz, t){ try{ const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(t).map(x => [x.type, x.value])); return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - t) / 60e3; }catch(e){ return 480; } }
+function shiftTimes(x){ const tz = (site(x.site) || {}).tz || "Asia/Singapore", [y, m, d] = String(x.day).split("-").map(Number), g = Date.UTC(y, m - 1, d, (SH[x.k] || SH.D)[1]), t0 = g - tzOff(tz, g) * 60e3; return [t0, t0 + 12 * 3600e3, tz]; }
+const myGuard = () => { const nm = ME ? String(ME.name).toLowerCase() : ""; return live("guards").filter(g => g.active !== false).find(g => (g.user && g.user.toLowerCase() === nm) || String(g.name).toLowerCase() === nm) || null; };
+function viewShift(){ const g = myGuard(), now = Date.now(), me = ME.name, tasks = live("patrolrel").filter(r => r.status === "open" && (r.officers || []).includes(me)); let h = offlineNote() + `<h1>${PROF.role === "guard" ? "My shift" : "Shift & team"}</h1>`;
+  if (g){ const mine = live("shifts").filter(x => x.guard === g.id && x.st !== "released").map(x => Object.assign({ T: shiftTimes(x) }, x)).sort((a, b) => a.T[0] - b.T[0]);
+    const cur = mine.find(x => x.st === "in") || mine.find(x => x.T[0] - 3600e3 <= now && now < x.T[1] && x.st !== "out"), next = mine.find(x => x.T[0] > now && x !== cur);
+    if (cur){ const late = cur.st !== "in" && now > cur.T[0] + 15 * 60e3, c = cur.st === "in" ? "var(--green)" : late ? "var(--red)" : "var(--blue)";
+      h += `<div class="card shift" style="--c:${c}"><span class="chip" style="--c:${c}">${cur.st === "in" ? "On duty" : late ? "Late — clock in" : "Starting soon"}</span><div class="big2" style="margin-top:6px">${esc(cur.post || "Post")} · ${esc(cur.site)}</div><div class="s">${esc((SH[cur.k] || SH.D)[0])} shift · ${esc(hm(cur.T[0], cur.T[2]))}–${esc(hm(cur.T[1], cur.T[2]))}${cur.inAt ? " · clocked in " + esc(hm(cur.inAt, cur.T[2])) : ""}</div>
+        <div class="btns">${cur.st === "in" ? `<button class="btn big" data-clock="out" data-id="${esc(cur.id)}">Clock out</button>` : `<button class="btn big pri" data-clock="in" data-id="${esc(cur.id)}">Clock in</button>`}</div></div>`; }
+    else h += `<div class="card shift" style="--c:var(--muted)"><span class="chip" style="--c:var(--muted)">Off duty</span><div class="big2" style="margin-top:6px">${next ? "Next: " + esc(next.post || "Post") + " · " + esc(next.site) : "No shift booked"}</div><div class="s">${next ? esc(fmt(next.T[0], next.T[2])) : "Your manager books shifts in the console."}</div>${next && next.st === "planned" ? `<div class="btns"><button class="btn pri" data-confirm="${esc(next.id)}">Confirm I'll be there</button></div>` : ""}</div>`;
+    const up = mine.filter(x => x.T[1] > now && x !== cur).slice(0, 6); if (up.length) h += `<h2>Coming up</h2>` + up.map(x => `<div class="card"><div class="row"><b>${esc(x.post || "Post")} · ${esc(x.site)}</b><span class="sp"></span><span class="chip" style="--c:${x.st === "confirmed" ? "var(--green)" : "var(--muted)"}">${esc(x.st)}</span></div><div class="s">${esc(fmt(x.T[0], x.T[2]))} · ${esc((SH[x.k] || SH.D)[0])}</div>${x.st === "planned" ? `<div class="btns"><button class="btn" data-confirm="${esc(x.id)}">Confirm</button></div>` : ""}</div>`).join(""); }
+  else if (PROF.role === "guard") h += `<div class="card"><b>You're not on a roster yet.</b><p class="s">Register at ${esc(PROF.site || "your site")} so your manager can book your shifts and you can clock in here.</p><div class="btns"><button class="btn pri" data-register>Register me at ${esc(PROF.site || "my site")}</button></div></div>`;
+  h += `<h2>My taskings</h2>` + (tasks.length ? tasks.map(r => { const acked = live("patrolfb").some(f => f.relId === r.id && f.kind === "ack" && f.officer === me); return `<div class="card${acked ? "" : " hot"}" data-task="${esc(r.id)}" role="button" tabindex="0"><div class="row"><span class="chip" style="--c:var(--red)">SEV ${esc(r.sev || "?")}</span><span class="sp"></span><span class="s">${esc(ago(r.createdAt))}</span></div><div class="t">${esc(r.title)}</div><div class="s">${esc(r.site || "")}${acked ? " · acknowledged" : " · not acknowledged"}</div></div>`; }).join("") : `<div class="card"><p class="s" style="margin:0">No taskings from the PSOC.</p></div>`);
+  const S = scopeSites(), desk = PROF.role === "guard" || PROF.role === "ssm";
+  if (desk && S[0]){ const code = S[0].code, dayEnd = now + 86400e3, vis = live("vgvisit").filter(v => v.site === code && v.status !== "out" && (v.inAt || 0) < dayEnd), keys = live("vgkeys").filter(k => k.site === code && !k.back);
+    h += `<h2>Site desk · ${esc(code)}</h2>` + (vis.length ? vis.map(v => `<div class="card"><div class="row"><b>${esc(v.name)}</b><span class="sp"></span><span class="chip" style="--c:${v.status === "in" ? "var(--green)" : "var(--blue)"}">${v.status === "in" ? "On site" : "Expected"}</span></div><div class="s">${esc(v.company || v.type || "")}${v.host ? " · for " + esc(v.host) : ""}${v.inAt ? " · " + esc(fmt(v.inAt)) : ""}</div><div class="btns">${v.status === "in" ? `<button class="btn" data-vout="${esc(v.id)}">Checked out</button>` : `<button class="btn pri" data-vin="${esc(v.id)}">Arrived</button>`}</div></div>`).join("") : `<div class="card"><p class="s" style="margin:0">No visitors expected today.</p></div>`)
+      + (keys.length ? keys.map(k => `<div class="card"><div class="row"><b>Key: ${esc(k.key)}</b><span class="sp"></span>${k.due && now > k.due ? `<span class="chip" style="--c:var(--amber)">Overdue</span>` : ""}</div><div class="s">With ${esc(k.holder)}${k.company ? " · " + esc(k.company) : ""}</div><div class="btns"><button class="btn" data-kback="${esc(k.id)}">Returned</button></div></div>`).join("") : ""); }
+  if (PROF.role !== "guard"){ const codes = new Set(S.map(s => s.code)), today = live("shifts").filter(x => codes.has(x.site)).map(x => Object.assign({ T: shiftTimes(x) }, x)).filter(x => x.T[0] <= now && now < x.T[1]);
+    const by = {}; today.forEach(x => { const o = by[x.site] = by[x.site] || { on: 0, plan: 0, late: 0 }; o.plan++; if (x.st === "in") o.on++; else if (now > x.T[0] + 15 * 60e3) o.late++; });
+    const rows = Object.entries(by).sort((a, b) => (b[1].late - a[1].late) || (a[1].on / a[1].plan - b[1].on / b[1].plan)).slice(0, 12);
+    h += `<h2>On post now</h2>` + (rows.length ? rows.map(([c, o]) => `<div class="card"><div class="row"><b>${esc(c)}</b><span class="s">${esc((site(c) || {}).city || "")}</span><span class="sp"></span><b style="color:${o.late ? "var(--red)" : "var(--green)"}">${o.on}/${o.plan}</b></div>${o.late ? `<div class="s" style="color:var(--red)">${o.late} late to clock in</div>` : ""}<div class="bar" style="--c:${o.late ? "var(--red)" : "var(--green)"}"><i style="width:${Math.round(o.on / Math.max(1, o.plan) * 100)}%"></i></div></div>`).join("") : `<div class="card"><p class="s" style="margin:0">No rosters recorded for this shift in ${esc(scopeLabel())}.</p></div>`); }
+  return h; }
+function taskSheet(id){ const r = live("patrolrel").find(x => x.id === id); if (!r) return; const me = ME.name, fb = live("patrolfb").filter(f => f.relId === id && f.officer === me), acked = fb.some(f => f.kind === "ack"), s = site(r.site), lat = r.lat != null ? r.lat : s && s.lat, lon = r.lon != null ? r.lon : s && s.lon;
+  sheet(`<div class="row"><span class="chip" style="--c:var(--red)">SEV ${esc(r.sev || "?")}</span><span class="sp"></span><span class="s">${esc(fmt(r.createdAt))}</span></div><h1 style="margin-top:8px">${esc(r.title)}</h1><p>${esc(r.msg || "")}</p><p class="s">Released by ${esc(r.by || "the PSOC")}</p>
+    ${acked ? `<div class="chip" style="--c:var(--green)">Acknowledged</div>` : `<button class="btn big pri" data-tack="${esc(id)}">Acknowledge — I'm responding</button>`}
+    ${lat != null ? `<div class="btns"><a class="btn" href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}" target="_blank" rel="noopener">Open the location in maps</a></div>` : ""}
+    <h2>Instructions</h2>${(r.steps || []).map((st, i) => { const d = fb.filter(x => x.kind === "step" && x.step === i).sort((a, b) => b.at - a.at)[0]; return `<label class="step"><input type="checkbox" data-tstep="${esc(id)}:${i}"${d && d.done ? " checked" : ""}><span>${esc(st)}${d && d.done ? ` <span class="s">· ${esc(hm(d.at))}</span>` : ""}</span></label>`; }).join("") || `<p class="s">No steps given.</p>`}
+    <h2>Report back</h2><select class="i" id="tbT">${["No threat seen"].concat(THREATS).map(t => `<option>${esc(t)}</option>`).join("")}</select><textarea class="i" id="tbD" style="margin-top:8px" placeholder="What you see, where exactly, how many"></textarea><input class="i" id="tbP" type="file" accept="image/*" capture="environment" style="margin-top:8px">
+    <div class="btns"><button class="btn pri" data-tsend="${esc(id)}">Send to the PSOC</button><button class="btn" data-callme="${esc(id)}">Ask the PSOC to call</button></div>
+    ${fb.filter(f => f.kind === "feedback").map(f => `<div class="card"><b>${esc(f.threat)}</b> <span class="s">${esc(ago(f.at))}</span><div>${esc(f.desc || "")}</div></div>`).join("")}<div class="btns"><button class="btn ghost" data-close>Close</button></div>`); }
+/* ---- decide ---- */
+function viewDecide(){ const asks = opdOpen(), me = ME.name, inForce = live("opdec").filter(r => r.status !== "closed" && (wide() || scopeSites().some(s => s.country === r.country)));
+  const acts = live("actions").filter(a => a.status === "pending" && (wide() || inScope(a.site, a.city)));
+  return offlineNote() + `<h1>Decisions</h1>` + (asks.length ? asks.map(({ r, a }) => { const opts = (a.opts && a.opts.length ? a.opts : ["Approve", "Hold", "Discuss"]);
+      return `<div class="card hot"><span class="chip" style="--c:var(--blue)">Your decision</span><div class="t">${esc(a.text)}</div><div class="s">${esc(r.title)}${r.country ? " · " + esc(r.country) : ""} · from ${esc(r.by || "the PSOC")}</div>${r.summary ? `<p style="margin:8px 0 0">${esc(trunc(r.summary, 400))}</p>` : ""}
+        <div class="btns">${opts.map(o => `<button class="btn${/approve|yes|proceed/i.test(o) ? " pri" : ""}" data-ans="${esc(r.id)}|${esc(a.id)}|${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`; }).join("") : `<div class="card ok"><div class="empty"><b>No decisions waiting for you.</b></div></div>`)
+    + (acts.length ? `<h2>Action queue · ${acts.length} waiting</h2>` + acts.sort((a, b) => String(a.pri).localeCompare(String(b.pri)) || b.createdAt - a.createdAt).slice(0, 20).map(a => `<div class="card${a.pri === "P1" ? " hot" : ""}" data-act="${esc(a.id)}" role="button" tabindex="0"><div class="row"><span class="chip" style="--c:${a.pri === "P1" ? "var(--red)" : a.pri === "P2" ? "var(--amber)" : "var(--muted)"}">${esc(a.pri || "")}</span><span class="s">${esc(a.source || "")}</span><span class="sp"></span><span class="s">${esc(ago(a.createdAt))}</span></div><div class="t">${esc(a.title)}</div>${a.claimedBy ? `<div class="s">${esc(a.claimedBy)} is on it</div>` : ""}</div>`).join("") : "")
+    + (inForce.length ? `<h2>In force</h2>` + inForce.slice(0, 12).map(r => { const done = (r.asks || []).filter(a => (a.answers || []).some(x => x.final)), mine = (r.asks || []).flatMap(a => (a.answers || []).filter(x => x.by === me).map(x => a.text + ": " + x.choice));
+        return `<div class="card"><div class="t">${esc(r.title)}</div><div class="s">${esc(r.country || "")} · updated ${esc(ago(r.lastAt || r.createdAt))}</div>${(r.posture || []).slice(0, 4).map(p => `<div class="s">• ${esc(p.area)}: ${esc(p.text || p.state)}</div>`).join("")}${mine.length ? `<div class="s" style="color:var(--teal)">You answered: ${esc(mine.join("; "))}</div>` : ""}${done.length ? `<div class="s">${done.length} decided</div>` : ""}</div>`; }).join("") : ""); }
+const DEC = [["monitor", "Monitor"], ["notify", "Notify site security"], ["check", "Request a site check"], ["dispatch", "Dispatch a patrol"], ["intel", "Hand to an analyst"], ["dismiss", "No action required"]];
+function actionSheet(id){ const a = live("actions").find(x => x.id === id); if (!a) return; const me = ME.name;
+  sheet(`<div class="row"><span class="chip" style="--c:${a.pri === "P1" ? "var(--red)" : "var(--amber)"}">${esc(a.pri || "")}</span><span class="s">${esc(a.source || "")}</span><span class="sp"></span><span class="s">${esc(fmt(a.createdAt))}</span></div><h1 style="margin-top:8px">${esc(a.title)}</h1>
+    <dl class="kv">${a.site ? `<dt>Site</dt><dd>${esc(a.site)}${site(a.site) ? " · " + esc(site(a.site).city) : ""}</dd>` : ""}${a.city ? `<dt>City</dt><dd>${esc(a.city)}</dd>` : ""}${a.claimedBy ? `<dt>On it</dt><dd>${esc(a.claimedBy)}</dd>` : ""}</dl><p>${esc(trunc(a.detail || "", 900))}</p>
+    ${a.claimedBy !== me ? `<button class="btn big" data-claim="${esc(id)}">I'm on it</button>` : ""}
+    <h2>Decide</h2><div class="choices">${DEC.map(([k, l]) => `<button class="choice" data-dec="${k}"${(a.suggested || []).includes(k) ? ' style="--c:var(--teal)" aria-pressed="false"' : ""}>${esc(l)}${(a.suggested || []).includes(k) ? "<small>suggested</small>" : ""}</button>`).join("")}</div>
+    <textarea class="i" id="decNote" style="margin-top:10px" placeholder="Note (optional)"></textarea>
+    <div class="btns"><button class="btn pri" data-decgo="${esc(id)}" disabled>Record decision</button><button class="btn red" data-escreq="${esc(id)}">Ask the PSOC to escalate</button></div><div class="btns"><button class="btn ghost" data-close>Close</button></div>`); }
+/* ---- read ---- */
+function viewRead(){ const seg = SEG.read || "briefs", arts = live("articles").sort((a, b) => b.updatedAt - a.updatedAt), dm = live("hsimpact").sort((a, b) => b.at - a.at), d = digest(), st = d && d.stories || [];
+  let h = `<h1>Read</h1><div class="seg" role="tablist">${[["briefs", "Briefs", arts.length], ["damage", "Damage", dm.length], ["stories", "Stories", st.length]].map(([k, l, n]) => `<button data-seg="${k}" aria-pressed="${seg === k}">${l}${n ? " " + n : ""}</button>`).join("")}</div>`;
+  if (seg === "briefs") h += arts.length ? arts.slice(0, 40).map(a => `<div class="card" data-art="${esc(a.id)}" role="button" tabindex="0"><div class="row"><span class="chip" style="--c:var(--teal)">${esc({ brief: "Brief", sitrep: "Sitrep", news: "Article", blog: "Post", exec: "Summary", digest: "Digest" }[a.type] || "Brief")}</span><span class="sp"></span><span class="s">${esc(ago(a.updatedAt))}</span></div><div class="t">${esc(artHead(a))}</div><div class="s">${esc(a.by || "")} · ${(a.src || []).length} sources</div></div>`).join("") : `<div class="card"><div class="empty"><b>No briefs yet.</b>Briefs and articles written in the console's Articles page appear here.</div></div>`;
+  if (seg === "damage") h += dm.length ? dm.map(S => { const w = (S.sites || []).filter(x => x.level >= 1 && inScope(x.code)); return `<div class="card${w.some(x => x.level >= 2) ? " hot" : ""}" data-dmg="${esc(S.id)}" role="button" tabindex="0"><div class="row"><span class="chip" style="--c:var(--red)">${esc(S.event || "Satellite damage")}</span><span class="sp"></span><span class="s">${esc(ago(S.at))}</span></div><div class="t">${esc(S.name)}</div><div class="s">${(S.d || 0).toLocaleString()} of ${(S.n || 0).toLocaleString()} buildings damaged · ${w.length} of your sites affected</div></div>`; }).join("") : `<div class="card"><div class="empty"><b>No damage assessments.</b>Satellite damage assessments from HASTE appear here.</div></div>`;
+  if (seg === "stories") h += st.length ? st.map(x => `<div class="card"><div class="row"><span class="chip" style="--c:var(--teal)">${esc(x.topic || "Story")}</span>${x.place ? `<span class="s">${esc(x.place)}</span>` : ""}<span class="sp"></span><span class="s">${esc(ago(x.at))}</span></div><div class="t">${esc(x.t)}</div><div class="s">${x.n} report${x.n === 1 ? "" : "s"} · ${esc((x.sources || []).join(", "))}</div>${x.url ? `<div class="btns"><a class="btn ghost" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">Read the source</a></div>` : ""}</div>`).join("") : `<div class="card"><div class="empty"><b>No stories yet.</b>The developing stories from the team's feeds appear here when the console is running.</div></div>`;
+  return h; }
+const MARK = /\[(\d{1,3}(?:\s*[,–-]\s*\d{1,3})*)\](?!\()/g;
+const artHead = a => (/^#\s+(.+)$/m.exec(a.text || "") || [, a.title || "Brief"])[1].replace(MARK, "").trim();
+function artHtml(a){ const src = a.src || [], pub = s => s.pub || s.source || (() => { try{ return new URL(s.url).hostname.replace(/^www\./, ""); }catch(e){ return s.feed || ""; } })();
+  const inl = t => esc(t).replace(MARK, (m, g) => { const ns = g.split(/\s*,\s*/).flatMap(p => { const r = /^(\d+)\s*[–-]\s*(\d+)$/.exec(p); return r ? Array.from({ length: Math.min(30, +r[2] - +r[1] + 1) }, (_, i) => +r[1] + i) : [+p]; }).filter(k => src[k - 1]); return ns.length ? `<sup>${ns.map(k => `<a href="#ref${k}">${k}</a>`).join(",")}</sup>` : ""; }).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  let html = "", list = false; String(a.text || "").split("\n").forEach(l => { const m = /^(#{1,3})\s+(.*)$/.exec(l), b = /^\s*[-*]\s+(.*)$/.exec(l); if (!b && list){ html += "</ul>"; list = false; }
+    if (m) html += `<h${m[1].length === 1 ? 1 : 2}>${inl(m[2])}</h${m[1].length === 1 ? 1 : 2}>`; else if (b){ if (!list){ html += "<ul>"; list = true; } html += `<li>${inl(b[1])}</li>`; } else if (l.trim()) html += `<p>${inl(l)}</p>`; }); if (list) html += "</ul>";
+  return `<article class="art">${html}<ol class="refs">${src.map((s, i) => `<li id="ref${i + 1}">${esc(pub(s))}, “${esc(s.title)}”${s.t ? ", " + esc(new Date(s.t).toDateString().slice(4)) : ""}.${s.url ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Source</a>` : ""}</li>`).join("")}</ol></article>`; }
+function damageSheet(id){ const S = live("hsimpact").find(x => x.id === id); if (!S) return; const w = (S.sites || []).filter(x => x.level != null && inScope(x.code));
+  sheet(`<span class="chip" style="--c:var(--red)">${esc(S.event || "Satellite damage")}</span><h1 style="margin-top:8px">${esc(S.name)}</h1><p class="s">Imagery ${esc(fmt(S.at))} · ${(S.d || 0).toLocaleString()} of ${(S.n || 0).toLocaleString()} buildings damaged${S.est ? ` · estimate ${S.est.v}${S.est.lo != null ? ` (${S.est.lo}–${S.est.hi})` : ""}` : ""}</p>
+    <h2>Your sites</h2>${w.length ? w.map(x => `<div class="card"><div class="row"><b>${esc(x.code)}</b><span class="sp"></span><span class="chip" style="--c:${x.level >= 3 ? "var(--red)" : x.level >= 2 ? "var(--amber)" : "var(--blue)"}">${esc(LV[x.level])}</span></div><div class="s">${x.d1} of ${x.n1} buildings damaged within 1 km · ${x.d3} within 3 km${x.near != null ? ` · nearest ${x.near < 1000 ? x.near + " m" : (x.near / 1000).toFixed(1) + " km"}` : ""}</div></div>`).join("") : `<p class="s">None of your sites is in the assessed area.</p>`}
+    <p class="note">A satellite assessment is a guide for the first hours: confirm on the ground.</p><div class="btns"><button class="btn ghost" data-close>Close</button></div>`); }
+function incSheet(id){ const x = live("incidents").find(y => y.id === id); if (!x) return; const log = (x.discussion || []).slice(-4).reverse();
+  sheet(`<div class="row"><span class="chip" style="--c:var(--red)">SEV ${esc(x.sev || "?")}</span><span class="s">${esc(x.status || "")}</span><span class="sp"></span><span class="s">${esc(fmt(x.createdAt))}</span></div><h1 style="margin-top:8px">${esc(x.title || x.id)}</h1><p>${esc(trunc(x.summary || "", 800))}</p>
+    ${log.length ? `<h2>Latest</h2>${log.map(l => `<div class="card"><div class="s">${esc(l.by || "")} · ${esc(ago(l.t))}</div><div>${esc(trunc(l.text, 400))}</div></div>`).join("")}` : ""}<p class="note">Manage the incident in the console. To send something from the scene, use Report.</p><div class="btns"><button class="btn red" data-tab="report">Report from the scene</button><button class="btn ghost" data-close>Close</button></div>`); }
+/* ---------- setup and settings ---------- */
+function setup(){ $("#tabs").innerHTML = ""; $("#top").innerHTML = `<div class="brand">TTE</div><div class="scope"><b>Mobile</b><small>Security on the move</small></div>`; const S = sites(), name = (ME && ME.name) || ls("psoc.uni.alias.v1", "") || "", p = PROF || {}, R = allowedRoles();
+  const countries = [...new Set(S.map(s => s.country).filter(Boolean))].sort(), regions = [...new Set(S.map(s => s.region).filter(Boolean))].sort(), byCity = {}; S.forEach(s => (byCity[s.city || "Other"] = byCity[s.city || "Other"] || []).push(s));
+  $("#view").innerHTML = `<h1>Welcome</h1><p class="s">Set this phone up once. You can change it in Settings.</p>
+    <label class="f" for="suName">Your name</label><input class="i" id="suName" autocomplete="name" value="${esc(name)}" placeholder="As the PSOC knows you">
+    <label class="f">What do you do?</label><div class="choices one">${R.map(k => `<button class="choice" data-role="${k}" aria-pressed="${p.role === k}">${esc(ROLES[k][0])}<small>${esc(ROLES[k][1])}</small></button>`).join("")}</div>
+    <div id="suScope">${scopePicker(p.role, p, byCity, countries, regions)}</div>
+    <label class="f" for="suServer">PSOC server address <span class="s">(optional; from your PSOC)</span></label><input class="i" id="suServer" inputmode="url" value="${esc(CFG().server || server())}" placeholder="https://psoc.example.org">
+    <div class="btns"><button class="btn big pri" data-setup>${EDITING ? "Save" : "Start"}</button></div>${EDITING ? `<div class="btns"><button class="btn ghost" data-cancelsetup>Cancel</button></div>` : ""}<p class="note">Your name and choices stay on this phone and in the PSOC's own system.</p>`; }
+function scopePicker(role, p, byCity, countries, regions){ if (!role) return ""; if (role === "guard" || role === "ssm") return `<label class="f" for="suSite">Your site</label><select class="i" id="suSite">${Object.keys(byCity).sort().map(c => `<optgroup label="${esc(c)}">${byCity[c].map(s => `<option value="${esc(s.code)}"${p.site === s.code ? " selected" : ""}>${esc(s.code)}${s.office ? " (office)" : ""}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  if (role === "dsom") return `<label class="f" for="suCountry">Your country</label><select class="i" id="suCountry">${countries.map(c => `<option${p.country === c ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+  if (role === "rsom") return `<label class="f" for="suRegion">Your region</label><select class="i" id="suRegion">${regions.map(c => `<option${p.region === c ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>`; return ""; }
+function settings(){ const c = CFG(); sheet(`<h1>Settings</h1><dl class="kv"><dt>Name</dt><dd>${esc(ME.name)}</dd><dt>Role</dt><dd>${esc(ROLES[PROF.role][0])}</dd><dt>Scope</dt><dd>${esc(scopeLabel())}</dd><dt>Sync</dt><dd>${esc(server() ? (SYNC.at ? "last " + ago(SYNC.at) : "not yet") + (OUT.length ? ` · ${OUT.length} waiting to send` : "") : "this phone only")}</dd>${digest() ? `<dt>Console picture</dt><dd>${esc(ago(digest().at))}</dd>` : ""}</dl>
+    <label class="f" for="stServer">PSOC server address</label><input class="i" id="stServer" inputmode="url" value="${esc(c.server || server())}" placeholder="https://psoc.example.org">
+    <label class="f" for="stHot">PSOC phone number <span class="s">(if the PSOC hasn't set one)</span></label><input class="i" id="stHot" inputmode="tel" value="${esc(c.hotline)}" placeholder="${esc((digest() || {}).hotline ? "Set by the PSOC" : "+65 …")}">
+    <label class="row" style="margin-top:12px"><input type="checkbox" id="stNot"${c.notify ? " checked" : ""} style="width:22px;height:22px"> <span>Notify me of urgent items while the app is open</span></label>
+    <div class="btns"><button class="btn pri" data-savecfg>Save</button><button class="btn" data-syncnow>Sync now</button></div>
+    <div class="btns"><button class="btn" data-change>Change role or site</button><a class="btn" href="${location.pathname.includes("/app/") ? "../web.html" : "web.html"}">Open the full console</a></div>
+    <div class="btns"><button class="btn ghost" data-signout>Sign out</button><button class="btn ghost" data-close>Close</button></div><p class="note">Set-up, analysis, maps and the command screens are in the full console on a computer.</p>`); }
+/* ---------- sheets, toasts, notifications ---------- */
+function sheet(html){ const s = $("#sheet"); $("#sheetIn").innerHTML = `<div class="grab"></div>` + html; s.hidden = false; $("#sheetIn").scrollTop = 0; }
+function closeSheet(){ $("#sheet").hidden = true; $("#sheetIn").innerHTML = ""; }
+let toastT = 0; function toast(msg){ const t = $("#toast"); t.innerHTML = `<div>${esc(msg)}</div>`; clearTimeout(toastT); toastT = setTimeout(() => t.innerHTML = "", 3200); }
+function alertNew(){ if (!ME || !PROF) return; const seen = ls("psoc.lite.notified.v1", {}) || {}, fresh = nowItems().filter(i => i.hot && !i.seen && !seen[i.key]); if (!fresh.length) return; fresh.forEach(i => seen[i.key] = Date.now()); lss("psoc.lite.notified.v1", seen);
+  if (!CFG().notify || !("Notification" in window) || Notification.permission !== "granted") return; const i = fresh[0], body = fresh.length > 1 ? `${i.t} (+${fresh.length - 1} more)` : i.t;
+  try{ navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(r => r.showNotification("TTE · " + KIND[i.k][0], { body, tag: "tte-now", renotify: true })).catch(() => new Notification("TTE", { body })) : new Notification("TTE", { body }); }catch(e){} }
+/* ---------- actions ---------- */
+document.addEventListener("click", async e => { const b = e.target.closest("button,[data-open],[data-task],[data-act],[data-art],[data-dmg]"); if (!b) return; const d = b.dataset;
+  if (d.tab){ closeSheet(); go(d.tab); return; } if (d.go === "settings") return settings(); if (d.close != null){ closeSheet(); return; } if (e.target === $("#sheet")) return closeSheet();
+  if (d.role){ $$("[data-role]").forEach(x => x.setAttribute("aria-pressed", x === b)); const S = sites(), byCity = {}; S.forEach(s => (byCity[s.city || "Other"] = byCity[s.city || "Other"] || []).push(s)); $("#suScope").innerHTML = scopePicker(d.role, PROF || {}, byCity, [...new Set(S.map(s => s.country).filter(Boolean))].sort(), [...new Set(S.map(s => s.region).filter(Boolean))].sort()); return; }
+  if (d.setup != null){ const name = $("#suName").value.trim(), rb = $("[data-role][aria-pressed='true']"); if (!name){ toast("Enter your name"); return; } if (!rb){ toast("Choose what you do"); return; }
+    const role = rb.dataset.role, prof = { role, site: $("#suSite") ? $("#suSite").value : "", country: $("#suCountry") ? $("#suCountry").value : "", region: $("#suRegion") ? $("#suRegion").value : "" };
+    const sv = $("#suServer").value.trim(); if (sv){ const c = CFG(); c.server = /^https?:\/\//i.test(sv) ? sv : "https://" + sv; lss("psoc.lite.cfg.v1", c); }
+    const uid = "u:" + name.toLowerCase(), u = live("users").find(x => x.id === uid); ME = { name: u ? u.name : name, role: u ? u.role : role === "guard" ? "patrol" : role === "dir" ? "leader" : "officer", at: Date.now(), via: "phone" }; lss("psoc.uni.me.v1", ME); lss("psoc.uni.alias.v1", ME.name);
+    put("users", Object.assign(u || { id: uid, name, role: ME.role }, { lastSeen: Date.now() })); PROF = prof; lss("psoc.lite.prof.v1", PROF); EDITING = false; TAB = "now"; render(); pull(); return; }
+  if (d.change != null){ closeSheet(); EDITING = true; setup(); return; } if (d.cancelsetup != null){ EDITING = false; render(); return; }
+  if (d.signout != null){ if (!confirm("Sign out of TTE on this phone?")) return; localStorage.removeItem("psoc.uni.me.v1"); localStorage.removeItem("psoc.lite.prof.v1"); ME = null; PROF = null; closeSheet(); render(); return; }
+  if (d.savecfg != null){ const c = CFG(), sv = $("#stServer").value.trim(); c.server = sv && !/^https?:\/\//i.test(sv) ? "https://" + sv : sv; c.hotline = $("#stHot").value.trim(); c.notify = $("#stNot").checked; lss("psoc.lite.cfg.v1", c);
+    if (c.notify && "Notification" in window && Notification.permission === "default") try{ await Notification.requestPermission(); }catch(x){} closeSheet(); toast("Saved"); pull(); return; }
+  if (d.syncnow != null){ closeSheet(); toast("Syncing…"); await flush(); await pull(); return; }
+  if (d.ack){ const A = ACKS(); A[d.ack] = Date.now(); lss("psoc.lite.ack.v1", A); const i = NOWI.find(x => x.key === d.ack); if (i && i.k === "task") taskAck(i.key.slice(5)); render(); return; }
+  if (d.open){ const i = NOWI.find(x => x.key === d.open); if (i && i.open) i.open(); return; }
+  if (d.task){ taskSheet(d.task); return; } if (d.act){ actionSheet(d.act); return; } if (d.dmg){ damageSheet(d.dmg); return; }
+  if (d.art){ const a = live("articles").find(x => x.id === d.art); if (a) sheet(artHtml(a) + `<div class="btns"><button class="btn ghost" data-close>Close</button></div>`); return; }
+  if (d.seg){ SEG.read = d.seg; lss("psoc.lite.seg.v1", SEG); render(); return; }
+  // report
+  if (d.urg){ REP.urg = d.urg; $$("[data-urg]").forEach(x => x.setAttribute("aria-pressed", x === b)); return; } if (d.thr){ REP.threat = d.thr; $$("[data-thr]").forEach(x => x.setAttribute("aria-pressed", x === b)); return; }
+  if (d.send != null){ REP.desc = $("#rpDesc").value; REP.site = $("#rpSite").value; REP.geo = $("#rpGeo").checked; return sendReport(b); }
+  if (d.callme !== undefined){ const r = d.callme && live("patrolrel").find(x => x.id === d.callme); put("patrolfb", { id: nid("pf"), at: Date.now(), kind: "callreq", relId: r ? r.id : "", incId: r ? r.incId : "", site: r ? r.site : (PROF.site || REP.site || ""), officer: ME.name, threat: "", desc: "requests a call", via: "phone" }); toast(server() ? "The PSOC will call you back" : "Saved — not connected to the PSOC"); return; }
+  // shift
+  if (d.clock){ const x = live("shifts").find(y => y.id === d.id); if (!x) return; if (d.clock === "in"){ x.st = "in"; x.inAt = Date.now(); } else { x.st = "out"; x.outAt = Date.now(); } x.status = "open"; put("shifts", x); toast(d.clock === "in" ? "Clocked in" : "Clocked out"); render(); if (NATIVE.on) setTimeout(reminders, 300); return; }
+  if (d.confirm){ const x = live("shifts").find(y => y.id === d.confirm); if (x){ x.st = "confirmed"; x.status = "open"; put("shifts", x); toast("Confirmed"); render(); if (NATIVE.on) setTimeout(reminders, 300); } return; }
+  if (d.register != null){ put("guards", { id: "g-" + Date.now().toString(36), name: ME.name, role: "SO", site: PROF.site, employer: "", user: ME.name, active: true, status: "open" }); toast("Registered — your manager can now book your shifts"); render(); return; }
+  if (d.vin || d.vout){ const v = live("vgvisit").find(y => y.id === (d.vin || d.vout)); if (v){ if (d.vin){ v.status = "in"; v.arrived = Date.now(); } else { v.status = "out"; v.left = Date.now(); } put("vgvisit", v); render(); } return; }
+  if (d.kback){ const k = live("vgkeys").find(y => y.id === d.kback); if (k){ k.back = Date.now(); put("vgkeys", k); render(); } return; }
+  if (d.tack){ taskAck(d.tack); taskSheet(d.tack); render(); return; }
+  if (d.tsend){ const r = live("patrolrel").find(x => x.id === d.tsend); if (!r) return; b.disabled = true; const photo = await photoData(($("#tbP").files || [])[0]), geo = await myLocation();
+    put("patrolfb", { id: nid("pf"), at: Date.now(), kind: "feedback", relId: r.id, incId: r.incId, site: r.site, officer: ME.name, threat: $("#tbT").value, desc: $("#tbD").value.trim(), photo, geo, via: "phone" }); toast("Sent to the PSOC"); taskSheet(r.id); return; }
+  // decide
+  if (d.ans){ const [rid, aid, choice] = d.ans.split("|"), r = live("opdec").find(x => x.id === rid), a = r && (r.asks || []).find(x => x.id === aid); if (!a) return; const note = prompt(`${a.text}\n\nYour answer: ${choice}\n\nAdd a note (optional):`, ""); if (note === null) return;
+    a.answers = (a.answers || []).filter(x => x.by !== ME.name).concat([{ by: ME.name, role: ME.role || "", choice, note: note || "", at: Date.now(), final: !/discuss/i.test(choice), via: "phone" }]); r.lastAt = Date.now(); put("opdec", r); toast("Decision recorded"); render(); return; }
+  if (d.dec){ $$("[data-dec]").forEach(x => x.setAttribute("aria-pressed", x === b)); const g = $("[data-decgo]"); if (g){ g.disabled = false; g.dataset.kind = d.dec; } return; }
+  if (d.decgo){ const a = live("actions").find(x => x.id === d.decgo); if (!a || !d.kind) return; const note = $("#decNote").value.trim(), lab = (DEC.find(x => x[0] === d.kind) || [, d.kind])[1];
+    a.status = "decided"; a.decision = { kind: d.kind, by: ME.name, note, at: Date.now(), via: "phone" }; a.log = (a.log || []).concat([{ t: Date.now(), m: `${ME.name} (phone): ${lab}${note ? " — " + note : ""}` }]); put("actions", a); closeSheet(); toast("Decision recorded"); render(); return; }
+  if (d.claim){ const a = live("actions").find(x => x.id === d.claim); if (a){ a.claimedBy = ME.name; a.log = (a.log || []).concat([{ t: Date.now(), m: `${ME.name} (phone) is on it` }]); put("actions", a); actionSheet(a.id); render(); } return; }
+  if (d.escreq){ const a = live("actions").find(x => x.id === d.escreq); if (!a) return; const note = $("#decNote").value.trim(); a.escReq = { by: ME.name, at: Date.now(), note }; a.log = (a.log || []).concat([{ t: Date.now(), m: `${ME.name} (phone) asks the PSOC to escalate${note ? " — " + note : ""}` }]); put("actions", a); closeSheet(); toast("The PSOC has been asked to escalate"); render(); return; } });
+function taskAck(id){ if (live("patrolfb").some(f => f.relId === id && f.kind === "ack" && f.officer === ME.name)) return; put("patrolfb", { id: nid("pf"), at: Date.now(), kind: "ack", relId: id, officer: ME.name, via: "phone" }); }
+document.addEventListener("change", async e => { const t = e.target; if (t.matches("[data-tstep]")){ const [rid, i] = t.dataset.tstep.split(":"); put("patrolfb", { id: nid("pf"), at: Date.now(), kind: "step", relId: rid, step: +i, done: t.checked, officer: ME.name, via: "phone" }); return; }
+  if (t.id === "rpPhoto"){ REP.desc = $("#rpDesc").value; REP.site = $("#rpSite").value; REP.photo = await photoData((t.files || [])[0]); $("#view").innerHTML = viewReport(); return; }
+  if (t.id === "rpSite") REP.site = t.value; if (t.id === "rpGeo") REP.geo = t.checked; });
+document.addEventListener("input", e => { if (e.target.id === "rpDesc") REP.desc = e.target.value; });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); if ((e.key === "Enter" || e.key === " ") && e.target.matches("[role=button]")){ e.preventDefault(); e.target.click(); } });
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
+/* ---------- in the store app (Capacitor): shift reminders, haptics, the Android back button, status bar and push ---------- */
+const NATIVE = { on: !!(window.Capacitor && typeof Capacitor.isNativePlatform === "function" && Capacitor.isNativePlatform()) };
+const plug = n => { try{ return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins[n]) || null; }catch(e){ return null; } };
+const hsh = s => { let h = 7; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return Math.abs(h) % 2000000000; };
+async function reminders(){ const LN = plug("LocalNotifications"), g = ME && myGuard(); if (!LN || !g) return; NATIVE.remAt = Date.now();
+  try{ const p = await LN.checkPermissions(); if (p.display !== "granted"){ const r = await LN.requestPermissions(); if (r.display !== "granted") return; } }catch(e){}
+  const now = Date.now(), notes = live("shifts").filter(x => x.guard === g.id && (x.st === "planned" || x.st === "confirmed")).map(x => Object.assign({ T: shiftTimes(x) }, x)).filter(x => x.T[0] - 3600e3 > now && x.T[0] - now < 7 * 864e5)
+    .map(x => ({ id: hsh(x.id), title: `Shift at ${x.site} in 1 hour`, body: `${x.post || "Post"} · ${(SH[x.k] || SH.D)[0]} shift starts ${hm(x.T[0], x.T[2])}${x.st === "planned" ? " — please confirm" : ""}`, schedule: { at: new Date(x.T[0] - 3600e3), allowWhileIdle: true }, extra: { go: "shift" } }));
+  try{ const pend = await LN.getPending(), old = (pend.notifications || []).filter(n => n.extra && n.extra.go === "shift"); if (old.length) await LN.cancel({ notifications: old.map(n => ({ id: n.id })) }); if (notes.length) await LN.schedule({ notifications: notes }); }catch(e){} }
+async function nativePush(){ const PN = plug("PushNotifications"), d = digest(); if (!PN || !d || !d.push || NATIVE.push) return; NATIVE.push = true;
+  try{ const r = await PN.requestPermissions(); if (r.receive !== "granted") return; PN.addListener("registration", t => { const base = server(); if (base) fetch(base + "/api/push/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t.value, platform: Capacitor.getPlatform(), user: ME ? ME.name : "", profile: PROF ? PROF.role : "" }) }).catch(() => {}); });
+    PN.addListener("pushNotificationActionPerformed", a => { const g = a && a.notification && a.notification.data && (a.notification.data.go || a.notification.data.mode); if (g) go({ "m-alerts": "now", "wf-duty": "shift", patrol: "shift", "m-dec": "decide" }[g] || (["now", "report", "shift", "decide", "read"].includes(g) ? g : "now")); }); await PN.register(); }catch(e){} }
+function nativeInit(){ if (!NATIVE.on || NATIVE.init) return; NATIVE.init = true; document.documentElement.classList.add("native"); try{ localStorage.setItem("ite.installhint", "1"); }catch(e){}
+  const SB = plug("StatusBar"), SP = plug("SplashScreen"), APP = plug("App"), LN = plug("LocalNotifications"), HP = plug("Haptics");
+  try{ SB && SB.setStyle({ style: "DARK" }); SB && SB.setBackgroundColor && SB.setBackgroundColor({ color: "#060B14" }); }catch(e){} try{ SP && SP.hide(); }catch(e){}
+  try{ APP && APP.addListener("backButton", () => { if (!$("#sheet").hidden){ closeSheet(); return; } if (TAB !== "now"){ go("now"); return; } APP.exitApp && APP.exitApp(); }); }catch(e){}
+  try{ APP && APP.addListener("resume", () => { pull(); reminders(); }); }catch(e){}
+  try{ LN && LN.addListener("localNotificationActionPerformed", a => { const g = a && a.notification && a.notification.extra && a.notification.extra.go; if (g) go(g); }); }catch(e){}
+  document.addEventListener("click", e => { if (HP && e.target.closest("[data-clock],[data-send],[data-ans],[data-decgo],[data-tack],[data-confirm]")) try{ HP.impact({ style: "MEDIUM" }); }catch(x){} }, true);
+  setTimeout(() => { reminders(); nativePush(); }, 2500); setInterval(() => { if (Date.now() - (NATIVE.remAt || 0) > 10 * 60e3) reminders(); nativePush(); }, 60e3); }
+/* ---------- start ---------- */
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); window.__teBip = e; document.dispatchEvent(new Event("te-installable")); });
+window.addEventListener("storage", e => { if (e.key && /^psoc\.uni\./.test(e.key)){ load(); if ($("#sheet").hidden) render(); } });
+window.addEventListener("online", () => { flush(); pull(); }); window.addEventListener("offline", status);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+{ const q = new URLSearchParams(location.search).get("go") || location.hash.slice(1), map = { alerts: "now", "m-alerts": "now", flag: "report", "@flag": "report", patrol: "shift", "wf-duty": "shift", "m-dec": "decide", decisions: "decide" }; const t = map[q] || q; if (["now", "report", "shift", "decide", "read"].includes(t)) TAB = t; }
+load(); render(); pull(); nativeInit(); setInterval(() => { if (!document.hidden) pull(); }, 30000); setInterval(status, 15000);
+</script>
+</body>
+</html>

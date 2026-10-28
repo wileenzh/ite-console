@@ -1,26 +1,30 @@
 # TTE mobile app (iOS and Android)
 
-The store app is the TTE console packaged with [Capacitor](https://capacitorjs.com) 8. It uses the same data, sign-in
-and settings as the console. On a phone, each role gets its own home screen and bottom tabs:
+The store app is **TTE Mobile**, the light phone app (`lite/tte-mobile.html`, built into `../mobile.html` by
+`tools/build_lite.py`), packaged with [Capacitor](https://capacitorjs.com) 8. It is not the console: it is a small app
+(about 100 KB) made for the phone, and it shares the team's data with the console through the PSOC server. Set-up,
+analysis, maps and the command screens stay in the web console (`web.html`), which also sends the phones the live
+picture (official warnings, the impact level at each site, the developing stories from the team's feeds).
 
-| Role | Opens on | Tabs |
-|---|---|---|
-| Security guard | My duties: current shift, **Clock in / Clock out** | Shift · Patrol · Report (flag to the PSOC with photo and location) · Alerts for my site |
-| Site security manager | Site security manager: shift board, five layers, site risks | Site · Roster · Risk · Cameras (video wall) |
-| DSOM (country) | Country view | Country · Decisions · Workforce · Sites |
-| RSOM (region) | Regional view | Region · Decisions · Risk · Workforce |
-| APAC director | APAC director overview | APAC · Decisions · Risk & value · Campuses |
-| PSOC officer | Home: what needs you now | Home · Map · Queue · Incidents |
+Five tabs, the same for everyone; what is on them depends on the role and the site, country or region chosen at set-up:
 
-People choose their role the first time they open the app, and can change it under **More › My role in the app**. A
-security patrol officer account is always a security guard, and a leadership account is always the APAC director.
-Every tab also has **More**, which lists every screen the account may see.
+| Tab | What it does |
+|---|---|
+| **Now** | What needs you: taskings, the action queue, decisions waiting, incidents, warnings, site impact, satellite damage, camera alarms. Mark them seen, or open one to act. |
+| **Report** | Flag something to the PSOC in a few taps: how urgent, what, where, details, photo and location. Life-threatening and serious reports open an incident at once. |
+| **Shift** | Clock in and out, confirm shifts, patrol taskings (acknowledge, tick the steps, report back), the site desk (visitors and keys); managers see who is on post. |
+| **Decide** | Answer the decisions stakeholders are asked for; decide actions from the queue, or ask the PSOC to escalate. (Not shown to guards.) |
+| **Read** | Briefs and articles written in the console, satellite damage assessments, and the developing stories from the feeds. |
+
+Roles: security guard, site security manager, DSOM (country), RSOM (region), APAC director, PSOC officer. A security
+patrol officer account is always a guard, and a leadership account is always the APAC director. Anything recorded
+without signal is kept on the phone and sent when it is back online.
 
 What the app adds on the phone:
 - **Shift reminders:** a notification one hour before each booked shift, rescheduled whenever shifts change.
 - **Haptics** when you clock in or out, pick up a shift, send a flag or answer a decision.
 - **Android back button:** it closes the open window or menu, then returns to the first tab, then leaves the app.
-- **Status bar and splash screen** in the app's colours; the map library is bundled so the map starts offline.
+- **Status bar and splash screen** in the app's colours; the app starts offline.
 - **Camera and location** for reports to the PSOC: a photo is attached, and the location is added to a flag.
 - **Push notifications**, once your Firebase (Android) and Apple Push (iOS) keys are added (see below).
 
@@ -30,7 +34,7 @@ What the app adds on the phone:
 mobile/
   package.json             Capacitor 8 and its plugins (exact versions)
   capacitor.config.json    app id, name, splash and notification settings
-  scripts/build-web.mjs    builds www/ from ../index.html (bundles Leaflet)
+  scripts/build-web.mjs    builds www/ from ../mobile.html, the light app (from ../index.html it bundles Leaflet)
   scripts/make-icons.py    draws every icon, splash and the notification icon from the PSOC logo
   resources/brand/         the PSOC logo (light and dark versions, full logo and mark)
   android/                 Android Studio project
@@ -51,7 +55,7 @@ npm run android     # builds www/, copies it into android/ and opens Android Stu
 npm run ios         # same for Xcode (on a Mac)
 ```
 
-After the console changes, run `npm run sync` to copy it into both apps.
+After the light app changes (`lite/tte-mobile.html`, then `python3 tools/build_lite.py`), run `npm run sync` to copy it into both apps.
 
 **GitHub builds it automatically.** `.github/workflows/mobile.yml` runs on every push that changes the console or this
 folder:
@@ -122,7 +126,7 @@ The camera, photo library and location messages iOS shows are already in `ios/Ap
 
 ## Updating the app
 
-Most changes are to the console (`index.html`). The app carries a copy of it, so users get those changes when a new
+Most phone changes are to the light app (`lite/tte-mobile.html`). The app carries a copy of it, so users get those changes when a new
 build is released through the stores or TestFlight. Live data (hazards, alerts, decisions, shifts) always comes from
 the network and the PSOC server, so it is current without an update.
 

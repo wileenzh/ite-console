@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the installable phone app (app/index.html) from the console.
+"""Build the installable phone app (app/index.html) from a page.
 
     python3 tools/build_app.py [source.html]
 
-The app is the same console (same file, same features) with what a phone
-needs to install it from the browser: a web app manifest, iPhone home-screen
+It is normally built from mobile.html, the light phone app (made by tools/build_lite.py), with what a
+phone needs to install it from the browser: a web app manifest, iPhone home-screen
 tags and icons, a service worker that keeps the app shell for fast and
 offline starts, and a one-time "Add to Home Screen" hint in Safari.
 Run it again whenever the console changes, then publish app/.
@@ -71,9 +71,9 @@ app.mkdir(exist_ok=True)
 (app / "index.html").write_text(out, encoding="utf-8")
 
 (app / "manifest.json").write_text("""{
-  "name": "TTE — To The Edge",
+  "name": "TTE Mobile",
   "short_name": "TTE",
-  "description": "PSOC situational awareness: hazards, alerts, incidents and sites.",
+  "description": "Security on the move: what needs you now, report to the PSOC, shift and patrol, decisions and briefs.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -89,10 +89,10 @@ app.mkdir(exist_ok=True)
     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "My duties", "short_name": "Duties", "url": "./?go=wf-duty", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Site alerts", "short_name": "Alerts", "url": "./?go=m-alerts", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Decisions", "short_name": "Decisions", "url": "./?go=m-dec", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Map", "short_name": "Map", "url": "./?go=overview", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Report to the PSOC", "short_name": "Report", "url": "./?go=report", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "What needs me now", "short_name": "Now", "url": "./?go=now", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "My shift", "short_name": "Shift", "url": "./?go=shift", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Decisions", "short_name": "Decide", "url": "./?go=decide", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }
 """, encoding="utf-8")

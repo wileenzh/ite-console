@@ -24491,10 +24491,11 @@ function paHelp(){ const url = paUrl(), qr = url === PA_URL, phone = document.bo
     <div class="pagrid">${!phone ? `<div class="paqrbox">${qr ? PA_QR : `<div class="paqrno">Open this link on the phone:</div>`}<div class="paurl"><code>${esc(url)}</code><button class="tab-mini" id="paCopy">Copy link</button></div>${qr ? `<small class="s">Point the phone's camera at the code and tap the link.</small>` : ""}</div>` : ""}
       <div class="pacols"><div><div class="pah"><b>iPhone / iPad</b></div>${iosSteps}</div><div><div class="pah"><b>Android</b></div>${andSteps}</div></div></div>
     <div class="dpsub" style="margin-top:14px">What you get</div>
-    <ul class="paget"><li>TTE on the home screen with the PSOC icon, opening full screen without the browser bars.</li><li>Your role's own screens and tabs: guard, site security manager, DSOM, RSOM, APAC director or PSOC officer (choose under <b>More › My role in the app</b>).</li>
-      <li>It opens without signal on the last version you loaded; live alerts, maps and news load when you're back online.</li><li>Always up to date: each time it opens with signal it picks up the newest version.</li>
-      <li>On Android, press and hold the icon for shortcuts: <b>My duties</b>, <b>Site alerts</b>, <b>Decisions</b> and <b>Map</b>.</li></ul>
-    <p class="help">This is the <b>mobile version</b>: phone screens and each role's tabs. On a computer, use the <b>web version</b> (<code>web.html</code>) for set-up, analysis and the command screens. Sign in on the phone the same way as on the desktop. Keys and imported data stay on each device.</p></div>
+    <ul class="paget"><li>TTE on the home screen with the PSOC icon, opening full screen without the browser bars.</li><li>A light app made for the phone, not the console squeezed down: <b>Now</b> (what needs you, to acknowledge or decide), <b>Report</b> (a few taps, with photo and location), <b>Shift</b> (clock in, patrol taskings, site desk), <b>Decide</b> and <b>Read</b> (briefs, damage, stories).</li>
+      <li>Set up once for your role — guard, site security manager, DSOM, RSOM, APAC director or PSOC officer — and your site, country or region.</li>
+      <li>Works without signal: what you report or record is kept and sent when you are back online.</li>
+      <li>On Android, press and hold the icon for shortcuts: <b>Report</b>, <b>Now</b>, <b>Shift</b> and <b>Decide</b>.</li></ul>
+    <p class="help">This is the <b>mobile version</b>, a separate light app that shares the team's data through the PSOC server. Set-up, analysis, maps and the command screens stay in the <b>web version</b> (<code>web.html</code>) on a computer, which also sends the phones the live picture (warnings, site impact and feed stories). Keys and imported data stay on each device.</p></div>
     <div class="ft"><span style="flex:1"></span><button class="pill" data-x>Close</button></div>`, true);
   if ($("#paGo")) $("#paGo").onclick = paInstall;
   if ($("#paCopy")) $("#paCopy").onclick = () => { try{ navigator.clipboard.writeText(url).then(() => toast("Link copied", url, "var(--teal)")); }catch(e){} }; }
@@ -25882,6 +25883,28 @@ function awSettings(){ const c = CFG.aw, d1k = CFG.dec1 && CFG.dec1.provider ===
 .awcite .awcrow{display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}.awcref{font-size:12.5px;line-height:1.5;word-break:break-word}.awcref a{color:var(--teal)}
 body.phone .awgrid{grid-template-columns:1fr}body.phone .awed textarea{min-height:46vh}body.phone .awcite .awcrow{grid-template-columns:1fr auto}body.phone .awcite .awcrow b{grid-column:1/-1}
 @media (max-width:1100px){.awgrid{grid-template-columns:1fr}}`; document.head.appendChild(st); }
+/* ---------- The phone digest: the light phone app (TTE Mobile) shares the console's stores, but the live picture — official
+   warnings, the impact level at each site, the developing stories from the team's feeds, the organisation's site list and the
+   PSOC hotline — is worked out here. A signed-in console publishes it as one shared record every few minutes when it changes, so
+   phones show the same picture without carrying the console. Phones asking the PSOC to escalate an action are picked up here. ---------- */
+SH_KEYS.mobdigest = "psoc.uni.mobdigest.v1"; SHARED.mobdigest = lsGet(SH_KEYS.mobdigest, []); SYNC_TYPES.push("mobdigest"); RETAIN_DAYS.mobdigest = 30; LOCAL_CAP.mobdigest = 3;
+const MD = { last: "", at: 0 };
+function mdBuild(){ const now = Date.now(), d = { id: "digest", by: ME ? ME.name : "", hotline: (CFG.patrol && CFG.patrol.hotline) || "", push: !!(CFG.mobile && CFG.mobile.push) };
+  d.sites = SITES.filter(s => isLive(s) && Number.isFinite(+s.lat)).map(s => { let tz = ""; try{ tz = wfTz(s.code); }catch(e){} return [s.code, metroOf(s) || s.city || "", s.country || "", s.region || "", +(+s.lat).toFixed(4), +(+s.lon).toFixed(4), isOffice(s) ? 1 : 0, tz]; });
+  d.warn = (DATA.alerts || []).filter(a => !a.end || a.end > now).slice(0, 120).map(a => ({ id: a.id, t: trunc(a.title || "", 160), area: trunc(a.area || "", 120), sev: a.severity || "", cities: a.points || [], src: (a.source && a.source.name) || "", end: a.end || null, at: a.start || null }));
+  try{ d.impact = impAssess().hit.slice(0, 400).map(h => ({ code: h.s.code, level: h.level, why: trunc(h.zs[0].label || "", 140), kind: h.zs[0].kind })); }catch(e){ d.impact = []; }
+  try{ d.stories = mfsBuild().slice(0, 12).map(c => ({ t: trunc(c.title, 200), topic: c.topic.label, place: c.place ? c.place.name : "", n: c.items.length, sources: c.sources.slice(0, 5), score: +c.score.toFixed(1), at: c.last, url: (c.items.find(i => i.url) || {}).url || "" })); }catch(e){ d.stories = []; }
+  return d; }
+function mdPublish(force){ if (!ME) return; try{ if (typeof isLimited === "function" && isLimited()) return; }catch(e){}
+  const d = mdBuild(), sig = hashStr(JSON.stringify(Object.assign({}, d, { by: "" }))); if (!force && sig === MD.last && Date.now() - MD.at < 15 * 60e3) return;
+  MD.last = sig; MD.at = Date.now(); d.at = Date.now(); putShared("mobdigest", d); }
+setTimeout(() => mdPublish(), 20e3); setInterval(() => mdPublish(), 3 * 60e3);
+// a phone asking the PSOC to escalate an action: raise it to P1 and tell the watch officer
+setInterval(() => { if (!ME) return; try{ if (typeof isLimited === "function" && isLimited()) return; }catch(e){}
+  (SHARED.actions || []).filter(a => a.escReq && !a.escSeen && a.status === "pending").forEach(a => { a.escSeen = Date.now(); a.pri = "P1"; a.log = (a.log || []).concat([{ t: Date.now(), m: `Escalation requested by ${a.escReq.by} from the phone${a.escReq.note ? ": " + a.escReq.note : ""} — raised to P1` }]);
+    putShared("actions", a); try{ toast("Escalation requested", `${a.escReq.by}: ${a.title}`, "var(--red)"); }catch(e){} try{ renderModes(); }catch(e){} }); }, 15e3);
+// anything without a valid position (a record from a phone or another system that has none) is left off the map rather than breaking it
+collectItems = (function(orig){ return function(){ const out = orig.apply(this, arguments); return Array.isArray(out) ? out.filter(it => it && Number.isFinite(+it.lat) && Number.isFinite(+it.lon)) : out; }; })(collectItems);
 
 boot();
 

@@ -1487,3 +1487,31 @@ before and after a typhoon, flood, earthquake, fire or blast, and marks each bui
 - **Reference list and export:** the reference list is built in the chosen style. Author–date styles turn `[1]` into
   (Publisher, Year) in the text. Export as Word, Markdown (footnotes for numbered styles), HTML or PDF, or copy with formatting.
   Drafts are saved and shared with the team.
+
+## The mobile version is now a separate light app — TTE Mobile
+
+`mobile.html` (and the installable `app/` and the store app) is no longer the console squeezed onto a phone. It is
+**TTE Mobile**, a small app made for the phone (about 100 KB instead of 4.8 MB). The source is
+`lite/tte-mobile.html` and `tools/build_lite.py` builds it. It does five things:
+
+| Tab | What it does |
+|---|---|
+| **Now** | What needs you: taskings, the action queue, decisions waiting, incidents, official warnings, site impact, satellite damage, camera alarms. Mark them seen, or open one to act. |
+| **Report** | Flag something to the PSOC in a few taps: how urgent, what, where, details, photo and location. Life-threatening and serious reports open an incident in the console at once. You can also call the PSOC or ask it to call you back. |
+| **Shift** | Clock in and out and confirm shifts. Patrol taskings: acknowledge, tick the steps, report back with a photo. The site desk handles visitors and keys. Managers see who is on post and who is late. |
+| **Decide** | Answer stakeholder decisions. Decide actions from the queue, say "I'm on it", or ask the PSOC to escalate. (Not shown to guards.) |
+| **Read** | Briefs and articles from the console's Articles page, satellite damage assessments, and the developing stories from the team's feeds. |
+
+- **Set-up:** each phone is set up once. You choose a role (guard, site security manager, DSOM, RSOM, APAC director, PSOC
+  officer) and your site, country or region. Everything is filtered to that scope.
+- **Shared data:** it uses the console's own stores through the PSOC server (`/api/items/<type>`), so what a phone
+  records appears in the console and the other way round.
+- **The phone digest:** a signed-in console publishes it every few minutes. It holds the live picture only the console
+  can work out: official warnings, the impact level at each site, the top stories from the feeds, the organisation's
+  site list and the PSOC hotline.
+- **Offline:** what you record without signal is kept on the phone and sent when it is back. Without a PSOC server
+  address, the phone works on its own and says so.
+- **Store app:** shift reminders, haptics, the Android back button and push (when enabled) carry over.
+- **Escalation requests:** when a phone asks to escalate an action, the console raises it to P1 and alerts the watch officer.
+
+The adaptive `index.html` still offers the console's phone layout. `web.html` is the full console for computers.
